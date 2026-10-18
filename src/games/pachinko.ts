@@ -1,5 +1,6 @@
 // Симуляция и отрисовка пачинко. Шарики не сталкиваются друг с другом,
 // поэтому траектория определяется только (seed, power) — ТВ повторяет её точно.
+import { uiFont } from '../shared/util';
 import { type Ball, PACHI, PINS, POCKETS, launchBall, slotSpin, stepBall, type Pocket } from './logic';
 
 export interface SpinState {
@@ -82,7 +83,7 @@ export function drawPachinko(ctx: CanvasRenderingContext2D, sim: PachinkoSim, sc
   ctx.lineWidth = 3;
   ctx.strokeRect(108, 160, 84, 50);
   const sp = sim.spin;
-  ctx.font = '28px DotGothic16, monospace';
+  ctx.font = '28px ' + uiFont();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < 3; i++) {
@@ -107,7 +108,7 @@ export function drawPachinko(ctx: CanvasRenderingContext2D, sim: PachinkoSim, sc
     ctx.fillRect(p.x + p.w / 2, p.y - 2, 3, 10);
     ctx.fillRect(p.x - p.w / 2, p.y + 6, p.w, 3);
     if (p.kind === 'start') {
-      ctx.font = '10px DotGothic16, monospace';
+      ctx.font = '10px ' + uiFont();
       ctx.fillStyle = '#ffd23f';
       ctx.fillText('START', p.x, p.y + 18);
     }

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Big Game 2 — выбор шрифта</title>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Pixelify+Sans:wght@400;700&family=Press+Start+2P&family=Tiny5&family=Handjet:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    /* локальные шрифты из папки fonts/ (работает в npm run dev) */
+    @font-face { font-family: 'MMXSNES'; src: url('/fonts/NbPixelFontBundle_v1_0/MMXSNES.ttf'); }
+    @font-face { font-family: 'GTA2PSX'; src: url('/fonts/PixelFontBundle2_v1_0/GTA2PSX.ttf'); }
+    body { margin: 0; background: #1b1f3a; color: #fff; font-family: system-ui, sans-serif; padding: 16px; -webkit-font-smoothing: none; }
+    h1 { margin: 0 0 4px; }
+    .hint { color: #a9b1e0; margin-bottom: 16px; }
+    .font { border: 3px solid #fff; background: #2b3163; margin-bottom: 16px; box-shadow: 5px 5px 0 #0b0d1f; }
+    .name { background: #ffd23f; color: #222; padding: 4px 10px; font-family: system-ui, sans-serif; font-weight: 700; }
+    .name small { font-weight: 400; }
+    .row { display: flex; gap: 16px; padding: 12px; flex-wrap: wrap; }
+    .tv { flex: 2; min-width: 420px; }
+    .phone { flex: 1; min-width: 300px; max-width: 380px; background: #232850; padding: 10px; border: 2px solid #ffffff55; }
+    .tv .big { font-size: 32px; margin-bottom: 8px; }
+    .tv .mid { font-size: 24px; margin-bottom: 6px; }
+    .phone .mid { font-size: 18px; margin-bottom: 6px; }
+    .phone .small { font-size: 14px; color: #a9b1e0; margin-bottom: 6px; }
+    .btn { display: inline-block; border: 3px solid #fff; background: #353c78; padding: 8px 12px; margin: 4px 4px 0 0; }
+    .lbl { font-family: system-ui, sans-serif; font-size: 11px; color: #a9b1e0; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Выбор шрифта</h1>
+  <div class="hint">У всех ниже есть кириллица. Японский текст в любом варианте будет подставляться из DotGothic16 автоматически.</div>
+  <div id="list"></div>
+  <script>
+    const fonts = [
+      ['MMXSNES', 'из папки fonts · общественное достояние'],
+      ['GTA2PSX', 'из папки fonts · общественное достояние'],
+      ['Pixelify Sans', 'Google Fonts · OFL'],
+      ['Press Start 2P', 'Google Fonts · OFL'],
+      ['Tiny5', 'Google Fonts · OFL'],
+      ['Handjet', 'Google Fonts · OFL'],
+      ['DotGothic16', 'текущий · Google Fonts · OFL'],
+    ];
+    const sample = (f) => `
+      <div class="font">
+        <div class="name">${f[0]} <small>— ${f[1]}</small></div>
+        <div class="row" style="font-family: '${f[0]}', 'DotGothic16', monospace">
+          <div class="tv">
+            <div class="lbl">ТВ</div>
+            <div class="big">BIG GAME 2 ビッグゲーム 2</div>
+            <div class="mid">Тест 2 выбирает, куда идти</div>
+            <div class="mid">Какая группа исполнила хит «Kurenai» (1989)?</div>
+            <div class="mid">Хоккайдо 北海道 · Иватэ · Акита · Ёсимото</div>
+            <div class="mid">1 800 ¥ ⭐3 · HP 10/10 · Музыка 3</div>
+          </div>
+          <div class="phone">
+            <div class="lbl">Телефон</div>
+            <div class="mid">Тест 2 выбирает, куда идти</div>
+            <div class="small">Твой PIN для входа с другого устройства: 1021</div>
+            <div class="small">Связь: online, синхронизация часов ±133 мс</div>
+            <span class="btn">A Джаз</span><span class="btn">B Хеви-метал</span>
+            <span class="btn">Пойти ➜</span>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('list').innerHTML = fonts.map(sample).join('');
+  </script>
+</body>
+</html>

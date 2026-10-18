@@ -55,3 +55,7 @@ export function getParam(name: string) {
 export function vibrate(p: number | number[]) {
   try { navigator.vibrate?.(p); } catch { /* iOS не поддерживает */ }
 }
+/** шрифт интерфейса из CSS-переменной --font (для canvas) */
+export function uiFont() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'DotGothic16, monospace';
+}

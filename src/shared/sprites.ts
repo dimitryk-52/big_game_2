@@ -92,3 +92,82 @@ export function characterUrl(color: string, hat: number, scale = 4) {
   }
   return u;
 }
+
+// ───── иконки тем (скиллов) 10×10 ─────
+// X — цвет темы, W — белый, . — пусто. Контур рисуется автоматически.
+const TOPIC_ICONS: Record<string, string[]> = {
+  music: [
+    '......XX..',
+    '......XXX.',
+    '......X.XX',
+    '......X..X',
+    '......X...',
+    '......X...',
+    '..XXXXX...',
+    '.XXXXXX...',
+    '.XXXXX....',
+    '..XXX.....',
+  ],
+  culture: [
+    'XXXXXXXXXX',
+    '.XXXXXXXX.',
+    '..X....X..',
+    'XXXXXXXXXX',
+    '..X....X..',
+    '..X....X..',
+    '..X....X..',
+    '..X....X..',
+    '..X....X..',
+    '.XX....XX.',
+  ],
+  geo: [
+    '..........',
+    '....WW....',
+    '...WWWW...',
+    '..WXWWXW..',
+    '..XXXXXX..',
+    '.XXXXXXXX.',
+    '.XXXXXXXX.',
+    'XXXXXXXXXX',
+    'XXXXXXXXXX',
+    '..........',
+  ],
+};
+const DIAMOND = [
+  '....XX....',
+  '...XXXX...',
+  '..XXXXXX..',
+  '.XXXWXXXX.',
+  'XXXWWXXXXX',
+  'XXXXXXXXXX',
+  '.XXXXXXXX.',
+  '..XXXXXX..',
+  '...XXXX...',
+  '....XX....',
+];
+
+const iconCache = new Map<string, string>();
+export function topicIconUrl(id: string, color: string, scale = 3): string {
+  const k = `${id}|${color}|${scale}`;
+  let u = iconCache.get(k);
+  if (u) return u;
+  const rows = (TOPIC_ICONS[id] ?? DIAMOND).map((r) => r.split(''));
+  const c = document.createElement('canvas');
+  c.width = 12 * scale;
+  c.height = 12 * scale;
+  const ctx = c.getContext('2d')!;
+  const filled = (x: number, y: number) => rows[y]?.[x] !== undefined && rows[y][x] !== '.';
+  ctx.fillStyle = '#000';
+  for (let y = -1; y <= 10; y++) for (let x = -1; x <= 10; x++) {
+    if (filled(x, y)) continue;
+    if (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1)) ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
+  }
+  rows.forEach((r, y) => r.forEach((ch, x) => {
+    if (ch === '.') return;
+    ctx.fillStyle = ch === 'W' ? '#ffffff' : color;
+    ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
+  }));
+  u = c.toDataURL();
+  iconCache.set(k, u);
+  return u;
+}

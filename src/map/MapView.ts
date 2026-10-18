@@ -19,6 +19,8 @@ export interface MapUpdate {
   activePid?: string | null;
   machines?: { pachinko: number[]; ring: number[] };
   showRewards?: boolean;
+  /** путь стрелки хода (коды префектур от текущей до цели) */
+  arrow?: number[] | null;
 }
 
 interface Token {
@@ -38,7 +40,8 @@ interface Token {
   hat: number;
 }
 
-const FONT = 'DotGothic16, monospace';
+/** шрифт берётся из CSS-переменной --font (меняется в одном месте — base.css) */
+const font = () => getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'DotGothic16, monospace';
 
 export class MapView {
   app!: Application;
@@ -48,6 +51,8 @@ export class MapView {
   private mapTex!: Texture;
   private mapSprite!: Sprite;
   private hiLayer = new Container();
+  private arrowG = new Graphics();
+  private arrowPts: { x: number; y: number }[] | null = null;
   private iconLayer = new Container();
   private labelLayer = new Container();
   private tokenLayer = new Container();
@@ -82,7 +87,7 @@ export class MapView {
   }
 
   private async init(el: HTMLElement, bg: number) {
-    try { await document.fonts.load('16px DotGothic16'); } catch { /* шрифт не обязателен */ }
+    try { await document.fonts.load('16px ' + font().split(',')[0], 'Привет 日本'); } catch { /* шрифт не обязателен */ }
     this.app = new Application();
     await this.app.init({ resizeTo: el, background: bg, antialias: false, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true });
     el.appendChild(this.app.canvas);
@@ -97,7 +102,7 @@ export class MapView {
     this.mapTex = Texture.from(this.mapCanvas);
     this.mapTex.source.scaleMode = 'nearest';
     this.mapSprite = new Sprite(this.mapTex);
-    this.world.addChild(this.sea, this.mapSprite, this.hiLayer, this.iconLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
+    this.world.addChild(this.sea, this.mapSprite, this.hiLayer, this.arrowG, this.iconLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
 
     this.fitAll(false);
@@ -122,6 +127,7 @@ export class MapView {
       this.mapTex.source.update();
     }
     this.updateHighlights(u);
+    this.arrowPts = u.arrow && u.arrow.length >= 2 ? u.arrow.map((c) => prefAnchorWorld(c)) : null;
     this.updateLabels(u);
     this.updateIcons(u);
     this.updateTokens(u);
@@ -177,7 +183,7 @@ export class MapView {
     for (const [c, kind] of want) {
       let l = this.labels.get(c);
       if (!l) {
-        l = new Text({ text: PREF[c].ru, style: { fontFamily: FONT, fontSize: 22, fill: 0xffffff, stroke: { color: 0x101020, width: 5 }, align: 'center' } });
+        l = new Text({ text: PREF[c].ru, style: { fontFamily: font(), fontSize: 22, fill: 0xffffff, stroke: { color: 0x101020, width: 5 }, align: 'center' } });
         l.anchor.set(0.5, 0.5);
         l.resolution = 2;
         const a = prefAnchorWorld(c);
@@ -242,7 +248,7 @@ export class MapView {
         const body = new Sprite(frames[0]);
         body.anchor.set(0.5, 1);
         body.scale.set(1.6);
-        const label = new Text({ text: p.name, style: { fontFamily: FONT, fontSize: 18, fill: 0xffffff, stroke: { color: 0x000000, width: 4 } } });
+        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 18, fill: 0xffffff, stroke: { color: 0x000000, width: 4 } } });
         label.anchor.set(0.5, 1);
         label.resolution = 2;
         label.position.set(0, -28);
@@ -293,6 +299,44 @@ export class MapView {
   hit(pid: string) {
     const t = this.tokens.get(pid);
     if (t) t.flash = 600;
+  }
+
+  /** пиксельная стрелка: бегущие точки по пути и наконечник */
+  private drawArrow() {
+    const g = this.arrowG;
+    g.clear();
+    const pts = this.arrowPts;
+    if (!pts) return;
+    const segs: { ax: number; ay: number; dx: number; dy: number; len: number }[] = [];
+    let total = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
+      const len = Math.hypot(dx, dy) || 1;
+      segs.push({ ax: pts[i].x, ay: pts[i].y, dx: dx / len, dy: dy / len, len });
+      total += len;
+    }
+    const at = (d: number) => {
+      for (const sg of segs) {
+        if (d <= sg.len) return { x: sg.ax + sg.dx * d, y: sg.ay + sg.dy * d };
+        d -= sg.len;
+      }
+      const l = segs[segs.length - 1];
+      return { x: l.ax + l.dx * l.len, y: l.ay + l.dy * l.len };
+    };
+    const step = 7, head = 11, start = 8;
+    const off = (this.time / 45) % step;
+    for (let d = start + off; d < total - head; d += step) {
+      const p = at(d);
+      g.rect(Math.round(p.x) - 2.5, Math.round(p.y) - 2.5, 5, 5).fill({ color: 0x101020 });
+      g.rect(Math.round(p.x) - 1.5, Math.round(p.y) - 1.5, 3, 3).fill({ color: 0xfff27a });
+    }
+    const last = segs[segs.length - 1];
+    const tip = at(total - 2);
+    const bx = tip.x - last.dx * head, by = tip.y - last.dy * head;
+    const nx = -last.dy * 6, ny = last.dx * 6;
+    const bob = Math.sin(this.time / 150) * 1.5;
+    const tx = tip.x + last.dx * bob, ty = tip.y + last.dy * bob;
+    g.poly([tx, ty, bx + nx, by + ny, bx - nx, by - ny]).fill({ color: 0xfff27a }).stroke({ width: 1.5, color: 0x101020 });
   }
 
   // ───── камера ─────
@@ -442,6 +486,7 @@ export class MapView {
     }
     this.applyCam();
     this.sea.tilePosition.x = Math.floor(this.time / 220) % 64;
+    this.drawArrow();
 
     const pulse = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(this.time / 180));
     this.hiSprites.forEach((s) => (s.alpha = pulse));

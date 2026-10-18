@@ -9,7 +9,6 @@ import { getParam, roomCode } from '../shared/util';
 import { unlockAudio } from '../shared/sound';
 import { netMode } from '../shared/net';
 import { MediaBox } from './MediaBox';
-import { mediaInfo, restoreFolder } from './localMedia';
 import type { Question } from '../shared/types';
 
 function setRoomInUrl(room: string) {
@@ -34,8 +33,6 @@ function Boot() {
 
   const start = async (resume: boolean) => {
     unlockAudio();
-    // клик — удобный момент подтвердить доступ к запомненной папке с медиа
-    if (!mediaInfo().count) await restoreFolder(true).catch(() => {});
     const h = new Host(room);
     try {
       await h.start({ resume });

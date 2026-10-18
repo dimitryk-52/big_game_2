@@ -1,5 +1,6 @@
 // Отрисовка призового кольца: 24 ячейки по кругу, бегущий указатель.
 import { RING_CELLS, type RingLayout } from './logic';
+import { uiFont } from '../shared/util';
 
 export function drawRing(ctx: CanvasRenderingContext2D, size: number, layout: RingLayout, cell: number | null, result: null | 'gold' | 'green' | 'miss', t: number) {
   ctx.clearRect(0, 0, size, size);
@@ -15,7 +16,7 @@ export function drawRing(ctx: CanvasRenderingContext2D, size: number, layout: Ri
   ctx.fillStyle = '#1b1f3a';
   ctx.fillRect(c - R * 0.5, c - R * 0.5, R, R);
   ctx.fillStyle = '#ffd23f';
-  ctx.font = `${Math.floor(size * 0.07)}px DotGothic16, monospace`;
+  ctx.font = `${Math.floor(size * 0.07)}px ${uiFont()}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const label = result === 'gold' ? 'ПРИЗ!!' : result === 'green' ? 'ВЫИГРЫШ' : result === 'miss' ? 'мимо…' : 'PRIZE';

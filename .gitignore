@@ -3,3 +3,11 @@ dist
 .env
 .env.local
 .devdata
+tools/pixelart/out
+
+# медиа для вопросов и скачанные шрифты — только локально
+media/*
+!media/README.txt
+fonts/
+ref/
+tools/pixelart/out/

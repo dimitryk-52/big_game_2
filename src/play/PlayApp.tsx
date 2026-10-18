@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player, PublicQuestion } from '../shared/types';
-import { Avatar, HpBar, LETTERS, TimerBar } from '../ui/common';
+import { Avatar, HpBar, LETTERS, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
-import { PREF, prefName } from '../map/mapData';
+import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
 import { RhythmBoard } from '../games/RhythmBoard';
@@ -229,16 +229,14 @@ function stageText(s: GameState, me: Player): string {
 
 function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const topics = s.settings.topics.filter((t) => t.combat);
-  const order = s.turnOrder.indexOf(me.id);
   return (
     <div class="scroll pad col">
       <div class="status-card slide-up" key={s.stage.t}>{stageText(s, me)}</div>
       <div class="panel col">
         <div class="row"><span class="muted">Где ты:</span> <b>{me.pref ? `${PREF[me.pref].ru} ${PREF[me.pref].ja}` : '—'}</b></div>
-        {order >= 0 && <div class="row"><span class="muted">Порядок хода:</span> <b>{order + 1}</b> из {s.turnOrder.length}</div>}
-        <div class="muted">Сила по темам</div>
-        <div class="row wrap">
-          {topics.map((t) => <span class="chip" style={{ borderColor: t.color }}>{t.name}: <b>{me.stats[t.id] ?? 0}</b></span>)}
+        <div class="muted">Сила</div>
+        <div class="col" style={{ gap: 6 }}>
+          {topics.map((t) => <SkillRow t={t} value={me.stats[t.id] ?? 0} max={skillMax(s)} size={22} />)}
         </div>
         <div class="muted">Бонусы</div>
         <div class="row wrap">
@@ -258,7 +256,7 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {s.joinOrder.filter((id) => id !== me.id).map((id) => s.players[id]).filter(Boolean).map((p) => (
           <div class="row">
             <Avatar p={p} size={22} /> <span class="grow">{p.name}</span>
-            <span class="muted">{prefName(p.pref)}</span> <span>❤{p.hp}</span>
+            <SkillChips topics={topics} stats={p.stats} size={14} /> <span>❤{p.hp}</span>
           </div>
         ))}
       </div>
@@ -357,7 +355,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
         const t = s.settings.topics.find((x) => x.id === id)!;
         return (
           <button class="btn big-btn" style={{ borderColor: t.color }} disabled={sent} onClick={() => send(id)}>
-            {t.name} · твоя сила {me.stats[id]} / у него {foe?.stats[id]}
+            <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <b>{me.stats[id]}</b> <span class="muted">против</span> <b>{foe?.stats[id]}</b>
           </button>
         );
       })}
@@ -403,6 +401,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       highlight2: st.t === 'move' ? st.options2 : undefined,
       blocked: st.t === 'landing' ? st.blocked : undefined,
       selected: sel,
+      arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
       activePid: me.id,
       machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
     });
@@ -432,7 +431,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
         {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text">👟 — ход на 2 префектуры (потратит бонус)</div>}
         {st.t === 'landing' && <div class="muted small-text">Тёмные префектуры заняты или рядом с соперниками. Тапни по карте.</div>}
         <button class="btn primary big-btn" disabled={!sel || sent} onClick={confirm}>
-          {sel ? `${sent ? '✔ ' : ''}${PREF[sel].ru} ${PREF[sel].ja}` : 'Выбери префектуру'}
+          {!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться: ${PREF[sel].ru}`}
         </button>
       </div>
     </div>

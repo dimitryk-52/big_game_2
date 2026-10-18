@@ -156,6 +156,11 @@ function Questions({ questions, settings, onChange }: { questions: Question[]; s
 function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Question; settings: Settings; busy: boolean; onSave: (q: Question) => void; onClose: () => void }) {
   const [q, setQ] = useState<Question>(q0);
   const [uploading, setUploading] = useState(false);
+  // файлы из папки media/ (раздаёт локальный сервер) — для подсказок в поле имени
+  const [mediaFiles, setMediaFiles] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('media-list.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])).then(setMediaFiles).catch(() => {});
+  }, []);
   const set = (p: Partial<Question>) => setQ({ ...q, ...p });
   const upload = async (f: File, apply: (url: string) => void) => {
     setUploading(true);
@@ -186,12 +191,13 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
             <option value="audio">аудио (только ТВ)</option>
             <option value="video">видео (только ТВ)</option>
           </select></label>
-          {q.media && <input class="inp-s grow" placeholder={q.media.type === 'image' ? 'URL картинки или загрузи файл →' : 'Имя файла в папке медиа на ТВ, например kurenai.mp4'} value={q.media.url} onInput={(e) => set({ media: { ...q.media!, url: (e.target as HTMLInputElement).value } })} />}
-          {(q.media?.type === 'audio' || q.media?.type === 'video') && <input type="file" accept={q.media.type + '/*'} title="Файл не загружается — берётся только имя" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) set({ media: { type: q.media!.type, url: f.name } }); }} />}
+          {q.media && <input class="inp-s grow" placeholder={q.media.type === 'image' ? 'URL картинки или загрузи файл →' : 'Имя файла из папки media, например kurenai.mp4'} list={q.media.type === 'image' ? undefined : 'media-files'} value={q.media.url} onInput={(e) => set({ media: { ...q.media!, url: (e.target as HTMLInputElement).value } })} />}
+          {(q.media?.type === 'audio' || q.media?.type === 'video') && <input type="file" accept={q.media.type + '/*'} title="Файл не загружается — берётся только имя. Сам файл положи в папку media проекта." onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) set({ media: { type: q.media!.type, url: f.name } }); }} />}
           {q.media?.type === 'image' && <input type="file" accept="image/*" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) void upload(f, (url) => set({ media: { type: 'image', url } })); }} />}
         </div>
         {q.media?.type === 'image' && q.media.url && <img src={q.media.url} class="preview" />}
-        {(q.media?.type === 'audio' || q.media?.type === 'video') && <div class="muted small">Аудио и видео играют только на ТВ из папки медиа на компьютере ТВ (выбирается на стартовом экране ТВ). Никуда не загружаются — в вопросе хранится только имя файла. Телефоны видят только текст и ответы.</div>}
+        {(q.media?.type === 'audio' || q.media?.type === 'video') && <datalist id="media-files">{mediaFiles.map((f) => <option value={f} />)}</datalist>}
+        {(q.media?.type === 'audio' || q.media?.type === 'video') && <div class="muted small">Аудио и видео играют только на ТВ из папки <b>media</b> в проекте. Никуда не загружаются — в вопросе хранится только имя файла. Телефоны видят только текст и ответы.</div>}
         <label><input type="checkbox" checked={!!q.answerImages} onChange={(e) => set({ answerImages: (e.target as HTMLInputElement).checked })} /> Ответы — картинки (сетка 2×2 на телефоне)</label>
         {q.answers.map((a, i) => (
           <div class={'ans-row' + (q.correct === i ? ' right' : '')}>

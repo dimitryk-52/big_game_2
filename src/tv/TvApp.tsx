@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, LETTERS, TimerBar } from '../ui/common';
+import { Avatar, HpBar, LETTERS, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { fmtYen, now } from '../shared/util';
 import { playRhythmMusic, sfx, setSound, soundOn } from '../shared/sound';
@@ -93,6 +93,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       highlight: st.t === 'move' ? st.options : undefined,
       highlight2: st.t === 'move' ? st.options2 : undefined,
       blocked: st.t === 'landing' ? st.blocked : undefined,
+      arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
       machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
     });
@@ -130,7 +131,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
 
   return (
-    <div class="tv">
+    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '')}>
       <div class="tv-map" ref={mapEl} />
       <TopBar s={s} />
       {s.phase !== 'lobby' && <PlayerList s={s} />}
@@ -215,31 +216,35 @@ function PlayerList({ s }: { s: GameState }) {
   const cur = s.phase === 'turns' ? s.turnOrder[s.turnIdx] : null;
   const answered = new Set(s.q?.answered ?? []);
   const combat = s.settings.topics.filter((t) => t.combat);
+  const max = skillMax(s);
+  const ids = order.filter((id) => s.players[id]);
   return (
-    <div class="plist">
-      {order.map((id, i) => {
+    <div class={'plist' + (ids.length > 5 ? ' cols-2' : '')}>
+      {ids.map((id) => {
         const p = s.players[id];
-        if (!p) return null;
         return (
           <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ borderColor: p.color }}>
-            <div class="pcard-head">
-              <span class="pnum">{i + 1}</span>
-              <Avatar p={p} size={34} dim={p.hp <= 0} />
-              <span class="pname">{p.name}</span>
-              <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
-              {p.busy && <span title={p.busy}>{p.busy === 'pachinko' ? '🎰' : '🎡'}</span>}
-              {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
+            <div class="pc-top">
+              <Avatar p={p} size={56} dim={p.hp <= 0} />
+              <div class="pc-info">
+                <div class="pc-name">
+                  <span class="pname">{p.name}</span>
+                  {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
+                  {p.busy && <span title={p.busy}>{p.busy === 'pachinko' ? '🎰' : '🎡'}</span>}
+                  <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
+                </div>
+                <HpBar hp={p.hp} max={p.maxHp} />
+                <div class="pc-money">
+                  <span>{fmtYen(p.yen)}</span>
+                  <span>⭐{p.stars}</span>
+                  {p.specials > 0 && <span>💥{p.specials}</span>}
+                  {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
+                  {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
+                </div>
+              </div>
             </div>
-            <HpBar hp={p.hp} max={p.maxHp} />
-            <div class="pcard-stats">
-              <span>{fmtYen(p.yen)}</span>
-              <span>⭐{p.stars}</span>
-              {p.specials > 0 && <span>💥{p.specials}</span>}
-              {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
-            </div>
-            <div class="pcard-stats small">
-              {combat.map((t) => <span style={{ color: t.color }}>{t.name.slice(0, 3)} {p.stats[t.id] ?? 0}</span>)}
-              {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
+            <div class="pc-skills">
+              {combat.map((t) => <SkillRow t={t} value={p.stats[t.id] ?? 0} max={max} />)}
             </div>
           </div>
         );
@@ -321,22 +326,20 @@ function CalibResult({ s }: { s: GameState }) {
         <h2>Итоги калибровки</h2>
         <table>
           <thead>
-            <tr><th>Ход</th><th>Игрок</th>{topics.map((t) => <th style={{ color: t.color }}>{t.name}</th>)}</tr>
+            <tr><th>Игрок</th>{topics.map((t) => <th><SkillIcon t={t} size={28} /></th>)}</tr>
           </thead>
           <tbody>
             {s.turnOrder.map((id, i) => {
               const p = s.players[id];
               return (
                 <tr class="slide-up" style={{ animationDelay: `${i * 0.12}s` }}>
-                  <td>{i + 1}</td>
                   <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
-                  {topics.map((t) => <td class="big">{p.stats[t.id]}</td>)}
+                  {topics.map((t) => <td class="calib-skill"><SkillRow t={t} value={p.stats[t.id] ?? 0} max={skillMax(s)} size={22} /></td>)}
                 </tr>
               );
             })}
           </tbody>
         </table>
-        <div class="muted">Самый слабый ходит первым. Высадка — в обратном порядке.</div>
       </div>
     </div>
   );
@@ -428,7 +431,7 @@ function DuelHud({ s }: { s: GameState }) {
         <div><b>{p.name}</b> <span class="muted">{role}</span></div>
         <HpBar hp={p.hp} max={p.maxHp} />
         <div class="row small-stats">
-          {s.settings.topics.filter((t) => t.combat).map((t) => <span style={{ color: t.color }}>{t.name.slice(0, 3)} {p.stats[t.id]}</span>)}
+          <SkillChips topics={s.settings.topics.filter((t) => t.combat)} stats={p.stats} size={18} />
           {p.specials > 0 && <span>💥{p.specials}</span>}
         </div>
       </div>

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Player, RhythmPublic } from '../shared/types';
 import { RHYTHM_LEAD_BEATS, RHYTHM_WINDOW, rhythmChart } from './logic';
-import { vibrate } from '../shared/util';
+import { uiFont, vibrate } from '../shared/util';
 
 const LANE_COLORS = ['#ff4d6d', '#ffd23f', '#5ce16b', '#4dabff'];
 
@@ -61,7 +61,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       const beatNow = (t - r.startAt) / msPerBeat;
       if (beatNow < RHYTHM_LEAD_BEATS) {
         ctx.fillStyle = '#fff';
-        ctx.font = `${Math.floor(H / 8)}px DotGothic16, monospace`;
+        ctx.font = `${Math.floor(H / 8)}px ${uiFont()}`;
         ctx.textAlign = 'center';
         const n = beatNow < 0 ? '…' : String(RHYTHM_LEAD_BEATS - Math.floor(beatNow));
         ctx.fillText(n, W / 2, H * 0.4);
@@ -83,7 +83,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
         ctx.fillRect(n.lane * lw + 10, y - 10, lw - 20, 4);
       });
       ctx.textAlign = 'center';
-      ctx.font = '20px DotGothic16, monospace';
+      ctx.font = '20px ' + uiFont();
       s.fx = s.fx.filter((f) => t - f.t < 600);
       for (const f of s.fx) {
         ctx.globalAlpha = 1 - (t - f.t) / 600;

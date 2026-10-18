@@ -10,16 +10,19 @@
 .logo { font-size: 1.5em; text-shadow: 3px 3px 0 #000; letter-spacing: 1px; }
 .logo span { color: var(--pink); font-size: 0.7em; }
 
-.plist { position: absolute; top: 12px; right: 12px; bottom: 12px; width: clamp(220px, 17vw, 330px); display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
-.pcard { background: rgba(27, 31, 58, 0.92); border: 3px solid #fff; padding: 6px 8px; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; gap: 4px; transition: transform 0.2s; }
+.plist { position: absolute; top: 12px; right: 12px; bottom: 12px; width: clamp(240px, 18vw, 340px); display: grid; grid-auto-rows: min-content; gap: 6px; overflow: hidden; align-content: start; }
+.plist.cols-2 { width: clamp(440px, 34vw, 640px); grid-template-columns: 1fr 1fr; }
+.pcard { background: rgba(27, 31, 58, 0.92); border: 3px solid #fff; padding: 6px 8px; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; gap: 5px; transition: transform 0.2s; min-width: 0; }
+.pc-top { display: flex; gap: 8px; align-items: flex-end; }
+.pc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pc-name { display: flex; align-items: center; gap: 6px; font-size: 1.05em; }
+.pc-money { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.8em; }
+.pc-skills { display: flex; flex-direction: column; gap: 3px; font-size: 0.85em; }
+.calib-skill { min-width: 150px; }
 .pcard.current { animation: glow 1s steps(2) infinite; transform: translateX(-10px); }
 .pcard.ko { opacity: 0.6; }
-.pcard-head { display: flex; align-items: center; gap: 6px; }
-.pnum { font-size: 0.8em; color: var(--muted); width: 1.2em; }
 .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ans-check { color: var(--green); }
-.pcard-stats { display: flex; gap: 10px; font-size: 0.85em; flex-wrap: wrap; }
-.pcard-stats.small { font-size: 0.72em; gap: 8px; }
 
 .log { position: absolute; left: 12px; bottom: 60px; display: flex; flex-direction: column; gap: 4px; max-width: 34vw; pointer-events: none; }
 .log div { background: rgba(0, 0, 0, 0.55); padding: 3px 8px; font-size: 0.85em; border-left: 4px solid var(--yellow); }
@@ -66,7 +69,7 @@
 .calib td.row { justify-content: flex-start; }
 
 /* вопрос */
-.qwrap { position: absolute; inset: 0 calc(clamp(220px, 17vw, 330px) + 24px) 0 12px; display: grid; place-items: center; z-index: 25; background: rgba(10, 12, 30, 0.45); }
+.qwrap { position: absolute; inset: 0 calc(clamp(240px, 18vw, 340px) + 24px) 0 12px; display: grid; place-items: center; z-index: 25; background: rgba(10, 12, 30, 0.45); }
 .qpanel { width: min(1200px, 100%); background: rgba(27, 31, 58, 0.97); border: 4px solid #fff; box-shadow: 8px 8px 0 var(--shadow); padding: 1.2em 1.4em; display: flex; flex-direction: column; gap: 0.8em; max-height: 94vh; }
 .qpanel.special { border-color: var(--pink); }
 .qhead { display: flex; gap: 10px; align-items: center; }
@@ -113,10 +116,14 @@
 .rhythm-pad:active { filter: brightness(1.5); transform: translateY(2px); }
 
 /* PnP */
-.pnp-layer { position: absolute; right: calc(clamp(220px, 17vw, 330px) + 24px); bottom: 12px; display: flex; gap: 10px; z-index: 35; align-items: flex-end; }
+.pnp-layer { position: absolute; right: calc(clamp(240px, 18vw, 340px) + 24px); bottom: 12px; display: flex; gap: 10px; z-index: 35; align-items: flex-end; }
 .pnp { background: #11142b; border: 3px solid #fff; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; }
 .pnp-head { font-size: 0.75em; padding: 2px 6px; background: #232850; }
 .pnp-cv { display: block; image-rendering: pixelated; }
 .pnp-foot { font-size: 0.7em; padding: 2px 6px; }
 
 .media-box { margin-top: 16px; padding-top: 12px; border-top: 2px solid #ffffff33; display: flex; flex-direction: column; gap: 8px; align-items: center; font-size: 14px; max-width: 520px; }
+
+/* две колонки игроков (больше 5) — сдвигаем вопрос и пнп */
+.tv.wide-list .qwrap { right: calc(clamp(440px, 34vw, 640px) + 24px); }
+.tv.wide-list .pnp-layer { right: calc(clamp(440px, 34vw, 640px) + 24px); }
