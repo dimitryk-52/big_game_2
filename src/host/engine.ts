@@ -6,6 +6,7 @@ import type {
   BonusId, GameMsg, GameState, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { RHYTHM_LEAD_BEATS, ringCellAt, ringLayout, ringResult } from '../games/logic';
@@ -22,6 +23,7 @@ export interface HostIO {
 class Aborted extends Error {}
 const ANSWER_GRACE = 700; // мс: льгота на доставку ответа после дедлайна
 const LEAD = 700; // мс: задержка старта таймера, чтобы вопрос успел дойти до всех
+const PREF_INTRO_MS = 3500; // мс: интро префектуры при первом входе
 
 interface Secrets {
   pins: Record<string, string>;
@@ -67,7 +69,7 @@ export class GameEngine {
     } else {
       this.s = {
         v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
-        prefs: {}, q: null, duel: null, rhythm: null, log: [], settings, paused: false, phase: 'lobby',
+        prefs: {}, q: null, duel: null, rhythm: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
       };
       this.sec = { pins: {}, used: [], qn: 0, logN: 0, calibIdx: 0, landingIdx: 0, rhythmN: 0, ring: {} };
     }
@@ -153,6 +155,21 @@ export class GameEngine {
         break;
       case 'questions':
         if (Array.isArray(args)) this.questions = args;
+        break;
+      case 'debug': {
+        // отладочная сцена (меню 🐞 на ТВ/телефоне); null — закрыть
+        const v = args?.scene ? buildDebugScene(this.s, this.questions, args, this.now) : null;
+        this.s.debug = v;
+        if (v?.rhythm) this.io.fx?.('rhythm', v.rhythm);
+        this.emit();
+        break;
+      }
+      case 'debugFx':
+        this.io.fx?.(args?.k, args?.d);
+        break;
+      case 'revealAll':
+        for (const c of Object.keys(this.s.prefs)) this.s.prefs[+c].rev = true;
+        this.emit();
         break;
       case 'end':
         this.s.phase = 'end';
@@ -331,7 +348,7 @@ export class GameEngine {
           p.calib[topic.id] = (p.calib[topic.id] ?? 0) + 1;
           p.stats[topic.id] = (p.stats[topic.id] ?? 0) + 1;
           p.yen += this.s.settings.reward.calibCorrectYen;
-          results[pid] = `+1 ${topic.name}`;
+          results[pid] = `+1 {skill:${topic.id}}`;
         }
       }
       await this.reveal(epoch, results);
@@ -372,8 +389,8 @@ export class GameEngine {
       this.s.prefs[code].rev = true;
       this.log(`${p.name} высаживается: ${prefName(code)}`);
       this.io.fx?.('land', { pid, code });
-      this.setStage({ t: 'banner', text: `${p.name} → ${PREF[code].ru}`, sub: PREF[code].ja });
-      await this.sleep(epoch, 1800);
+      this.setStage({ t: 'prefIntro', code, pid });
+      await this.sleep(epoch, PREF_INTRO_MS);
       this.sec.landingIdx = i + 1;
       this.snapshot();
     }
@@ -440,6 +457,11 @@ export class GameEngine {
     ps.visits++;
     this.io.fx?.('arrive', { pid, code: to, firstVisit });
     this.emit();
+    if (firstVisit) {
+      await this.sleep(epoch, 700);
+      this.setStage({ t: 'prefIntro', code: to, pid });
+      await this.sleep(epoch, PREF_INTRO_MS);
+    }
     await this.gate(epoch);
 
     // ── вопрос префектуры: отвечают все ──
@@ -450,7 +472,7 @@ export class GameEngine {
     if (q) {
       const pids = this.s.joinOrder.filter((id) => this.s.players[id]);
       const removed = await this.bonusPhase(epoch, pids, false, q);
-      const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, removed);
+      const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, removed, to);
       const results: Record<string, string> = {};
       const moverOk = res[pid] === q.correct;
       for (const id of pids) {
@@ -592,7 +614,7 @@ export class GameEngine {
         // бонусы: сначала атакующий дуэли, потом защитник
         const removed = await this.bonusPhase(epoch, [att.id, def.id], true, q);
         const topicName = this.s.settings.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
-        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? '💥 Спецвопрос' : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed);
+        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? '💥 Спецвопрос' : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
         const okA = res[asker.id] === q.correct, okT = res[target.id] === q.correct;
         const results: Record<string, string> = {};
         if (okA !== okT) {
@@ -714,7 +736,7 @@ export class GameEngine {
     return q;
   }
 
-  private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}): Promise<Record<string, number | null>> {
+  private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}, pref: number | null = null): Promise<Record<string, number | null>> {
     const n = ++this.sec.qn;
     const startAt = this.now + LEAD;
     const deadline = startAt + timeSec * 1000;
@@ -722,6 +744,7 @@ export class GameEngine {
     const pq: PublicQuestion = {
       qid: q.id, n, context, title, text: q.text, media: q.media, answers: q.answers, answerImages: !!q.answerImages,
       topic: q.topic, special: !!q.special, startAt, deadline, participants, answered: [], removed, revealed: false,
+      ...(pref ? { pref } : {}),
     };
     this.s.q = pq;
     this.choices = {};

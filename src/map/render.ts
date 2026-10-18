@@ -1,12 +1,13 @@
-// Карта — готовый рисунок (src/img/map.png → assets/map.webp, собирается scripts/build-map.py).
+// Карта — пиксель-арт из рисунка src/img/map.png (→ assets/map.png, собирается scripts/build-map.py):
+// один пиксель картинки = один «пиксель» рисунка, на экране растягивается без сглаживания.
 // Границы префектур — карта меток assets/regions.png (R = код*5); из неё строятся маски
 // для тумана, подсветки и контура выбранной префектуры.
 import { MAP_H, MAP_W, PREF } from './mapData';
-import mapUrl from './assets/map.webp';
+import mapUrl from './assets/map.png';
 import regionsUrl from './assets/regions.png';
 
-/** мировых единиц на пиксель рисунка: мир ≈ 1376×768, как у прежней сетки — зум и размеры фишек не меняются */
-export const SCALE = 0.5;
+/** мировых единиц на пиксель карты: мир всегда 1376 в ширину — зум и размеры фишек не зависят от разрешения карты */
+export const SCALE = 1376 / MAP_W;
 export const CANVAS_W = MAP_W * SCALE;
 export const CANVAS_H = MAP_H * SCALE;
 
@@ -113,19 +114,19 @@ export function renderPrefMask(regions: Uint8Array, code: number) {
 export function renderPrefFog(regions: Uint8Array, code: number) {
   return prefLayer(regions, code, 0, (x, y, inside) => {
     if (!inside) return null;
-    const n = hash(x >> 4, y >> 4) * 0.6 + hash(x >> 3, y >> 3) * 0.4;
+    const n = hash(x >> 2, y >> 2) * 0.6 + hash(x >> 1, y >> 1) * 0.4;
     const v = n > 0.66 ? 12 : n < 0.3 ? -10 : 0;
     // у границы префектуры — тёмная кромка, чтобы соседние туманные области не сливались
-    const edge = codeAt(regions, x - 2, y) !== code || codeAt(regions, x + 2, y) !== code
-      || codeAt(regions, x, y - 2) !== code || codeAt(regions, x, y + 2) !== code;
+    const edge = codeAt(regions, x - 1, y) !== code || codeAt(regions, x + 1, y) !== code
+      || codeAt(regions, x, y - 1) !== code || codeAt(regions, x, y + 1) !== code;
     if (edge) return [70, 80, 115, 235];
     return [196 + v, 205 + v, 226 + v, 228];
   });
 }
 
-/** контур префектуры толщиной ~3px рисунка (для выбранной) */
+/** контур префектуры толщиной в пиксель карты (для выбранной) */
 export function renderPrefOutline(regions: Uint8Array, code: number) {
-  const T = 3;
+  const T = 1;
   return prefLayer(regions, code, T + 1, (x, y, inside) => {
     // пиксель контура: снаружи префектуры, но в пределах T от неё
     if (inside) return null;

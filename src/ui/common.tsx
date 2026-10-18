@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { GameState, Player, Topic } from '../shared/types';
-import { characterUrl, topicIconUrl } from '../shared/sprites';
+import type { GameState, Player, RewardType, Topic } from '../shared/types';
+import { REWARD_INFO } from '../shared/settings';
+import { characterUrl, pixelIconUrl, topicIconUrl } from '../shared/sprites';
+import { prefBgUrl } from '../shared/prefBg';
+import { PREF } from '../map/mapData';
 
 /** перерисовка каждый кадр (для таймеров) */
 export function useFrame(active = true) {
@@ -67,6 +70,25 @@ export function SkillIcon({ t, size = 18 }: { t: Pick<Topic, 'id' | 'color' | 'n
   return <img class="skill-icon" src={topicIconUrl(t.id, t.color)} width={size} height={size} alt={t.name} title={t.name} draggable={false} />;
 }
 
+/** пиксельная иконка из sprites.ts (stars, money, bonus, special, prize, pachinko, ring) */
+export function PixIcon({ id, size = 18 }: { id: string; size?: number }) {
+  return <img class="pix-icon" src={pixelIconUrl(id)} height={size} alt="" draggable={false} />;
+}
+
+/** текст результата, где {skill:id} — иконка скилла (например «+1 {skill:music}») */
+export function ResText({ text, topics, size = 18 }: { text: string; topics: Topic[]; size?: number }) {
+  const parts = text.split(/\{skill:([\w-]+)\}/);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part;
+        const t = topics.find((x) => x.id === part);
+        return t ? <SkillIcon t={t} size={size} /> : part;
+      })}
+    </>
+  );
+}
+
 /** сегментированная пиксельная полоска */
 export function SkillBar({ value, max, color }: { value: number; max: number; color: string }) {
   const segs = Math.max(1, Math.min(12, max));
@@ -94,5 +116,22 @@ export function SkillChips({ topics, stats, size = 16 }: { topics: Topic[]; stat
     <span class="skill-chips">
       {topics.map((t) => <span class="skill-chip"><SkillIcon t={t} size={size} /><b>{stats[t.id] ?? 0}</b></span>)}
     </span>
+  );
+}
+
+/** интро префектуры при первом входе: фон (если нарисован) и название по-русски и по-японски */
+export function PrefIntro({ code, who, reward }: { code: number; who?: Player; reward?: RewardType }) {
+  const bg = prefBgUrl(code);
+  const p = PREF[code];
+  return (
+    <div class="pref-intro">
+      {bg ? <img class="pref-intro-bg" src={bg} alt="" draggable={false} /> : <div class="pref-intro-bg empty" />}
+      <div class="pref-intro-title">
+        <div class="pref-intro-ja">{p?.ja}</div>
+        <div class="pref-intro-ru">{p?.ru}</div>
+        {reward && <div class="pref-intro-reward">Награда: <PixIcon id={reward} size={32} /> {REWARD_INFO[reward].name}</div>}
+        {who && <div class="pref-intro-who"><Avatar p={who} size={36} /> {who.name}</div>}
+      </div>
+    </div>
   );
 }

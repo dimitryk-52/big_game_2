@@ -8,17 +8,21 @@
 #  2. границы префектур — толстые (≥3px) почти чёрные линии рисунка;
 #  3. заливка водоразделом от «зёрен» из scripts/map-seeds.json (код префектуры → точки на картинке):
 #     регионы растут по светлому и встречаются на чёрных линиях; острова без зерна — ближайшей префектуре;
-#  4. пишет src/map/assets/regions.png (R = код*5, 0 — море), src/map/assets/map.webp и
-#     обновляет anchor/bb/size в src/map/japan.json (координаты — пиксели картинки).
+#  4. превращает рисунок в настоящий пиксель-арт (scripts/pixelart.py): родная сетка рисунка —
+#     CELL×CELL пикселей, карта меток уменьшается в ту же сетку, так что границы совпадают с пикселями;
+#  5. пишет src/map/assets/regions.png (R = код*5, 0 — море), src/map/assets/map.png (пиксель-арт) и
+#     обновляет anchor/bb/size в src/map/japan.json (координаты — пиксели пиксель-арта).
 # Если префектура легла не туда — поправьте/добавьте точки в map-seeds.json и перезапустите.
 # --debug сохраняет картинку с границами и номерами для проверки.
 # Нужны: pillow, numpy, scipy, scikit-image.
 import json, sys
+sys.stdout.reconfigure(encoding='utf-8')
 from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage as nd
 from skimage.segmentation import watershed
+from pixelart import pixelize, labels_down
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'src/img/map.png'
@@ -26,6 +30,8 @@ SEEDS = ROOT / 'scripts/map-seeds.json'
 DATA = ROOT / 'src/map/japan.json'
 OUT = ROOT / 'src/map/assets'
 SEA = np.array([73, 132, 188])
+CELL = 3      # размер «пикселя» рисунка в пикселях исходника
+COLORS = 64   # цветов в палитре пиксель-арта
 
 debug = None
 if '--debug' in sys.argv:
@@ -79,11 +85,18 @@ miss = land & (reg == 0)
 iy, ix = nd.distance_transform_edt(reg == 0, return_distances=False, return_indices=True)
 reg[miss] = reg[iy[miss], ix[miss]]
 
-# 4. данные префектур
+# 4. пиксель-арт и метки в его сетке
+pix = pixelize(img, CELL, COLORS)
+PW, PH = pix.size
+preg = labels_down(reg, PW, PH)
+fx, fy = PW / W, PH / H
+
+# 5. данные префектур (якоря ищем на исходнике — точнее, потом переводим в сетку пиксель-арта)
 data = json.loads(DATA.read_text(encoding='utf-8'))
 for k in ('w', 'h', 'cells'):
     data.pop(k, None)
-data['w'], data['h'] = W, H
+data['w'], data['h'] = PW, PH
+pobjs = nd.find_objects(preg)
 codes = [p['code'] for p in data['prefs']]
 objs = nd.find_objects(reg)
 for p in data['prefs']:
@@ -101,9 +114,12 @@ for p in data['prefs']:
         top = cl == cs.argmax()
     dt = nd.distance_transform_edt(top)
     y, x = np.unravel_index(dt.argmax(), dt.shape)
-    p['anchor'] = [int(x + s[1].start), int(y + s[0].start)]
-    p['bb'] = [s[1].start, s[0].start, s[1].stop - 1, s[0].stop - 1]
-    p['size'] = int(m.sum())
+    p['anchor'] = [int((x + s[1].start) * fx), int((y + s[0].start) * fy)]
+    ps = pobjs[c - 1] if c - 1 < len(pobjs) else None
+    if ps is None:
+        raise SystemExit(f'префектура {c} {p["en"]} исчезла при уменьшении — слишком мелкая?')
+    p['bb'] = [ps[1].start, ps[0].start, ps[1].stop - 1, ps[0].stop - 1]
+    p['size'] = int((preg[ps] == c).sum())
 
 # соседство по рисунку — для сверки с игровым (реальным) adj
 touch = set()
@@ -123,13 +139,14 @@ print('соседи на рисунке, но не в игре:', ', '.join(f'{n
 print('соседи в игре, но не касаются на рисунке (морские связи?):', ', '.join(f'{name[x]}-{name[y]}' for x, y in only_game) or '—')
 
 OUT.mkdir(parents=True, exist_ok=True)
-rgba = np.zeros((H, W, 4), np.uint8)
-rgba[..., 0] = reg * 5
+rgba = np.zeros((PH, PW, 4), np.uint8)
+rgba[..., 0] = preg * 5
 rgba[..., 3] = 255
 Image.fromarray(rgba, 'RGBA').save(OUT / 'regions.png', optimize=True)
-img.save(OUT / 'map.webp', lossless=True, quality=100, method=6)
+pix.save(OUT / 'map.png', optimize=True)
+(OUT / 'map.webp').unlink(missing_ok=True)
 DATA.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-print('готово:', OUT / 'regions.png', OUT / 'map.webp', DATA)
+print(f'готово: пиксель-арт {PW}×{PH}', OUT / 'regions.png', OUT / 'map.png', DATA)
 
 if debug:
     v = (a * 0.6 + 255 * 0.25).astype(np.uint8)
@@ -143,7 +160,7 @@ if debug:
     d = ImageDraw.Draw(im)
     f = ImageFont.truetype('arial.ttf', 18)
     for p in data['prefs']:
-        x, y = p['anchor']
+        x, y = p['anchor'][0] / fx, p['anchor'][1] / fy
         d.text((x - 10, y - 10), str(p['code']), fill=(255, 255, 0), font=f, stroke_width=3, stroke_fill=(0, 0, 0))
     for code, pts in seeds.items():
         for x, y in pts:

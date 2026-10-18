@@ -171,3 +171,143 @@ export function topicIconUrl(id: string, color: string, scale = 3): string {
   iconCache.set(k, u);
   return u;
 }
+
+// ───── пиксельные иконки (награды на карте, игровые автоматы, звёзды в интерфейсе) ─────
+// Буквы — цвета из ICON_PAL, . — пусто. Чёрный контур и тень снизу рисуются автоматически,
+// чтобы иконка читалась поверх пёстрой карты.
+const ICON_PAL: Record<string, string> = {
+  Y: '#ffd23f', O: '#e0861e', W: '#ffffff', D: '#6b3d10', R: '#ec3a52', M: '#9a1f34',
+  B: '#8fd8ff', G: '#5ce16b', P: '#c77dff', S: '#c9ced8', K: '#2a2a3a',
+};
+const PIXEL_ICONS: Record<string, string[]> = {
+  stars: [
+    '....Y....',
+    '....Y....',
+    '...YWY...',
+    'YYYYWYYYY',
+    '.YYYYYYO.',
+    '..YYYYO..',
+    '..YYOYY..',
+    '.YYO.OYO.',
+    '.YO...OO.',
+  ],
+  money: [
+    '..OOOOOO..',
+    '.OYYYYYYO.',
+    'OYDYYYYDYO',
+    'OYYDYYDYYO',
+    'OYYYDDYYYO',
+    'OYYDDDDYYO',
+    'OYYYDDYYYO',
+    'OYYDDDDYYO',
+    '.OYYDDYYO.',
+    '..OOOOOO..',
+  ],
+  bonus: [
+    '.YY....YY.',
+    'Y..Y..Y..Y',
+    '.YYYYYYYY.',
+    'RRRRYYRRRR',
+    'RWRRYYRRRR',
+    'MMMMYYMMMM',
+    '.RRRYYRRR.',
+    '.RRRYYRRR.',
+    '.RRRYYRRR.',
+    '.MMMYYMMM.',
+  ],
+  special: [
+    '....R.....',
+    '.R..RR..R.',
+    '.RRROORRR.',
+    '..ROYYOR..',
+    'RROYWWYORR',
+    '.ROYWWYOR.',
+    '..ROYYORR.',
+    '.RRROORR..',
+    '.R..RR..R.',
+    '.....R....',
+  ],
+  prize: [
+    'YYYYYYYYYY',
+    'Y.YWYYYO.Y',
+    'Y.YWYYYO.Y',
+    '.YYWYYYOY.',
+    '..YYYYYO..',
+    '...YYYO...',
+    '....YO....',
+    '....YO....',
+    '...YYYO...',
+    '..DDDDDD..',
+  ],
+  pachinko: [
+    '.RRRRRRRR.',
+    'RBBBBBBBBR',
+    'RBWBBWBBBR',
+    'RBBBWBBWBR',
+    'RBWBBSBBBR',
+    'RBBBBBBBBR',
+    'RRRRRRRRRR',
+    'RKKYYYYKKR',
+    'RKKKKKKKKR',
+    '.MM....MM.',
+  ],
+  ring: [
+    '...RRYY...',
+    '..R....Y..',
+    '.P......G.',
+    '.P..YY..G.',
+    '.B..YY..R.',
+    '.B......R.',
+    '..G....P..',
+    '...GBBP...',
+    '....DD....',
+    '...DDDD...',
+  ],
+};
+
+const pixCache = new Map<string, HTMLCanvasElement>();
+/** иконка с контуром; размер холста (w+2)×(h+3) клеток по scale пикселей */
+export function pixelIcon(id: string, scale = 1): HTMLCanvasElement {
+  const key = id + '|' + scale;
+  const c0 = pixCache.get(key);
+  if (c0) return c0;
+  const rows = (PIXEL_ICONS[id] ?? PIXEL_ICONS.stars).map((r) => r.split(''));
+  const h = rows.length, w = rows[0].length;
+  const filled = (x: number, y: number) => (rows[y]?.[x] ?? '.') !== '.';
+  const c = document.createElement('canvas');
+  c.width = (w + 2) * scale;
+  c.height = (h + 3) * scale;
+  const ctx = c.getContext('2d')!;
+  const px = (x: number, y: number) => ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
+  const near = (x: number, y: number) => {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (filled(x + dx, y + dy)) return true;
+    return false;
+  };
+  // тень: контур, сдвинутый на клетку вниз
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  for (let y = 0; y <= h + 1; y++) for (let x = -1; x <= w; x++) if (near(x, y - 1)) px(x, y);
+  ctx.fillStyle = '#0d0d1a';
+  for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) if (!filled(x, y) && near(x, y)) {
+    ctx.clearRect((x + 1) * scale, (y + 1) * scale, scale, scale);
+    px(x, y);
+  }
+  rows.forEach((r, y) => r.forEach((ch, x) => {
+    if (ch === '.') return;
+    ctx.fillStyle = ICON_PAL[ch] ?? '#f0f';
+    ctx.clearRect((x + 1) * scale, (y + 1) * scale, scale, scale);
+    px(x, y);
+  }));
+  pixCache.set(key, c);
+  return c;
+}
+
+const pixUrlCache = new Map<string, string>();
+export function pixelIconUrl(id: string, scale = 3) {
+  const key = id + '|' + scale;
+  let u = pixUrlCache.get(key);
+  if (!u) {
+    u = pixelIcon(id, scale).toDataURL();
+    pixUrlCache.set(key, u);
+  }
+  return u;
+}

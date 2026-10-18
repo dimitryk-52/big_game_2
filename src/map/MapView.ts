@@ -7,8 +7,7 @@ import {
   CANVAS_H, CANVAS_W, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { characterCanvas } from '../shared/sprites';
-import { REWARD_INFO } from '../shared/settings';
+import { characterCanvas, pixelIcon } from '../shared/sprites';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
@@ -63,7 +62,7 @@ export class MapView {
   private outline: Sprite | null = null;
   private tokens = new Map<string, Token>();
   private labels = new Map<number, Text>();
-  private icons = new Map<string, Text>();
+  private icons = new Map<string, Sprite & { icon?: string; bob?: number }>();
   private particles: { g: Graphics; vx: number; vy: number; life: number; max: number }[] = [];
   private lastLookKey = '';
   private last: MapUpdate | null = null;
@@ -215,27 +214,28 @@ export class MapView {
   }
 
   private updateIcons(u: MapUpdate) {
-    const want = new Map<string, { code: number; text: string; dx: number }>();
-    for (const c of u.machines?.pachinko ?? []) if (u.prefs[c]?.rev) want.set('p' + c, { code: c, text: '🎰', dx: -12 });
-    for (const c of u.machines?.ring ?? []) if (u.prefs[c]?.rev) want.set('r' + c, { code: c, text: '🎡', dx: -12 });
+    const want = new Map<string, { code: number; icon: string; dx: number }>();
+    for (const c of u.machines?.pachinko ?? []) if (u.prefs[c]?.rev) want.set('p' + c, { code: c, icon: 'pachinko', dx: -14 });
+    for (const c of u.machines?.ring ?? []) if (u.prefs[c]?.rev) want.set('r' + c, { code: c, icon: 'ring', dx: -14 });
     if (u.showRewards !== false) for (const c of PREF_CODES) {
       const p = u.prefs[c];
       if (!p?.rev) continue;
-      want.set('w' + c, { code: c, text: REWARD_INFO[p.reward].icon, dx: 12 });
+      want.set('w' + c, { code: c, icon: p.reward, dx: 14 });
     }
     for (const [k, t] of this.icons) if (!want.has(k)) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);
-      if (!t) {
-        t = new Text({ text: w.text, style: { fontSize: 16 } });
+      if (!t || t.icon !== w.icon) {
+        t?.destroy();
+        const tex = Texture.from(pixelIcon(w.icon));
+        tex.source.scaleMode = 'nearest';
+        t = Object.assign(new Sprite(tex), { icon: w.icon, bob: Math.random() * 6 });
         t.anchor.set(0.5, 1);
-        t.resolution = 2;
         this.iconLayer.addChild(t);
         this.icons.set(k, t);
       }
-      if (t.text !== w.text) t.text = w.text;
       const a = prefAnchorWorld(w.code);
-      t.position.set(a.x + w.dx, a.y - 6);
+      t.position.set(a.x + w.dx, a.y - 4);
     }
   }
 
@@ -467,7 +467,7 @@ export class MapView {
     const code = codeAt(this.regions, p.x, p.y);
     if (code && (!opts.length || opts.includes(code))) return code;
     // промах мимо — ищем ближайшую подсвеченную префектуру в радиусе ~20px экрана (удобно пальцем)
-    const R = Math.max(8, 20 / (this.cam.z * SCALE)), step = Math.max(1, R / 10);
+    const R = Math.max(3, 20 / (this.cam.z * SCALE)), step = Math.max(1, R / 10);
     let best = code, bd = 1e9;
     for (let dy = -R; dy <= R; dy += step) for (let dx = -R; dx <= R; dx += step) {
       const k = codeAt(this.regions, p.x + dx, p.y + dy);
@@ -517,8 +517,11 @@ export class MapView {
       l.scale.set(inv * (opt ? 0.85 : 0.6));
       l.visible = opt || this.cam.z > 1.6;
     }
+    // иконки — в масштабе фишек (пиксель иконки ≈ пиксель персонажа), чуть покачиваются
+    const iconScale = 1.4 * Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
     for (const t of this.icons.values()) {
-      t.scale.set(Math.max(0.7, Math.min(1.6, inv * 1.4)));
+      t.scale.set(iconScale);
+      t.pivot.y = Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8);
       t.visible = this.cam.z > 0.75;
     }
 
@@ -552,6 +555,9 @@ export class MapView {
       const s = Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
       t.root.scale.set(s);
       t.label.visible = this.cam.z > 0.8;
+      // имя рендерится в разрешении экрана: при приближении текстура текста не растягивается
+      const res = Math.min(8, Math.ceil(this.cam.z * s * this.app.renderer.resolution));
+      if (t.label.resolution !== res) t.label.resolution = res;
     }
     // порядок отрисовки по Y
     this.tokenLayer.children.sort((a, b) => a.y - b.y);

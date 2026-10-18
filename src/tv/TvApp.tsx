@@ -4,8 +4,11 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, LETTERS, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import { prefBgUrl } from '../shared/prefBg';
+import { viewState } from '../host/debugScenes';
+import { DebugMenu } from '../ui/DebugMenu';
 import { fmtYen, now } from '../shared/util';
 import { playRhythmMusic, sfx, setSound, soundOn } from '../shared/sound';
 import { RhythmBoard } from '../games/RhythmBoard';
@@ -19,7 +22,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const map = useRef<MapView | null>(null);
   const lastStageKey = useRef('');
   const [panel, setPanel] = useState(true);
-  const s = host.state;
+  const [debug, setDebug] = useState(false);
+  const s = viewState(host.state);
 
   // подписка на события движка
   useEffect(() => {
@@ -133,6 +137,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   return (
     <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '')}>
       <div class="tv-map" ref={mapEl} />
+      {st.t === 'question' && prefBgUrl(s.q?.pref) && <img class="tv-qbg" src={prefBgUrl(s.q?.pref)!} alt="" draggable={false} />}
       <TopBar s={s} />
       {s.phase !== 'lobby' && <PlayerList s={s} />}
       <Log s={s} />
@@ -159,6 +164,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} → <b>{PREF[st.to].ru} {PREF[st.to].ja}</b></Prompt>}
       {inDuel && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
+      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} reward={s.prefs[st.code]?.reward} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
         <div class="duel-pick pop">
@@ -177,7 +183,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'end' && <EndScreen s={s} />}
       {s.paused && <div class="paused">ПАУЗА</div>}
       <PnPLayer s={s} />
-      {panel && <HostPanel s={s} host={host} onNewGame={onNewGame} />}
+      {panel && <HostPanel s={s} host={host} onNewGame={onNewGame} onDebug={() => setDebug((x) => !x)} />}
+      {debug && <DebugMenu s={host.state} send={(cmd, args) => host.ctl(cmd, args)} onClose={() => setDebug(false)} fx />}
     </div>
   );
 }
@@ -236,7 +243,7 @@ function PlayerList({ s }: { s: GameState }) {
                 <HpBar hp={p.hp} max={p.maxHp} />
                 <div class="pc-money">
                   <span>{fmtYen(p.yen)}</span>
-                  <span>⭐{p.stars}</span>
+                  <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
                   {p.specials > 0 && <span>💥{p.specials}</span>}
                   {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
                   {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
@@ -409,7 +416,7 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
                 <span>{p.name}</span>
                 {!q.revealed && done && <b>✔</b>}
                 {q.revealed && <b>{ok ? '✔' : '✘'}</b>}
-                {q.revealed && q.results?.[id] && <span class="qres">{q.results[id]}</span>}
+                {q.revealed && q.results?.[id] && <span class="qres"><ResText text={q.results[id]} topics={s.settings.topics} /></span>}
               </div>
             );
           })}
@@ -477,7 +484,7 @@ function RewardPopup({ s }: { s: GameState }) {
   return (
     <div class="banner">
       <div class="banner-inner reward pop">
-        <div class="reward-icon">{REWARD_INFO[st.reward].icon}</div>
+        <div class="reward-icon"><PixIcon id={st.reward} size={96} /></div>
         <div class="banner-text">{p?.name}</div>
         <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: {st.text}</div>
       </div>
@@ -526,7 +533,7 @@ function EndScreen({ s }: { s: GameState }) {
   );
 }
 
-function HostPanel({ s, host, onNewGame }: { s: GameState; host: Host; onNewGame: () => void }) {
+function HostPanel({ s, host, onNewGame, onDebug }: { s: GameState; host: Host; onNewGame: () => void; onDebug: () => void }) {
   const [snd, setSnd] = useState(soundOn);
   const netLabel = useMemo(() => ({ supabase: 'Supabase', ws: 'LAN (dev)', local: 'вкладки' }[host.net.mode]), [host]);
   return (
@@ -537,6 +544,7 @@ function HostPanel({ s, host, onNewGame }: { s: GameState; host: Host; onNewGame
       <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); }}>{snd ? '🔊' : '🔇'}</button>
       <button class="btn small" onClick={() => { if (confirm('Завершить игру и показать итоги?')) host.ctl('end'); }}>🏁</button>
       <button class="btn small" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна.')) onNewGame(); }}>🆕</button>
+      <button class="btn small" title="Отладка: любой экран игры" onClick={onDebug}>🐞</button>
       <MediaBox questions={host.engine.questions} compact />
       <span class="chip" title="Режим сети">{netLabel} · {host.net.status === 'online' ? 'онлайн' : host.net.status}</span>
       <span class="muted" style={{ fontSize: 12 }}>H — скрыть</span>

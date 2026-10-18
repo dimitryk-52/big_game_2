@@ -10,13 +10,15 @@
 .logo { font-size: 1.5em; text-shadow: 3px 3px 0 #000; letter-spacing: 1px; }
 .logo span { color: var(--pink); font-size: 0.7em; }
 
-.plist { position: absolute; top: 12px; right: 12px; bottom: 12px; width: clamp(240px, 18vw, 340px); display: grid; grid-auto-rows: min-content; gap: 6px; overflow: hidden; align-content: start; }
-.plist.cols-2 { width: clamp(440px, 34vw, 640px); grid-template-columns: 1fr 1fr; }
+/* слева запас под выезжающую карточку текущего игрока, справа и снизу — под тень (overflow её иначе режет) */
+.plist { position: absolute; top: 12px; right: 6px; bottom: 6px; padding: 0 6px 6px 14px; width: clamp(260px, calc(18vw + 20px), 360px); display: grid; grid-auto-rows: min-content; gap: 6px; overflow: hidden; align-content: start; }
+.plist.cols-2 { width: clamp(460px, calc(34vw + 20px), 660px); grid-template-columns: 1fr 1fr; }
 .pcard { background: rgba(27, 31, 58, 0.92); border: 3px solid #fff; padding: 6px 8px; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; gap: 5px; transition: transform 0.2s; min-width: 0; }
 .pc-top { display: flex; gap: 8px; align-items: flex-end; }
 .pc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .pc-name { display: flex; align-items: center; gap: 6px; font-size: 1.05em; }
 .pc-money { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.8em; }
+.pc-stars { display: inline-flex; align-items: center; gap: 3px; }
 .pc-skills { display: flex; flex-direction: column; gap: 3px; font-size: 0.85em; }
 .calib-skill { min-width: 150px; }
 .pcard.current { animation: glow 1s steps(2) infinite; transform: translateX(-10px); }
@@ -69,6 +71,8 @@
 .calib td.row { justify-content: flex-start; }
 
 /* вопрос */
+/* фон префектуры: квадратная картинка, по центру во всю ширину экрана */
+.tv-qbg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; pointer-events: none; animation: fadeIn 0.4s; }
 .qwrap { position: absolute; inset: 0 calc(clamp(240px, 18vw, 340px) + 24px) 0 12px; display: grid; place-items: center; z-index: 25; background: rgba(10, 12, 30, 0.45); }
 .qpanel { width: min(1200px, 100%); background: rgba(27, 31, 58, 0.97); border: 4px solid #fff; box-shadow: 8px 8px 0 var(--shadow); padding: 1.2em 1.4em; display: flex; flex-direction: column; gap: 0.8em; max-height: 94vh; }
 .qpanel.special { border-color: var(--pink); }

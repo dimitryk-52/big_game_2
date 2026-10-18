@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player, PublicQuestion } from '../shared/types';
-import { Avatar, HpBar, LETTERS, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
+import { prefBgUrl } from '../shared/prefBg';
+import { viewState } from '../host/debugScenes';
+import { DebugMenu, phoneDebugEnabled } from '../ui/DebugMenu';
+
+const DEBUG = phoneDebugEnabled();
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
@@ -30,7 +35,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 export function PlayApp({ client, onLeaveRoom }: { client: GameClient; onLeaveRoom: () => void }) {
   useClient(client);
-  const s = client.s;
+  const s = client.s && viewState(client.s);
   const me = client.me;
 
   useEffect(() => {
@@ -149,9 +154,14 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
     if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || (tab === 'ring' && !hasRing)) setTab('home');
   }, [hasPachinko, hasRing, tab]);
 
+  const [debugOpen, setDebugOpen] = useState(false);
   return (
     <div class="phone game">
       <Header client={client} s={s} me={me} />
+      {DEBUG && <button class="debug-fab" onClick={() => setDebugOpen((x) => !x)}>🐞</button>}
+      {DEBUG && debugOpen && client.s && (
+        <div class="debug-sheet"><DebugMenu s={client.s} send={(cmd, args) => client.send({ t: 'ctl', cmd, args })} onClose={() => setDebugOpen(false)} /></div>
+      )}
       <div class="main">
         {/* мини-игры остаются смонтированными (на паузе), пока идёт вопрос */}
         {(tab === 'pachinko' || hasBalls) && (hasPachinko || hasBalls) && (
@@ -159,6 +169,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
             <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
+        {s.stage.t === 'prefIntro' && <PrefIntro key={s.stage.code} code={s.stage.code} who={s.players[s.stage.pid]} reward={s.prefs[s.stage.code]?.reward} />}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
         {(att === 'landing' || att === 'move') && <MapPick key={att} client={client} s={s} me={me} mode={att} />}
@@ -199,7 +210,7 @@ function Header({ client, s, me }: { client: GameClient; s: GameState; me: Playe
       </div>
       <div class="col" style={{ gap: 2, alignItems: 'flex-end' }}>
         <span>{fmtYen(me.yen)}</span>
-        <span>⭐ {me.stars}{me.specials ? ` · 💥${me.specials}` : ''}</span>
+        <span><PixIcon id="stars" size={18} /> {me.stars}{me.specials ? ` · 💥${me.specials}` : ''}</span>
       </div>
     </header>
   );
@@ -218,6 +229,7 @@ function stageText(s: GameState, me: Player): string {
     case 'moving': return `${n(st.pid)} идёт в ${PREF[st.to].ru}`;
     case 'bonus': return 'Игроки выбирают бонусы…';
     case 'question': return s.q ? 'Вопрос на ТВ: ' + s.q.title : 'Вопрос';
+    case 'prefIntro': return PREF[st.code]?.ru ?? '';
     case 'reward': return `${n(st.pid)}: ${st.text}`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
@@ -287,8 +299,11 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
   };
   const ok = q.revealed && q.correct === (choice ?? q.choices?.[me.id]);
   const imgs = q.answerImages;
+  const bg = prefBgUrl(q.pref);
   return (
-    <div class={'question scroll pad col' + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
+    <>
+    {bg && <img class="q-bg" src={bg} alt="" draggable={false} />}
+    <div class={'question scroll pad col' + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (bg ? ' has-bg' : '')}>
       <div class="q-title">{q.title}{q.special ? ' · 💥' : ''}</div>
       {!q.revealed && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
@@ -316,10 +331,11 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
       {q.revealed && (
         <div class="q-result pop">
           {ok ? '✔ Верно!' : choice === null ? '⏱ Без ответа' : '✘ Неверно'}
-          {q.results?.[me.id] && <div class="q-res-sub">{q.results[me.id]}</div>}
+          {q.results?.[me.id] && <div class="q-res-sub"><ResText text={q.results[me.id]} topics={s.settings.topics} size={24} /></div>}
         </div>
       )}
     </div>
+    </>
   );
 }
 

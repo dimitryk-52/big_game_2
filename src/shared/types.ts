@@ -87,6 +87,8 @@ export interface PublicQuestion {
   choices?: Record<string, number | null>;
   /** итоги: кто сколько получил — для экрана ответа */
   results?: Record<string, string>;
+  /** префектура, где задают вопрос (для фона) */
+  pref?: number;
 }
 
 export interface DuelPublic {
@@ -122,6 +124,8 @@ export type Stage =
   | { t: 'moving'; pid: string; from: number | null; to: number; path: number[] }
   | { t: 'bonus'; pids: string[]; deadline: number; offers: Record<string, BonusId[]>; picked: Record<string, BonusId | 'none'> }
   | { t: 'question' }
+  /** интро префектуры при первом входе: фон и название по центру */
+  | { t: 'prefIntro'; code: number; pid: string }
   | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
@@ -197,6 +201,16 @@ export interface GameState {
   settings: Settings;
   paused: boolean;
   phase: 'lobby' | 'calib' | 'landing' | 'turns' | 'end';
+  /** отладочная сцена поверх игры (меню 🐞); сценарий при этом не трогается */
+  debug?: DebugView | null;
+}
+
+export interface DebugView {
+  scene: string;
+  stage: Stage;
+  q?: PublicQuestion | null;
+  duel?: DuelPublic | null;
+  rhythm?: RhythmPublic | null;
 }
 
 // ───── Сообщения ─────
