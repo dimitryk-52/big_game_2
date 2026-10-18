@@ -130,3 +130,38 @@ h1, h2, .banner-text, .pref-intro-ru, .fighter-name { text-shadow: var(--tx-outl
 .ui-label { font-size: 14px; color: var(--muted); }
 .ui-icon { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; background: #3b6e3a; }
 .ui-intro { position: relative; width: 480px; height: 270px; font-size: 14px; }
+
+/* ───── радужная рамка: спецтема / спецвопрос ─────
+   Ступенчатая радуга по кругу едет вдоль рамки. Вешается классом .rainbow на кнопку или панель. */
+@property --rb { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.rainbow { position: relative; }
+.rainbow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: calc(var(--px) * 2);
+  background: conic-gradient(from var(--rb),
+    #ff4d4d 0 14.3%, #ff9f43 0 28.6%, #ffd23f 0 42.9%, #5ce16b 0 57.2%, #2ee6d6 0 71.5%, #4dabff 0 85.8%, #c77dff 0 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: rb-spin 2.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes rb-spin { to { --rb: 360deg; } }
+.btn.rainbow { --c: #3b2a6e; }
+
+/* ───── барабан ───── */
+.wheel { position: relative; flex: none; }
+.wheel-cv { display: block; image-rendering: pixelated; }
+.wheel-item { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; pointer-events: none; transition: opacity 0.2s; }
+.wheel-item img { image-rendering: pixelated; display: block; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45)); }
+.wheel-item b { color: #fff; text-shadow: var(--tx-outline); white-space: nowrap; }
+.wheel-item.dim { opacity: 0.35; }
+.wheel-item.win { animation: wheel-win 0.5s steps(2) infinite; }
+@keyframes wheel-win { 50% { transform: translate(-50%, -50%) scale(1.25); } }
+.wheel-box { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.wheel-label { min-height: 1.6em; font-size: 28px; text-shadow: var(--tx-outline); }
+.wheel-label.done { color: var(--yellow); animation: pop 0.4s both; }
+
+.pixel-img { image-rendering: pixelated; display: block; max-width: none; }

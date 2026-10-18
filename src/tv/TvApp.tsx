@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax, PixelImg } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
@@ -240,7 +240,7 @@ function TvLogo() {
     void Promise.all([pixelLogoUrl('ビッグゲーム'), pixelLogoUrl('BIG GAME 2')]).then(setUrls);
   }, []);
   if (!urls) return <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>;
-  if (urls.length === 1) return <img class="logo-img" src={urls[0]} alt="BIG GAME 2" />;
+  if (urls.length === 1) return <PixelImg class="logo-img" src={urls[0]} alt="BIG GAME 2" />;
   return (
     <div class="logo-px">
       <img class="logo-px-jp" src={urls[0]} alt="ビッグゲーム" />

@@ -277,6 +277,7 @@ const NUM_FIELDS: [string, string][] = [
   ['landingTime', 'Время на высадку, сек'],
   ['revealMs', 'Показ ответа, мс'],
   ['baseStrength', 'Базовая сила темы'],
+  ['skillScale', 'Шкала силы: делений на полоске'],
   ['startHp', 'Стартовое HP'],
   ['specialPower', 'Сила спецвопроса'],
   ['duelRounds', 'Раундов в дуэли'],

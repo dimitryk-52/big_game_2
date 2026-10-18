@@ -15,6 +15,7 @@ import { RingGame } from './RingGame';
 import { Shop } from './Shop';
 import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
+import { SPECIAL_TOPIC } from '../shared/sprites';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -399,7 +400,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
           </button>
         );
       })}
-      {st.canSpecial && <button class="btn primary big-btn" disabled={sent} onClick={() => send('special')}>💥 Спецвопрос (сила {s.settings.specialPower}, осталось {me.specials})</button>}
+      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
       {st.canRhythm && <button class="btn yellow big-btn" disabled={sent} onClick={() => send('rhythm')}>🥁 Ритм-баттл (сила музыки)</button>}
     </div>
   );

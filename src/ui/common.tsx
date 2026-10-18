@@ -57,11 +57,40 @@ export function HpBar({ hp, max }: { hp: number; max: number }) {
 
 export const LETTERS = ['A', 'B', 'C', 'D'];
 
+/** devicePixelRatio, который обновляется при смене масштаба Windows / зума браузера */
+export function useDpr() {
+  const [dpr, setDpr] = useState(window.devicePixelRatio || 1);
+  useEffect(() => {
+    const mq = matchMedia(`(resolution: ${dpr}dppx)`);
+    const on = () => setDpr(window.devicePixelRatio || 1);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [dpr]);
+  return dpr;
+}
+
+/**
+ * Пиксель-арт без «рваных» линий: картинка растягивается в целое число РЕАЛЬНЫХ пикселей экрана.
+ * При масштабе Windows 125% или зуме браузера обычные 183 CSS-пикселя — это 228.75 точек,
+ * и часть пикселей рисунка становится шире соседних. scale — желаемый размер в CSS-пикселях
+ * на пиксель рисунка; берётся ближайший целый множитель в точках экрана.
+ */
+export function PixelImg({ src, scale = 1, class: cls, alt = '' }: { src: string; scale?: number; class?: string; alt?: string }) {
+  const dpr = useDpr();
+  const [nat, setNat] = useState<[number, number] | null>(null);
+  const k = Math.max(1, Math.round(scale * dpr));
+  const style = nat ? { width: (nat[0] * k) / dpr, height: (nat[1] * k) / dpr } : { visibility: 'hidden' };
+  return (
+    <img class={'pixel-img' + (cls ? ' ' + cls : '')} src={src} alt={alt} draggable={false} style={style as any}
+      onLoad={(e) => { const i = e.currentTarget as HTMLImageElement; setNat([i.naturalWidth, i.naturalHeight]); }} />
+  );
+}
+
 // ───── скиллы: иконка + цифра + полоска ─────
 
-/** масштаб полосок: не меньше 5, иначе по самому сильному игроку */
-export function skillMax(s: Pick<GameState, 'players'>) {
-  let m = 5;
+/** масштаб полосок: из настроек (skillScale), а если кто-то сильнее — по самому сильному игроку */
+export function skillMax(s: Pick<GameState, 'players' | 'settings'>) {
+  let m = Math.max(1, s.settings?.skillScale ?? 5);
   for (const p of Object.values(s.players ?? {})) for (const v of Object.values(p.stats ?? {})) m = Math.max(m, v);
   return m;
 }
@@ -91,7 +120,7 @@ export function ResText({ text, topics, size = 18 }: { text: string; topics: Top
 
 /** сегментированная пиксельная полоска */
 export function SkillBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const segs = Math.max(1, Math.min(12, max));
+  const segs = Math.max(1, Math.min(15, max));
   const filled = Math.round((Math.min(value, max) / max) * segs);
   return (
     <span class="skill-bar">

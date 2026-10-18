@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoAdvance: true,
   hostPaced: true,
   baseStrength: 1,
+  skillScale: 5,
   startHp: 10,
   specialPower: 5,
   duelRounds: 3,

@@ -148,6 +148,29 @@ const DIAMOND = [
 const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch) => (ch === '.' ? null : ch === 'W' ? '#ffffff' : color)));
 const MISSING: Grid = diamond('#ff00ff');
 
+/** спецтема: круг с радужным круговым градиентом (если нет своего topic_special.png) */
+function rainbowGrid(n = 11): Grid {
+  const c = (n - 1) / 2;
+  const STEPS = 12;
+  const g: Grid = [];
+  for (let y = 0; y < n; y++) {
+    const row: (string | null)[] = [];
+    for (let x = 0; x < n; x++) {
+      const dx = x - c, dy = y - c;
+      if (Math.hypot(dx, dy) > c + 0.35) { row.push(null); continue; }
+      const a = ((Math.atan2(dx, -dy) / (Math.PI * 2)) + 1) % 1; // по часовой от верха
+      const hue = (Math.floor(a * STEPS) * 360) / STEPS;
+      row.push(`hsl(${hue} 90% 60%)`);
+    }
+    g.push(row);
+  }
+  // центр и блик белые
+  g[c][c] = '#ffffff';
+  g[2][3] = g[3][2] = '#ffffff';
+  return g;
+}
+export const SPECIAL_TOPIC = { id: 'special', name: 'Спецтема', color: '#ffffff' };
+
 /** холст иконки с контуром (и тенью); scale — размер пикселя иконки */
 function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {
   const h = g.length, w = g[0]?.length ?? 0;
@@ -185,7 +208,7 @@ export function topicIconUrl(id: string, color: string, scale = 3): string {
   const k = `${id}|${color}|${scale}`;
   let u = iconCache.get(k);
   if (u) return u;
-  u = drawIcon(grids.get('topic_' + id) ?? diamond(color), scale, false).toDataURL();
+  u = drawIcon(grids.get('topic_' + id) ?? (id === 'special' ? rainbowGrid() : diamond(color)), scale, false).toDataURL();
   iconCache.set(k, u);
   return u;
 }

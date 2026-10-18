@@ -155,6 +155,8 @@ export interface Settings {
   /** вопрос ведёт ведущий кнопкой «Далее»: интро → текст (читает вслух) → ответы и таймер → закрыть */
   hostPaced?: boolean;
   baseStrength: number;
+  /** делений на полоске силы; если у кого-то сила больше — шкала растёт сама */
+  skillScale: number;
   startHp: number;
   specialPower: number;
   duelRounds: number;

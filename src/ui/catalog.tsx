@@ -2,15 +2,17 @@
 // и компонентах игры. Стиль меняется в src/styles/kit.css — здесь сразу видно результат.
 import './pxStyles';
 import { render } from 'preact';
+import { useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/tv.css';
 import '../styles/play.css';
 import '../styles/kit.css';
-import { loadIcons, characterUrl, pixelBadgeUrl } from '../shared/sprites';
+import { loadIcons, characterUrl, pixelBadgeUrl, pixelIconUrl, topicIconUrl, SPECIAL_TOPIC } from '../shared/sprites';
+import { Wheel, makeSpin, wheelLabel, wheelRot, type WheelSeg, type WheelSpin } from './Wheel';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { Player } from '../shared/types';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar } from './common';
-import { LOGO_URL } from '../shared/logo';
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, useFrame, PixelImg } from './common';
+import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
 
 const topics = DEFAULT_SETTINGS.topics;
 const combat = topics.filter((t) => t.combat);
@@ -36,6 +38,40 @@ function Section({ title, note, children }: { title: string; note?: string; chil
   );
 }
 const Label = ({ t }: { t: string }) => <div class="ui-label">{t}</div>;
+
+// ───── барабан: примеры секторов (иконки строятся после loadIcons) ─────
+function bonusSegs(): WheelSeg[] {
+  return [
+    { id: 'money', label: '¥300', short: '¥300', color: '#3cb54a', icon: pixelIconUrl('money', 4) },
+    { id: 'fifty1', label: 'Убрать 1 неверный ответ', short: '−1', color: '#4a55a8' },
+    { id: 'stars', label: '+1 ★', color: '#f2b51f', icon: pixelIconUrl('stars', 4) },
+    { id: 'move2', label: 'Ход на 2 префектуры', short: '×2', color: '#ff9f43' },
+    { id: 'special', label: 'Спецвопрос', color: '#ffffff', rainbow: true, weight: 0.6, icon: topicIconUrl('special', '#fff', 4) },
+    { id: 'fifty2', label: '50/50', short: '50/50', color: '#2e7fd6', weight: 0.8 },
+    { id: 'hp', label: '+2 HP', short: '+2♥', color: '#e8364e' },
+    { id: 'none', label: 'Мимо!', short: '✕', color: '#5b5f7e' },
+  ];
+}
+function topicSegs(): WheelSeg[] {
+  const seg = (t: (typeof combat)[number]): WheelSeg => ({ id: t.id, label: t.name, color: t.color, icon: topicIconUrl(t.id, t.color, 4) });
+  return [...combat.map(seg), { id: 'special', label: 'Спецтема!', color: '#fff', rainbow: true, icon: topicIconUrl('special', '#fff', 4) }, ...combat.map(seg)];
+}
+
+function WheelDemo({ title, segs }: { title: string; segs: WheelSeg[] }) {
+  const [spin, setSpin] = useState<WheelSpin | null>(null);
+  useFrame(true);
+  const t = Date.now();
+  const busy = !!spin && !wheelRot(segs, spin, t).done && t >= spin.startAt;
+  const lab = wheelLabel(segs, spin, t);
+  return (
+    <div class="wheel-box panel" style={{ padding: 16 }}>
+      <b>{title}</b>
+      <Wheel segs={segs} spin={spin} now={Date.now} size={380} sound />
+      <div class={'wheel-label' + (lab.done ? ' done' : '')}>{lab.text}</div>
+      <button class="btn primary" disabled={busy} onClick={() => setSpin(makeSpin(segs, Date.now() + 100, spin ? wheelRot(segs, spin, Date.now()).rot : 0))}>Крутить</button>
+    </div>
+  );
+}
 
 function Catalog() {
   return (
@@ -80,8 +116,32 @@ function Catalog() {
           <Label t="HP" /><HpBar hp={7} max={10} />
           <Label t="HP мало (мигает)" /><HpBar hp={2} max={10} />
           <Label t="Скиллы" />
-          {combat.map((t, i) => <SkillRow t={t} value={i + 1} max={5} />)}
+          {combat.map((t, i) => <SkillRow t={t} value={i + 1} max={DEFAULT_SETTINGS.skillScale} />)}
         </div>
+      </Section>
+
+      {LOGO_TEXT_URL && (
+        <Section title="Надпись в углу ТВ" note="logo_text_px.png через PixelImg: целое число точек экрана на пиксель — линии не ломаются при масштабе Windows 125–150% и зуме браузера.">
+          <div class="ui-icon" style={{ background: '#a9c8e6' }}><PixelImg src={LOGO_TEXT_URL} /><div class="ui-label">×1</div></div>
+          <div class="ui-icon" style={{ background: '#a9c8e6' }}><PixelImg src={LOGO_TEXT_URL} scale={2} /><div class="ui-label">×2</div></div>
+        </Section>
+      )}
+
+      <Section title="Барабан" note="Хост выбирает сектор заранее (makeSpin) и рассылает время старта — все экраны останавливаются на одном секторе. Размер сектора = шанс выпасть (weight). Радужный сектор — спецтема.">
+        <WheelDemo title="Бонус игроку" segs={bonusSegs()} />
+        <WheelDemo title="Тема вопроса" segs={topicSegs()} />
+      </Section>
+
+      <Section title="Спецтема" note="Иконка — круг с радужным градиентом (своя картинка: src/img/icons/topic_special.png). Рамка .rainbow — у спецвопроса при выборе темы в дуэли.">
+        <div class="ui-icon"><SkillIcon t={SPECIAL_TOPIC as any} size={48} /><div class="ui-label">topic_special</div></div>
+        <div class="panel ui-col" style={{ width: 380, padding: 14 }}>
+          <b>Дуэль! Твой вопрос</b>
+          {combat.map((t) => (
+            <button class="btn big-btn" style={{ '--c': t.color } as any}><SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <b>{A.stats[t.id]}</b> <span class="muted">против</span> <b>{B.stats[t.id]}</b></button>
+          ))}
+          <button class="btn big-btn rainbow"><SkillIcon t={SPECIAL_TOPIC as any} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос</span> <b>сила 5</b> <span class="muted">· осталось 1</span></button>
+        </div>
+        <span class="chip rainbow">Спецтема</span>
       </Section>
 
       <Section title="Панели и карточки">
@@ -96,7 +156,7 @@ function Catalog() {
               <div class="pc-money"><span>¥1 200</span><span class="pc-stars"><PixIcon id="stars" size={18} />3</span></div>
             </div>
           </div>
-          <div class="pc-skills">{combat.map((t) => <SkillRow t={t} value={A.stats[t.id]} max={5} />)}</div>
+          <div class="pc-skills">{combat.map((t) => <SkillRow t={t} value={A.stats[t.id]} max={DEFAULT_SETTINGS.skillScale} />)}</div>
         </div>
         <div class="pcard current" style={{ '--frame': B.color, width: 300 } as any}>
           <div class="pc-top"><Avatar p={B} size={56} /><div class="pc-info"><div class="pc-name"><span class="pname">{B.name} — ходит</span></div><HpBar hp={B.hp} max={B.maxHp} /></div></div>
