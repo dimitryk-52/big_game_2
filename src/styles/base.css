@@ -1,3 +1,12 @@
+/* Handjet — статичные файлы со склеенными контурами (scripts/build-font.py):
+   у переменной версии из Google Fonts в Chrome видна полоса посередине букв */
+@font-face { font-family: 'Handjet'; font-weight: 300; font-style: normal; font-display: swap; src: url('../fonts/handjet-300.woff2') format('woff2'); }
+@font-face { font-family: 'Handjet'; font-weight: 400; font-style: normal; font-display: swap; src: url('../fonts/handjet-400.woff2') format('woff2'); }
+@font-face { font-family: 'Handjet'; font-weight: 500; font-style: normal; font-display: swap; src: url('../fonts/handjet-500.woff2') format('woff2'); }
+@font-face { font-family: 'Handjet'; font-weight: 600; font-style: normal; font-display: swap; src: url('../fonts/handjet-600.woff2') format('woff2'); }
+@font-face { font-family: 'Handjet'; font-weight: 700; font-style: normal; font-display: swap; src: url('../fonts/handjet-700.woff2') format('woff2'); }
+@font-face { font-family: 'Handjet'; font-weight: 800; font-style: normal; font-display: swap; src: url('../fonts/handjet-800.woff2') format('woff2'); }
+
 :root {
   --bg: #1b1f3a;
   --bg2: #232850;
@@ -13,12 +22,14 @@
   --red: #ff3b3b;
   --purple: #c77dff;
   --shadow: #0b0d1f;
-  --font: 'DotGothic16', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', monospace;
+  /* Handjet — основной (много жирностей), японские символы берутся из DotGothic16 */
+  --font: 'Handjet', 'DotGothic16', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-weight: 500; }
+b, strong, h1, h2, h3 { font-weight: 700; }
 body { -webkit-font-smoothing: none; -webkit-tap-highlight-color: transparent; }
-button, input, select, textarea { font-family: var(--font); font-size: inherit; color: inherit; }
+button, input, select, textarea { font-family: var(--font); font-size: inherit; font-weight: inherit; color: inherit; }
 img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: middle; }
 
 .btn {
@@ -48,13 +59,13 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 .timer.big { height: 32px; }
 .timer-fill { position: absolute; inset: 0 auto 0 0; background: var(--green); transition: width 0.1s linear; }
 .timer.low .timer-fill { background: var(--red); animation: blink 0.5s steps(2) infinite; }
-.timer-num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; text-shadow: 2px 2px 0 #000; }
+.timer-num { position: absolute; inset: 0; display: grid; place-items: center; font-size: 18px; font-weight: 700; text-shadow: 2px 2px 0 #000; }
 .timer.big .timer-num { font-size: 22px; }
 
 .hpbar { position: relative; height: 16px; background: #3a0d16; border: 2px solid #fff; min-width: 80px; }
 .hp-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#ff7a8c, #e0233f); transition: width 0.4s steps(8); }
 .hpbar.low .hp-fill { animation: blink 0.6s steps(2) infinite; }
-.hpbar span { position: absolute; inset: 0; font-size: 11px; display: grid; place-items: center; text-shadow: 1px 1px 0 #000; }
+.hpbar span { position: absolute; inset: 0; font-size: 13px; font-weight: 700; display: grid; place-items: center; text-shadow: 1px 1px 0 #000; }
 
 @keyframes blink { 50% { opacity: 0.55; } }
 @keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
@@ -67,7 +78,7 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 .slide-up { animation: slideUp 0.3s ease-out both; }
 .shake { animation: shake 0.4s; }
 
-.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 2px solid #fff; background: #11142b; font-size: 14px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 2px solid #fff; background: #11142b; font-size: 17px; }
 .dot { width: 10px; height: 10px; display: inline-block; border: 2px solid #000; }
 .dot.on { background: var(--green); }
 .dot.off { background: #666; }

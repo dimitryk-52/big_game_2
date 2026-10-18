@@ -1,7 +1,7 @@
 /* Экран ТВ: рассчитан на 16:9, масштабируется от ширины окна */
 .page-tv { overflow: hidden; }
 .page-tv html, .page-tv body { height: 100%; }
-.tv { position: fixed; inset: 0; font-size: clamp(14px, 1.05vw, 22px); }
+.tv { position: fixed; inset: 0; font-size: clamp(17px, 1.3vw, 28px); }
 .tv-map { position: absolute; inset: 0; }
 .splash { position: fixed; inset: 0; display: grid; place-items: center; }
 .warn { background: #5a1a1a; border: 2px solid var(--red); padding: 8px 12px; font-size: 0.85em; max-width: 520px; }
@@ -75,7 +75,7 @@
 .qhead { display: flex; gap: 10px; align-items: center; }
 .qtitle { flex: 1; color: var(--muted); }
 .chip.special { border-color: var(--pink); color: var(--pink); }
-.qtext { font-size: 2em; line-height: 1.25; text-align: center; padding: 0.2em 0; }
+.qtext { font-size: 2.1em; font-weight: 600; line-height: 1.25; text-align: center; padding: 0.2em 0; }
 .qmedia { max-height: 38vh; max-width: 100%; object-fit: contain; align-self: center; border: 3px solid #fff; background: #000; }
 .qaudio { align-self: center; }
 .qanswers { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7em; }

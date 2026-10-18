@@ -6,8 +6,8 @@ dist
 tools/pixelart/out
 
 # медиа для вопросов и скачанные шрифты — только локально
-media/*
-!media/README.txt
-fonts/
-ref/
+/media/*
+!/media/README.txt
+/fonts/
+/ref/
 tools/pixelart/out/

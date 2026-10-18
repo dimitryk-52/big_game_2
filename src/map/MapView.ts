@@ -183,7 +183,7 @@ export class MapView {
     for (const [c, kind] of want) {
       let l = this.labels.get(c);
       if (!l) {
-        l = new Text({ text: PREF[c].ru, style: { fontFamily: font(), fontSize: 22, fill: 0xffffff, stroke: { color: 0x101020, width: 5 }, align: 'center' } });
+        l = new Text({ text: PREF[c].ru, style: { fontFamily: font(), fontSize: 26, fontWeight: '600', fill: 0xffffff, stroke: { color: 0x101020, width: 5 }, align: 'center' } });
         l.anchor.set(0.5, 0.5);
         l.resolution = 2;
         const a = prefAnchorWorld(c);
@@ -248,7 +248,7 @@ export class MapView {
         const body = new Sprite(frames[0]);
         body.anchor.set(0.5, 1);
         body.scale.set(1.6);
-        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 18, fill: 0xffffff, stroke: { color: 0x000000, width: 4 } } });
+        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 22, fontWeight: '700', fill: 0xffffff, stroke: { color: 0x000000, width: 4 } } });
         label.anchor.set(0.5, 1);
         label.resolution = 2;
         label.position.set(0, -28);
