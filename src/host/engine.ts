@@ -754,7 +754,7 @@ export class GameEngine {
   private pickQuestion(f: (q: Question) => boolean): Question | null {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
     const st = this.s.settings;
-    const all = this.questions.filter((q) => q.answers?.length === 4 && f(isSpecialQ(st, q) && !q.special ? { ...q, special: true } : q));
+    const all = this.questions.filter((q) => q.answers?.length === 4 && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
     if (!all.length) return null;
     const fresh = all.filter((q) => !this.sec.used.includes(q.id));
     const q = pick(fresh.length ? fresh : all);

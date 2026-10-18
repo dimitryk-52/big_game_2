@@ -34,7 +34,6 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
     questions.forEach((q) => (c[q.topic] = (c[q.topic] ?? 0) + 1));
     return c;
   }, [questions]);
-  const looseSpecial = questions.filter((q) => q.special && !s.topics.find((t) => t.id === q.topic)?.special).length;
   const save = async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); };
   const add = (special: boolean) => setS((c) => ({
     ...c,
@@ -103,7 +102,6 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
         <tbody>{special.map(([t, i]) => row(t, i))}</tbody>
       </table>
       {!special.length && <div class="muted small">Пока нет ни одной спецтемы.</div>}
-      {looseSpecial > 0 && <div class="muted small">Ещё {looseSpecial} вопр. отмечены «спецвопрос» в обычных темах — они идут как общие спецвопросы.</div>}
       <div><button class="btn small rainbow" onClick={() => add(true)}>+ спецтема</button></div>
 
       {iconFor !== null && s.topics[iconFor] && (

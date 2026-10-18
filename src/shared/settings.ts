@@ -68,7 +68,8 @@ export function specialTopicOf(st: Pick<Settings, 'topics'>, name: string): Topi
 
 /** вопрос — спецвопрос: отмечен сам или лежит в спецтеме */
 export function isSpecialQ(st: Pick<Settings, 'topics'>, q: Pick<Question, 'special' | 'topic'>): boolean {
-  return !!q.special || !!st.topics.find((t) => t.id === q.topic)?.special;
+  // спецвопрос = вопрос из спецтемы; флаг q.special в обычных темах игнорируется (старые данные)
+  return !!st.topics.find((t) => t.id === q.topic)?.special;
 }
 
 export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: string }> = {
