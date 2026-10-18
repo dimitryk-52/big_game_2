@@ -7,7 +7,7 @@ import {
   CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { characterCanvas, pixelBadge, pixelIcon } from '../shared/sprites';
+import { characterCanvas, pixelBadge, type BadgeKind } from '../shared/sprites';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
@@ -37,6 +37,8 @@ interface Token {
   tx: number;
   ty: number;
   hop: null | { pts: { x: number; y: number }[]; t: number; dur: number };
+  /** куда фишка ушла анимацией, пока хост ещё не записал новую префектуру (и до какого времени ждём) */
+  goingTo: null | { code: number; until: number };
   flash: number;
   color: string;
   hat: number;
@@ -66,7 +68,7 @@ export class MapView {
   private outline: Sprite | null = null;
   private tokens = new Map<string, Token>();
   private labels = new Map<number, Text>();
-  private icons = new Map<string, Sprite & { icon?: string; bob?: number }>();
+  private icons = new Map<string, Sprite & { icon?: string; kind?: BadgeKind; bob?: number }>();
   private particles: { g: Graphics; vx: number; vy: number; life: number; max: number }[] = [];
   private lastLookKey = '';
   private last: MapUpdate | null = null;
@@ -220,34 +222,33 @@ export class MapView {
   }
 
   private updateIcons(u: MapUpdate) {
-    const want = new Map<string, { code: number; icon: string; dx: number; badge?: boolean }>();
-    for (const c of u.machines?.pachinko ?? []) if (u.prefs[c]?.rev) want.set('p' + c, { code: c, icon: 'pachinko', dx: -22 });
-    for (const c of u.machines?.ring ?? []) if (u.prefs[c]?.rev) want.set('r' + c, { code: c, icon: 'ring', dx: -22 });
+    // выноски над центром префектуры; пока там стоит игрок — прячем, чтобы не закрывать его имя.
+    // Награда (кремовая, покачивается) — пока её не забрали; автомат (голубой, неподвижный) — всегда,
+    // это постоянное место: к нему можно вернуться и играть ещё. Если есть и то и другое — автомат левее.
+    const want = new Map<string, { code: number; icon: string; dx: number; kind: BadgeKind }>();
     const occupied = new Set(u.players.map((p) => p.pref));
-    if (u.showRewards !== false) for (const c of PREF_CODES) {
-      const p = u.prefs[c];
-      if (!p?.rev || p.taken) continue;
-      // выноска над центром префектуры; пока там стоит игрок — прячем, чтобы не закрывать его имя
-      if (occupied.has(c)) continue;
-      want.set('w' + c, { code: c, icon: p.reward, dx: 0, badge: true });
+    const shown = (c: number) => !!u.prefs[c]?.rev && !occupied.has(c);
+    const hasReward = (c: number) => u.showRewards !== false && shown(c) && !u.prefs[c].taken;
+    for (const c of PREF_CODES) if (hasReward(c)) want.set('w' + c, { code: c, icon: u.prefs[c].reward, dx: 0, kind: 'reward' });
+    const machines: [string, number[]][] = [['pachinko', u.machines?.pachinko ?? []], ['ring', u.machines?.ring ?? []]];
+    for (const [icon, codes] of machines) for (const c of codes) {
+      if (shown(c)) want.set(icon + c, { code: c, icon, dx: hasReward(c) ? -24 : 0, kind: 'machine' });
     }
-    for (const [k, t] of this.icons) if (!want.has(k)) { t.destroy(); this.icons.delete(k); }
+    for (const [k, t] of this.icons) if (!want.has(k) || t.kind !== want.get(k)!.kind) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);
       if (!t || t.icon !== w.icon) {
         t?.destroy();
-        // награда — на плашке с указателем вниз, автоматы — просто иконкой
-        const tex = Texture.from(w.badge ? pixelBadge(w.icon) : pixelIcon(w.icon));
+        const tex = Texture.from(pixelBadge(w.icon, 1, w.kind));
         tex.source.scaleMode = 'nearest';
-        t = Object.assign(new Sprite(tex), { icon: w.icon, bob: Math.random() * 6 });
-        // у выноски якорь — кончик указателя (посередине снизу)
-        if (w.badge) t.anchor.set(0.5, (tex.height - 1) / tex.height);
-        else t.anchor.set(0.5, 1);
+        t = Object.assign(new Sprite(tex), { icon: w.icon, kind: w.kind, bob: Math.random() * 6 });
+        // якорь — кончик указателя (посередине снизу)
+        t.anchor.set(0.5, (tex.height - 1) / tex.height);
         this.iconLayer.addChild(t);
         this.icons.set(k, t);
       }
       const a = prefAnchorWorld(w.code);
-      t.position.set(a.x + w.dx, w.badge ? a.y : a.y - 4);
+      t.position.set(a.x + w.dx, a.y);
     }
   }
 
@@ -265,7 +266,13 @@ export class MapView {
       if (!p.pref) continue;
       live.add(p.id);
       let t = this.tokens.get(p.id);
-      const target = this.tokenTarget(p, u.players);
+      let target = this.tokenTarget(p, u.players);
+      const going = this.tokens.get(p.id)?.goingTo;
+      if (going) {
+        // хост записывает новую префектуру чуть позже конца прыжка — не тянем фишку назад
+        if (p.pref === going.code || performance.now() > going.until) this.tokens.get(p.id)!.goingTo = null;
+        else target = prefAnchorWorld(going.code);
+      }
       if (!t || t.color !== p.color || t.hat !== p.hat) {
         t?.root.destroy({ children: true });
         const frames = [0, 1].map((f) => {
@@ -285,7 +292,7 @@ export class MapView {
         const plate = new Graphics();
         root.addChild(ring, body, plate, label);
         this.tokenLayer.addChild(root);
-        t = { pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: target.x, y: target.y, tx: target.x, ty: target.y, hop: null, flash: 0, color: p.color, hat: p.hat };
+        t = { pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: target.x, y: target.y, tx: target.x, ty: target.y, hop: null, goingTo: null, flash: 0, color: p.color, hat: p.hat };
         this.tokens.set(p.id, t);
       }
       t.label.text = p.name;
@@ -308,6 +315,10 @@ export class MapView {
     const pts = codes.map((c) => prefAnchorWorld(c));
     pts[0] = { x: t.x, y: t.y };
     t.hop = { pts, t: 0, dur };
+    const to = codes[codes.length - 1];
+    t.goingTo = { code: to, until: performance.now() + dur + 3000 };
+    t.tx = pts[pts.length - 1].x;
+    t.ty = pts[pts.length - 1].y;
   }
 
   puff(code: number, color = 0xffffff, n = 26) {
@@ -529,7 +540,7 @@ export class MapView {
     const iconScale = 1.4 * Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
     for (const t of this.icons.values()) {
       t.scale.set(iconScale);
-      t.pivot.y = Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8);
+      t.pivot.y = t.kind === 'reward' ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0;
       t.visible = this.cam.z > 0.75;
     }
 

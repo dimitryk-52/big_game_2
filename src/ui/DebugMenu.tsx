@@ -58,7 +58,7 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
           <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>
           <button class="btn small" onClick={() => send('teleport', { pid, pref })}>Переместить игрока сюда</button>
-          <button class="btn small" onClick={() => send('give', { pid, yen: 1000, stars: 3 })}>+1000 ¥ +3 ★</button>
+          <button class="btn small" onClick={() => send('give', { pid, yen: 1000, stars: 3 })}>+¥1000 +3 ★</button>
           <button class="btn small" onClick={() => send('give', { pid, hp: -3 })}>−3 HP</button>
           <button class="btn small" onClick={() => send('give', { pid, hp: 99 })}>Вылечить</button>
           {fx && <>

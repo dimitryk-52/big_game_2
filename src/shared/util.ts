@@ -41,7 +41,7 @@ export function now() {
   return performance.timeOrigin + performance.now();
 }
 export function fmtYen(n: number) {
-  return n.toLocaleString('ru-RU') + ' ¥';
+  return '¥' + n.toLocaleString('ru-RU');
 }
 export function clamp(v: number, a: number, b: number) {
   return Math.max(a, Math.min(b, v));

@@ -8,8 +8,14 @@
 
 .topbar { position: absolute; top: 12px; left: 12px; display: flex; gap: 10px; align-items: center; pointer-events: none; }
 .logo { font-size: 1.5em; text-shadow: 3px 3px 0 #000; letter-spacing: 1px; }
-.logo-img { height: clamp(40px, 4vw, 72px); image-rendering: pixelated; filter: drop-shadow(3px 3px 0 #000); }
+/* пиксельная надпись logo_text_px.png — в натуральную величину, пиксель в пиксель */
+.logo-img { image-rendering: pixelated; display: block; }
 .lobby-logo { width: clamp(220px, 20vw, 380px); height: auto; margin-bottom: 0.6em; filter: drop-shadow(5px 5px 0 rgba(0, 0, 0, 0.5)); }
+/* пиксельная надпись: размер «пикселя» логотипа — целое число экранных пикселей */
+.logo-px { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; image-rendering: pixelated; }
+.logo-px img { image-rendering: pixelated; display: block; }
+.logo-px-jp { zoom: 3; }
+.logo-px-en { zoom: 2; margin-left: 3px; }
 .logo span { color: var(--pink); font-size: 0.7em; }
 
 /* слева запас под выезжающую карточку текущего игрока, справа и снизу — под тень (overflow её иначе режет) */
@@ -28,8 +34,6 @@
 .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ans-check { color: var(--green); }
 
-.log { position: absolute; left: 12px; bottom: 60px; display: flex; flex-direction: column; gap: 4px; max-width: 34vw; pointer-events: none; }
-.log div { background: rgba(0, 0, 0, 0.55); padding: 3px 8px; font-size: 0.85em; border-left: 4px solid var(--yellow); }
 
 .host-panel { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; align-items: center; z-index: 50; flex-wrap: wrap; }
 .host-panel .btn { font-size: 0.8em; }

@@ -56,7 +56,7 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
       const res = await client.req<{ cell: number; res: 'gold' | 'green' | 'miss' }>('ringStop', { at });
       r.stop = { cell: res.cell, res: res.res };
       if (res.res === 'gold') { sfx.fanfare(); setMsg('🏆 ПРИЗ! Ведущий вручит его тебе'); vibrate([100, 50, 100, 50, 300]); }
-      else if (res.res === 'green') { sfx.jackpot(); setMsg(`Выигрыш: +${st.prizeYen} ¥`); }
+      else if (res.res === 'green') { sfx.jackpot(); setMsg(`Выигрыш: +¥${st.prizeYen}`); }
       else { sfx.wrong(); setMsg('Мимо! Попробуй ещё'); }
     } catch (e: any) { setErr(e.message); }
     setPhase('done');
@@ -64,16 +64,16 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
 
   return (
     <div class="ringgame pad col">
-      <div class="center"><b>Призовая машина</b> · попытка {st.cost} ¥</div>
+      <div class="center"><b>Призовая машина</b> · попытка ¥{st.cost}</div>
       <canvas ref={cv} width={600} height={600} class="ring-cv" />
       {msg && <div class="status-card pop center">{msg}</div>}
       {err && <div class="warn">{err}</div>}
       {phase === 'running' || phase === 'stopping' ? (
         <button class="btn primary big-btn stop-btn" disabled={phase !== 'running'} onPointerDown={(e) => { e.preventDefault(); void stop(); }}>СТОП</button>
       ) : (
-        <button class="btn yellow big-btn" disabled={me.yen < st.cost} onClick={start}>Играть ({st.cost} ¥)</button>
+        <button class="btn yellow big-btn" disabled={me.yen < st.cost} onClick={start}>Играть (¥{st.cost})</button>
       )}
-      <div class="muted small-text">Зелёная ячейка — {st.prizeYen} ¥{st.physicalPrize ? ', золотая — настоящий приз!' : ''}</div>
+      <div class="muted small-text">Зелёная ячейка — ¥{st.prizeYen}{st.physicalPrize ? ', золотая — настоящий приз!' : ''}</div>
       <button class="btn small ghost" onClick={onExit}>Назад</button>
     </div>
   );

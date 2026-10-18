@@ -11,7 +11,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
   const [busy, setBusy] = useState(false);
   const shop = s.settings.shop;
   const topics = s.settings.topics.filter((t) => t.combat);
-  const price = (c: { yen: number; stars: number }) => [c.yen ? `${c.yen} ¥` : '', c.stars ? `${c.stars} ★` : ''].filter(Boolean).join(' + ') || 'бесплатно';
+  const price = (c: { yen: number; stars: number }) => [c.yen ? `¥${c.yen}` : '', c.stars ? `${c.stars} ★` : ''].filter(Boolean).join(' + ') || 'бесплатно';
   const can = (c: { yen: number; stars: number }) => me.yen >= c.yen && me.stars >= c.stars;
   const buy = async (item: Item, topic?: string) => {
     setBusy(true);

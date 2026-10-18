@@ -110,7 +110,7 @@ export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient
     <div class="pachi">
       <div class="pachi-top">
         <span>Шарики: <b>{balls}</b></span>
-        <span class="muted">= {balls * st.yenPerBall} ¥</span>
+        <span class="muted">= ¥{balls * st.yenPerBall}</span>
       </div>
       <div class="pachi-board">
         <canvas ref={cv} width={PACHI.W * scale} height={PACHI.H * scale} />
@@ -135,7 +135,7 @@ export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient
       </div>
       {err && <div class="warn">{err}</div>}
       <div class="row wrap pad-x">
-        {here && <button class="btn small yellow" disabled={busy} onClick={buy}>+{st.pack} шариков за {st.pack * st.yenPerBall} ¥</button>}
+        {here && <button class="btn small yellow" disabled={busy} onClick={buy}>+{st.pack} шариков за ¥{st.pack * st.yenPerBall}</button>}
         <button class="btn small" disabled={busy || !balls} onClick={() => cash(false)}>Обменять на ¥</button>
         <button class="btn small" disabled={busy} onClick={() => cash(true)}>Выйти</button>
       </div>

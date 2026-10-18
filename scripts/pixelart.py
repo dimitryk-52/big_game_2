@@ -7,7 +7,7 @@
 #   python scripts/pixelart.py вход.png выход.png [--cell 3] [--colors 64]
 #   python scripts/pixelart.py --bgs [--cell 3] [--colors 64] [--force]
 #       все src/img/bgs/bg_*_orig.png → src/img/bgs/bg_*.png (пропускает уже готовые, если не --force)
-#   python scripts/pixelart.py --logo [--cell 6]
+#   python scripts/pixelart.py --logo [--height 96]
 #       src/img/logo.png → logo_menu.webp (уменьшенный, для меню);
 #       src/img/logo_text.png → logo_text_px.png (пиксель-арт для угла ТВ), если файл есть
 #
@@ -63,6 +63,18 @@ def despeckle(ix: np.ndarray) -> np.ndarray:
     return np.where(lone, l, ix)
 
 
+def pixelize_palette(img: Image.Image, cell: int, palette: list[tuple[int, int, int]]) -> Image.Image:
+    """как pixelize, но цвета — ровно из palette (плюс прозрачность): для плоских надписей и логотипов"""
+    a = np.asarray(img.convert('RGBA')).astype(int)
+    pal = np.array(palette)
+    idx = ((a[..., :3][:, :, None, :] - pal[None, None]) ** 2).sum(-1).argmin(-1) + 1
+    idx[a[..., 3] < 128] = 0
+    w, h = round(img.width / cell), round(img.height / cell)
+    lab = despeckle(labels_down(idx.astype(np.uint8), w, h))
+    cols = np.array([(0, 0, 0, 0)] + [(*c, 255) for c in palette], np.uint8)
+    return Image.fromarray(cols[lab], 'RGBA')
+
+
 def labels_down(lab: np.ndarray, w: int, h: int) -> np.ndarray:
     """карта меток (0 — фон) → сетка w×h, в каждой клетке самая частая метка"""
     H, W = lab.shape
@@ -91,7 +103,15 @@ if __name__ == '__main__':
             print('logo.png → logo_menu.webp', im.size)
         text = ROOT / 'src/img/logo_text.png'
         if text.exists():
-            out = pixelize(Image.open(text), arg('--cell', 6.0), arg('--colors', 24, int))
+            # надпись для угла ТВ: высота --height «пикселей» (по умолчанию 40); исходник сначала
+            # уменьшаем до 8 пикселей на клетку, чтобы не гонять огромную картинку целиком
+            im = Image.open(text).convert('RGBA')
+            im = im.crop(im.getbbox())
+            ph = arg('--height', 96, int)
+            k = 8
+            im = im.resize((round(im.width * ph * k / im.height), ph * k), Image.LANCZOS)
+            # у надписи всего три цвета — берём их точно, без промежуточных оттенков на краях
+            out = pixelize_palette(im, k, [(255, 255, 255), (232, 32, 42), (20, 16, 40)])
             out.save(ROOT / 'src/img/logo_text_px.png', optimize=True)
             print('logo_text.png → logo_text_px.png', out.size)
         else:

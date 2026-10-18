@@ -76,7 +76,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     case 'questionImages': return view({ t: 'question' }, { q: mkQ(findQ((q) => !!q.answerImages), {}) });
     case 'questionReveal': {
       const q = mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), {});
-      return view({ t: 'question' }, { q: revealed(q, (id, ok) => (ok ? (id === pid ? `+${s.settings.reward.moverCorrectYen}¥ +1★` : `+${s.settings.reward.otherCorrectYen}¥`) : undefined)) });
+      return view({ t: 'question' }, { q: revealed(q, (id, ok) => (ok ? (id === pid ? `+¥${s.settings.reward.moverCorrectYen} +1★` : `+¥${s.settings.reward.otherCorrectYen}`) : undefined)) });
     }
     case 'calibQuestion': {
       const topic = s.settings.topics.find((t) => t.combat)!;
@@ -86,7 +86,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     }
     case 'reward': {
       const reward = (sub ?? 'money') as RewardType;
-      const text = { money: `+${s.settings.reward.prefMoney} ¥`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус: 50/50', special: 'Спецвопрос', prize: 'Крутим рулетку…' }[reward];
+      const text = { money: `+¥${s.settings.reward.prefMoney}`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус: 50/50', special: 'Спецвопрос', prize: 'Крутим рулетку…' }[reward];
       return view({ t: 'reward', pid, reward, text, pref });
     }
     case 'prize': return view({ t: 'prize', pid, text: s.settings.prizeNames[0] ?? 'Приз' });

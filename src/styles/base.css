@@ -96,14 +96,18 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 
 /* интро префектуры: квадратный фон кадрируется по центру под экран (ТВ — во всю ширину, телефон — во всю высоту) */
 .pref-intro { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; overflow: hidden; background: #0b0d1e; animation: fadeIn 0.5s; }
-.pref-intro-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; animation: introZoom 3.5s ease-out both; }
+.pref-intro-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+/* зум фона интро: увеличенная заранее копия масштабируется плавно — без дрожания пикселей */
+.pref-intro-bg.zoom, .tv-qbg.zoom { animation: fadeIn 0.5s, introZoom 6s ease-out both; }
+.pref-intro-bg.smooth, .tv-qbg.smooth { image-rendering: auto; }
+@keyframes introZoom { from { transform: scale(1.12); } to { transform: scale(1); } }
+.pref-intro.over { background: transparent; animation: none; }
 .pref-intro-bg.empty { background: repeating-linear-gradient(45deg, #151933 0 16px, #1b2042 16px 32px); }
 .pref-intro-title { position: relative; text-align: center; padding: 0.4em 1.4em 0.5em; background: rgba(10, 12, 30, 0.72); border-top: 4px solid #fff; border-bottom: 4px solid #fff; animation: pop 0.6s 0.3s both; }
 .pref-intro-ja { font-size: 1.4em; color: var(--pink); text-shadow: 3px 3px 0 #000; letter-spacing: 0.2em; }
 .pref-intro-ru { font-size: 3.4em; line-height: 1; text-shadow: 4px 4px 0 #000; }
 .pref-intro-reward { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0.4em; font-size: 1.3em; color: var(--yellow); text-shadow: 2px 2px 0 #000; animation: pop 0.5s 0.9s both; }
 .pref-intro-who { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0.3em; color: var(--muted); }
-@keyframes introZoom { from { transform: scale(1.08); } to { transform: scale(1); } }
 
 /* отладочное меню 🐞 */
 .debug-menu { position: fixed; top: 12px; left: 12px; z-index: 100; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 80px); overflow-y: auto; background: rgba(14, 16, 36, 0.97); border: 3px solid var(--yellow); box-shadow: 6px 6px 0 var(--shadow); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 16px; }

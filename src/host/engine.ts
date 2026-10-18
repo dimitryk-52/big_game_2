@@ -23,7 +23,7 @@ export interface HostIO {
 class Aborted extends Error {}
 const ANSWER_GRACE = 700; // мс: льгота на доставку ответа после дедлайна
 const LEAD = 700; // мс: задержка старта таймера, чтобы вопрос успел дойти до всех
-const PREF_INTRO_MS = 3500; // мс: интро префектуры при первом входе
+const PREF_INTRO_MS = 5000; // мс: интро префектуры при первом входе
 
 interface Secrets {
   pins: Record<string, string>;
@@ -402,6 +402,9 @@ export class GameEngine {
       this.io.fx?.('land', { pid, code });
       this.setStage({ t: 'prefIntro', code, pid });
       await this.sleep(epoch, PREF_INTRO_MS);
+      // первый вопрос — сразу на месте высадки
+      await this.gate(epoch);
+      await this.prefQuestion(epoch, p, code);
       this.sec.landingIdx = i + 1;
       this.snapshot();
     }
@@ -475,7 +478,17 @@ export class GameEngine {
     }
     await this.gate(epoch);
 
-    // ── вопрос префектуры: отвечают все ──
+    await this.prefQuestion(epoch, p, to);
+
+    // ── дуэль ──
+    const other = this.occupants(to, pid)[0];
+    if (other && other.hp > 0 && p.hp > 0) await this.duel(epoch, p, other);
+  }
+
+  /** вопрос префектуры, куда пришёл (или высадился) игрок p: отвечают все, у p награда больше */
+  private async prefQuestion(epoch: number, p: Player, to: number) {
+    const st = this.s.settings;
+    const pid = p.id;
     const q =
       this.pickQuestion((x) => x.pref === to && !x.special) ??
       this.pickQuestion((x) => x.topic === 'general' && !x.pref && !x.special) ??
@@ -492,23 +505,19 @@ export class GameEngine {
           if (moverOk) {
             pl.yen += st.reward.moverCorrectYen;
             pl.stars += st.reward.moverCorrectStars;
-            results[id] = `+${st.reward.moverCorrectYen}¥ +${st.reward.moverCorrectStars}★`;
+            results[id] = `+¥${st.reward.moverCorrectYen} +${st.reward.moverCorrectStars}★`;
           } else {
             pl.yen += st.reward.moverWrongYen;
-            results[id] = `+${st.reward.moverWrongYen}¥`;
+            results[id] = `+¥${st.reward.moverWrongYen}`;
           }
         } else if (res[id] === q.correct) {
           pl.yen += st.reward.otherCorrectYen;
-          results[id] = `+${st.reward.otherCorrectYen}¥`;
+          results[id] = `+¥${st.reward.otherCorrectYen}`;
         }
       }
       await this.reveal(epoch, results);
       if (moverOk) await this.prefReward(epoch, p, to);
     }
-
-    // ── дуэль ──
-    const other = this.occupants(to, pid)[0];
-    if (other && other.hp > 0 && p.hp > 0) await this.duel(epoch, p, other);
   }
 
   private async prefReward(epoch: number, p: Player, code: number) {
@@ -521,7 +530,7 @@ export class GameEngine {
     if (reward === 'prize' && ps.prizeTaken) reward = 'money';
     let text = '';
     switch (reward) {
-      case 'money': p.yen += st.reward.prefMoney; text = `+${st.reward.prefMoney} ¥`; break;
+      case 'money': p.yen += st.reward.prefMoney; text = `+¥${st.reward.prefMoney}`; break;
       case 'stars': p.stars += st.reward.prefStars; text = `+${st.reward.prefStars} ★`; break;
       case 'bonus': {
         const b = pick<BonusId>(['fifty1', 'fifty1', 'fifty2', 'move2']);
@@ -560,7 +569,7 @@ export class GameEngine {
       p.yen += st.reward.reviveYen;
       const b = pick<BonusId>(['fifty1', 'fifty2', 'move2']);
       p.bonuses[b]++;
-      results[p.id] = `+${st.reward.reviveYen}¥ и ${BONUS_INFO[b].short}`;
+      results[p.id] = `+¥${st.reward.reviveYen} и ${BONUS_INFO[b].short}`;
     } else results[p.id] = 'Ожил';
     await this.reveal(epoch, results);
   }
@@ -922,7 +931,7 @@ export class GameEngine {
         const yen = balls * st.pachinko.yenPerBall;
         p.yen += yen;
         if (a.exit) p.busy = null;
-        if (yen > 0) this.log(`${p.name} обменял ${balls} шариков на ${yen} ¥`);
+        if (yen > 0) this.log(`${p.name} обменял ${balls} шариков на ¥${yen}`);
         this.emit();
         return reply(true, { yen });
       }
@@ -953,7 +962,7 @@ export class GameEngine {
         const { cell } = ringCellAt(r.t0, at, st.ring.cellMs);
         const res = ringResult(ringLayout(r.seed, st.ring.physicalPrize), cell);
         p.busy = null;
-        if (res === 'green') { p.yen += st.ring.prizeYen; this.log(`${p.name} выиграл в призовой машине ${st.ring.prizeYen} ¥!`); }
+        if (res === 'green') { p.yen += st.ring.prizeYen; this.log(`${p.name} выиграл в призовой машине ¥${st.ring.prizeYen}!`); }
         if (res === 'gold') {
           const name = st.prizeNames[randInt(st.prizeNames.length)] ?? 'Приз';
           p.prizes.push(name);

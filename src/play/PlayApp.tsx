@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
+import { Avatar, HpBar, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
@@ -182,7 +182,10 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
             <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
-        {s.stage.t === 'prefIntro' && <PrefIntro key={s.stage.code} code={s.stage.code} who={s.players[s.stage.pid]} reward={s.prefs[s.stage.code]?.taken ? undefined : s.prefs[s.stage.code]?.reward} />}
+        {/* интро префектуры идёт на ТВ; на телефоне — только её фон, вопрос потом появится поверх */}
+        {s.stage.t === 'prefIntro' && (
+          <div class="phone-intro">{prefBgUrl(s.stage.code) && <img class="q-bg" src={prefBgUrl(s.stage.code)!} alt="" draggable={false} />}</div>
+        )}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
         {(att === 'landing' || att === 'move') && <MapPick key={att} client={client} s={s} me={me} mode={att} />}
@@ -197,7 +200,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
         {!att && tab === 'ring' && hasRing && <RingGame client={client} s={s} me={me} onExit={() => setTab('home')} />}
       </div>
-      {!att && (
+      {!att && s.stage.t !== 'prefIntro' && (
         <nav class="tabbar">
           <button class={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}>🏠<span>Игра</span></button>
           <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>🗾<span>Карта</span></button>

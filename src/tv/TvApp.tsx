@@ -6,7 +6,7 @@ import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
-import { prefBgUrl } from '../shared/prefBg';
+import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
 import { fmtYen, now } from '../shared/util';
@@ -16,7 +16,7 @@ import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
 import { refreshMusic, setMusic } from './bgMusic';
-import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
+import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -134,6 +134,22 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   });
 
   const st = s.stage;
+  // фон префектуры — один слой от интро до конца вопроса (и выбора бонусов между ними),
+  // чтобы при переходе интро → вопрос он не затухал и не мелькала карта
+  const sceneCode = useRef<number | null>(null);
+  let bgCode: number | null = null;
+  if (st.t === 'prefIntro') bgCode = st.code;
+  else if (st.t === 'question' && s.q?.pref) bgCode = s.q.pref;
+  else if (st.t === 'bonus') bgCode = sceneCode.current;
+  // зум фона — только если сцена началась с интро
+  const sceneZoom = useRef(false);
+  if (bgCode && sceneCode.current === null) sceneZoom.current = st.t === 'prefIntro';
+  sceneCode.current = bgCode;
+  const sceneBg = useSmoothBg(prefBgUrl(bgCode));
+  // увеличенные копии фонов для зума готовим заранее: все — в фоне, цель хода — пока фишка идёт
+  useEffect(() => { prewarmBgs(); }, []);
+  useEffect(() => { if (st.t === 'moving') prewarmBg(st.to); }, [st.t === 'moving' ? st.to : null]);
+
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
 
   // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
@@ -145,12 +161,11 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   return (
     <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '')}>
       <div class="tv-map" ref={mapEl} />
-      {st.t === 'question' && (prefBgUrl(s.q?.pref)
-        ? <img class="tv-qbg" src={prefBgUrl(s.q?.pref)!} alt="" draggable={false} />
-        : <div class="tv-qdim" />)}
+      {sceneBg.src
+        ? <img class={'tv-qbg' + (sceneZoom.current ? ' zoom' : '') + (sceneBg.smooth ? ' smooth' : '')} key="scene-bg" src={sceneBg.src} alt="" draggable={false} />
+        : st.t === 'question' && <div class="tv-qdim" />}
       <TopBar s={s} />
       {s.phase !== 'lobby' && <PlayerList s={s} />}
-      <Log s={s} />
       {st.t === 'lobby' && <Lobby s={s} host={host} />}
       {st.t === 'banner' && <Banner key={st.text} text={st.text} sub={st.sub} big={st.big} />}
       {st.t === 'calibResult' && <CalibResult s={s} />}
@@ -174,7 +189,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} → <b>{PREF[st.to].ru} {PREF[st.to].ja}</b></Prompt>}
       {inDuel && !(st.t === 'question' && s.q?.context === 'duel') && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
-      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} reward={s.prefs[st.code]?.taken ? undefined : s.prefs[st.code]?.reward} />}
+      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer reward={s.prefs[st.code]?.taken ? undefined : s.prefs[st.code]?.reward} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
         <div class="duel-pick pop">
@@ -217,11 +232,28 @@ function joinUrl(room: string, mode: string) {
   return u.toString();
 }
 
+/** надпись в левом верхнем углу: свой logo_text_px.png, иначе пиксельная надпись в стиле логотипа */
+function TvLogo() {
+  const [urls, setUrls] = useState<string[] | null>(LOGO_TEXT_URL ? [LOGO_TEXT_URL] : null);
+  useEffect(() => {
+    if (LOGO_TEXT_URL) return;
+    void Promise.all([pixelLogoUrl('ビッグゲーム'), pixelLogoUrl('BIG GAME 2')]).then(setUrls);
+  }, []);
+  if (!urls) return <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>;
+  if (urls.length === 1) return <img class="logo-img" src={urls[0]} alt="BIG GAME 2" />;
+  return (
+    <div class="logo-px">
+      <img class="logo-px-jp" src={urls[0]} alt="ビッグゲーム" />
+      <img class="logo-px-en" src={urls[1]} alt="BIG GAME 2" />
+    </div>
+  );
+}
+
 function TopBar({ s }: { s: GameState }) {
   const phase = { lobby: 'Регистрация', calib: 'Калибровка', landing: 'Высадка', turns: `Круг ${s.round}`, end: 'Финал' }[s.phase];
   return (
     <div class="topbar">
-      {LOGO_TEXT_URL ? <img class="logo-img" src={LOGO_TEXT_URL} alt="BIG GAME 2" /> : <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>}
+      <TvLogo />
       <div class="chip">{phase}</div>
       {s.phase !== 'lobby' && <div class="chip">Комната {s.room}</div>}
     </div>
@@ -266,14 +298,6 @@ function PlayerList({ s }: { s: GameState }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function Log({ s }: { s: GameState }) {
-  return (
-    <div class="log">
-      {s.log.slice(-4).map((l) => <div key={l.id} class="slide-up">{l.text}</div>)}
     </div>
   );
 }
@@ -494,7 +518,7 @@ function DuelResult({ s }: { s: GameState }) {
     <div class="banner">
       <div class="banner-inner pop">
         {d.over ? (
-          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+{s.settings.reward.duelWinYen} ¥ · +{s.settings.reward.duelWinStars} ★</div></>
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+¥{s.settings.reward.duelWinYen} · +{s.settings.reward.duelWinStars} ★</div></>
             : <div class="banner-text">Дуэль окончена</div>
         ) : d.mode === 'rhythm' && s.rhythm ? (
           <>

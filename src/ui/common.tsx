@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { GameState, Player, RewardType, Topic } from '../shared/types';
 import { REWARD_INFO } from '../shared/settings';
 import { characterUrl, pixelIconUrl, topicIconUrl } from '../shared/sprites';
-import { prefBgUrl } from '../shared/prefBg';
+import { prefBgUrl, useSmoothBg } from '../shared/prefBg';
 import { PREF } from '../map/mapData';
 
 /** перерисовка каждый кадр (для таймеров) */
@@ -120,12 +120,14 @@ export function SkillChips({ topics, stats, size = 16 }: { topics: Topic[]; stat
 }
 
 /** интро префектуры при первом входе: фон (если нарисован) и название по-русски и по-японски */
-export function PrefIntro({ code, who, reward }: { code: number; who?: Player; reward?: RewardType }) {
+/** bgLayer — фон рисует общий слой под интро (ТВ), здесь только заглушка, если фона нет */
+export function PrefIntro({ code, who, reward, bgLayer }: { code: number; who?: Player; reward?: RewardType; bgLayer?: boolean }) {
   const bg = prefBgUrl(code);
+  const smooth = useSmoothBg(bgLayer ? null : bg);
   const p = PREF[code];
   return (
-    <div class="pref-intro">
-      {bg ? <img class="pref-intro-bg" src={bg} alt="" draggable={false} /> : <div class="pref-intro-bg empty" />}
+    <div class={'pref-intro' + (bgLayer && bg ? ' over' : '')}>
+      {bg ? !bgLayer && smooth.src && <img class={'pref-intro-bg zoom' + (smooth.smooth ? ' smooth' : '')} src={smooth.src} alt="" draggable={false} /> : <div class="pref-intro-bg empty" />}
       <div class="pref-intro-title">
         <div class="pref-intro-ja">{p?.ja}</div>
         <div class="pref-intro-ru">{p?.ru}</div>

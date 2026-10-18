@@ -218,8 +218,12 @@ const badgeCache = new Map<string, HTMLCanvasElement>();
  * Иконка награды на плашке-выноске: светлый фон, тёмный контур со срезанными углами
  * и треугольник-указатель вниз (кончик — нижний центр холста). scale — размер пикселя.
  */
-export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
-  const key = id + '|' + scale;
+/** цвета плашки: награда — кремовая, автомат (постоянное место, не награда) — голубая */
+const BADGE_COLORS = { reward: ['#fff3d6', '#e2c48f'], machine: ['#d4ecff', '#8fb8e6'] } as const;
+export type BadgeKind = keyof typeof BADGE_COLORS;
+
+export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): HTMLCanvasElement {
+  const key = id + '|' + scale + '|' + kind;
   const c0 = badgeCache.get(key);
   if (c0) return c0;
   const g = grids.get(id) ?? MISSING;
@@ -255,7 +259,7 @@ export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
   // тень всей выноски на пиксель ниже
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (cell[y][x]) px(x, y + 1);
-  const colors = ['', '#0d0b1e', '#fff3d6', '#e2c48f'];
+  const colors = ['', '#0d0b1e', ...BADGE_COLORS[kind]];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const v = cell[y][x];
     if (!v) continue;
@@ -281,11 +285,11 @@ export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
 }
 
 const badgeUrlCache = new Map<string, string>();
-export function pixelBadgeUrl(id: string, scale = 3) {
-  const key = id + '|' + scale;
+export function pixelBadgeUrl(id: string, scale = 3, kind: BadgeKind = 'reward') {
+  const key = id + '|' + scale + '|' + kind;
   let u = badgeUrlCache.get(key);
   if (!u) {
-    u = pixelBadge(id, scale).toDataURL();
+    u = pixelBadge(id, scale, kind).toDataURL();
     badgeUrlCache.set(key, u);
   }
   return u;

@@ -93,7 +93,7 @@ function Catalog() {
             <div class="pc-info">
               <div class="pc-name"><span class="pname">{A.name}</span><span class="dot on" /></div>
               <HpBar hp={A.hp} max={A.maxHp} />
-              <div class="pc-money"><span>1 200 ¥</span><span class="pc-stars"><PixIcon id="stars" size={18} />3</span></div>
+              <div class="pc-money"><span>¥1 200</span><span class="pc-stars"><PixIcon id="stars" size={18} />3</span></div>
             </div>
           </div>
           <div class="pc-skills">{combat.map((t) => <SkillRow t={t} value={A.stats[t.id]} max={5} />)}</div>
@@ -119,8 +119,9 @@ function Catalog() {
         {topics.map((t) => <div class="ui-icon"><SkillIcon t={t} size={44} /><div class="ui-label">topic_{t.id}</div></div>)}
       </Section>
 
-      <Section title="Награды на карте" note="Иконка награды на плашке-выноске с указателем вниз — так она стоит над префектурой.">
+      <Section title="Награды на карте" note="Награда — кремовая выноска (покачивается, пропадает, когда забрали). Автомат — голубая, неподвижная, остаётся всегда.">
         {ICONS.slice(0, 5).map((id) => <div class="ui-icon"><img class="pix-icon" src={pixelBadgeUrl(id, 4)} alt="" /><div class="ui-label">{id}</div></div>)}
+        {ICONS.slice(5).map((id) => <div class="ui-icon"><img class="pix-icon" src={pixelBadgeUrl(id, 4, 'machine')} alt="" /><div class="ui-label">{id} (автомат)</div></div>)}
       </Section>
 
       <Section title="Персонажи" note="Пока рисуются кодом: src/shared/sprites.ts (BASE, HATS).">
