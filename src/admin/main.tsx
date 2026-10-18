@@ -9,18 +9,21 @@ import type { GameMsg, GameState, Question, RewardType, Settings } from '../shar
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
-import { DEFAULT_SETTINGS, REWARD_INFO } from '../shared/settings';
+import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
-import { Avatar } from '../ui/common';
+import { Avatar, SkillIcon } from '../ui/common';
+import { Topics } from './Topics';
 import { fmtYen, uid } from '../shared/util';
 
-type Tab = 'questions' | 'prefs' | 'settings' | 'remote';
+type Tab = 'questions' | 'topics' | 'prefs' | 'settings' | 'remote';
 
 function App() {
   const [tab, setTab] = useState<Tab>('questions');
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [err, setErr] = useState('');
+  /** «+ вопрос» с вкладки тем: открыть редактор вопроса этой темы */
+  const [newIn, setNewIn] = useState<{ topic: string; n: number } | null>(null);
   const store = getStore();
   const reload = async () => {
     try {
@@ -35,7 +38,7 @@ function App() {
       <header class="admin-hdr">
         <b>BIG GAME 2 · ведущий</b>
         <nav>
-          {([['questions', 'Вопросы'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
+          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
             <button class={'btn small' + (tab === k ? ' yellow' : '')} onClick={() => setTab(k)}>{l}</button>
           ))}
           <a class="btn small ghost" href="ui.html" target="_blank" title="Все элементы интерфейса: кнопки, барабан, иконки">UI-кит ↗</a>
@@ -46,7 +49,8 @@ function App() {
       {err && <div class="warn">{err}</div>}
       {!questions || !settings ? <div class="pad">Загрузка…</div> : (
         <>
-          {tab === 'questions' && <Questions questions={questions} settings={settings} onChange={reload} />}
+          {tab === 'questions' && <Questions questions={questions} settings={settings} onChange={reload} newIn={newIn} />}
+          {tab === 'topics' && <Topics settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} onAddQuestion={(topic) => { setNewIn({ topic, n: Date.now() }); setTab('questions'); }} />}
           {tab === 'prefs' && <Prefs settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'settings' && <SettingsEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'remote' && <Remote />}
@@ -62,16 +66,19 @@ function emptyQuestion(topic: string): Question {
   return { id: uid(12), text: '', answers: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correct: 0, topic };
 }
 
-function Questions({ questions, settings, onChange }: { questions: Question[]; settings: Settings; onChange: () => void }) {
+function Questions({ questions, settings, onChange, newIn }: { questions: Question[]; settings: Settings; onChange: () => void; newIn?: { topic: string; n: number } | null }) {
   const store = getStore();
   const [filter, setFilter] = useState({ topic: '', q: '', pref: '' });
   const [edit, setEdit] = useState<Question | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const newQ = (topic: string) => ({ ...emptyQuestion(topic), ...(settings.topics.find((t) => t.id === topic)?.special ? { special: true } : {}) });
+  useEffect(() => { if (newIn) { setFilter((f) => ({ ...f, topic: newIn.topic })); setEdit(newQ(newIn.topic)); } }, [newIn?.n]);
+  const firstSpecial = settings.topics.find((t) => t.special);
   const isSeed = questions === SEED_QUESTIONS || questions.every((q) => q.id.startsWith('seed-'));
   const list = useMemo(() => questions.filter((q) =>
     (!filter.topic || q.topic === filter.topic) &&
-    (!filter.pref || String(q.pref ?? '') === filter.pref || (filter.pref === 'special' && q.special)) &&
+    (!filter.pref || String(q.pref ?? '') === filter.pref || (filter.pref === 'special' && isSpecialQ(settings, q))) &&
     (!filter.q || q.text.toLowerCase().includes(filter.q.toLowerCase()))), [questions, filter]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -115,10 +122,14 @@ function Questions({ questions, settings, onChange }: { questions: Question[]; s
   return (
     <div class="pad col">
       <div class="row wrap">
-        <button class="btn primary small" onClick={() => setEdit(emptyQuestion(filter.topic || 'general'))}>+ Новый вопрос</button>
+        <button class="btn primary small" onClick={() => setEdit(newQ(filter.topic || 'general'))}>+ Новый вопрос</button>
+        <button class="btn small rainbow" title={firstSpecial ? 'Вопрос в спецтему игрока' : 'Сначала создай спецтему на вкладке «Темы»'} onClick={() => { const sp = settings.topics.find((t) => t.id === filter.topic && t.special) ?? firstSpecial; setEdit(sp ? newQ(sp.id) : { ...emptyQuestion(filter.topic || 'general'), special: true }); }}>+ Спецвопрос</button>
         <select value={filter.topic} onChange={(e) => setFilter({ ...filter, topic: (e.target as HTMLSelectElement).value })}>
           <option value="">Все темы ({questions.length})</option>
-          {settings.topics.map((t) => <option value={t.id}>{t.name} ({counts[t.id] ?? 0})</option>)}
+          {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name} ({counts[t.id] ?? 0})</option>)}
+          {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
+            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>💥 {t.name}{t.owner ? ` — ${t.owner}` : ''} ({counts[t.id] ?? 0})</option>)}
+          </optgroup>}
         </select>
         <select value={filter.pref} onChange={(e) => setFilter({ ...filter, pref: (e.target as HTMLSelectElement).value })}>
           <option value="">Любая префектура</option>
@@ -137,9 +148,10 @@ function Questions({ questions, settings, onChange }: { questions: Question[]; s
         <tbody>
           {list.map((q) => {
             const t = settings.topics.find((x) => x.id === q.topic);
+            const sp = isSpecialQ(settings, q);
             return (
               <tr>
-                <td><span class="chip" style={{ borderColor: t?.color }}>{t?.name ?? q.topic}</span>{q.special && ' 💥'}</td>
+                <td><span class={'chip topic-chip' + (sp ? ' rainbow' : '')} style={{ borderColor: t?.color }}>{t && <SkillIcon t={t} size={18} />}{t?.name ?? q.topic}{t?.owner ? <span class="muted"> · {t.owner}</span> : ''}</span>{q.special && !t?.special && ' 💥'}</td>
                 <td>{q.media && `[${q.media.type}] `}{q.text}</td>
                 <td class="muted">{q.answers[q.correct]?.text ?? (q.answers[q.correct]?.image ? '[картинка]' : '')}</td>
                 <td>{q.pref ? PREF[q.pref]?.ru : ''}</td>
@@ -179,14 +191,19 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
         <h3 style={{ margin: 0 }}>Вопрос</h3>
         <textarea rows={3} value={q.text} placeholder="Текст вопроса" onInput={(e) => set({ text: (e.target as HTMLTextAreaElement).value })} />
         <div class="row wrap">
-          <label>Тема <select value={q.topic} onChange={(e) => set({ topic: (e.target as HTMLSelectElement).value })}>
-            {settings.topics.map((t) => <option value={t.id}>{t.name}</option>)}
+          <label>Тема <select value={q.topic} onChange={(e) => { const id = (e.target as HTMLSelectElement).value; set({ topic: id, special: settings.topics.find((t) => t.id === id)?.special ? true : undefined }); }}>
+            {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name}</option>)}
+            {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
+              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>💥 {t.name}{t.owner ? ` — ${t.owner}` : ''}</option>)}
+            </optgroup>}
           </select></label>
           <label>Префектура <select value={String(q.pref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ pref: v ? Number(v) : undefined }); }}>
             <option value="">—</option>
             {PREFS.map((p) => <option value={String(p.code)}>{p.ru} {p.ja}</option>)}
           </select></label>
-          <label><input type="checkbox" checked={!!q.special} onChange={(e) => set({ special: (e.target as HTMLInputElement).checked })} /> 💥 спецвопрос</label>
+          {settings.topics.find((t) => t.id === q.topic)?.special
+            ? <span class="chip rainbow">💥 спецвопрос игрока</span>
+            : <label title="Общий спецвопрос — если у игрока нет своей спецтемы"><input type="checkbox" checked={!!q.special} onChange={(e) => set({ special: (e.target as HTMLInputElement).checked })} /> 💥 общий спецвопрос</label>}
           <label>Время, сек <input class="inp-s num" type="number" min={5} max={120} value={q.time ?? ''} placeholder="авто" onInput={(e) => { const v = (e.target as HTMLInputElement).value; set({ time: v ? Number(v) : undefined }); }} /></label>
         </div>
         <div class="row wrap">
@@ -339,18 +356,7 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
         <label class="set-row"><span>Ритм-баттл в дуэлях</span><input type="checkbox" checked={s.rhythmInDuel} onChange={(e) => upd((c) => (c.rhythmInDuel = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Золотая ячейка (настоящий приз) в призовой машине</span><input type="checkbox" checked={s.ring.physicalPrize} onChange={(e) => upd((c) => (c.ring.physicalPrize = (e.target as HTMLInputElement).checked))} /></label>
       </div>
-      <h3>Темы</h3>
-      <div class="note">«Боевые» темы участвуют в калибровке и дают силу в дуэлях. «general» — запасные вопросы для префектур без своих вопросов, «okinawa» — вопросы воскрешения. Эти два id лучше не менять.</div>
-      {s.topics.map((t, i) => (
-        <div class="row">
-          <input class="inp-s" style={{ width: 110 }} value={t.id} onInput={(e) => upd((c) => (c.topics[i].id = (e.target as HTMLInputElement).value))} />
-          <input class="inp-s grow" value={t.name} onInput={(e) => upd((c) => (c.topics[i].name = (e.target as HTMLInputElement).value))} />
-          <input type="color" value={t.color} onInput={(e) => upd((c) => (c.topics[i].color = (e.target as HTMLInputElement).value))} />
-          <label><input type="checkbox" checked={t.combat} onChange={(e) => upd((c) => (c.topics[i].combat = (e.target as HTMLInputElement).checked))} /> боевая</label>
-          <button class="btn small" onClick={() => upd((c) => c.topics.splice(i, 1))}>✕</button>
-        </div>
-      ))}
-      <div><button class="btn small" onClick={() => upd((c) => c.topics.push({ id: 'topic' + c.topics.length, name: 'Новая тема', combat: true, color: '#ffffff' }))}>+ тема</button></div>
+      <div class="note">Темы и спецтемы игроков — на вкладке «Темы».</div>
       <h3>Названия призов</h3>
       <textarea rows={4} value={s.prizeNames.join('\n')} onInput={(e) => upd((c) => (c.prizeNames = (e.target as HTMLTextAreaElement).value.split('\n').map((x) => x.trim()).filter(Boolean)))} />
       <div class="muted small">По одному на строку. При выигрыше приза выбирается случайное название.</div>

@@ -5,7 +5,7 @@
 import type {
   BonusId, GameMsg, GameState, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, isSpecialQ, specialTopicOf } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -595,7 +595,8 @@ export class GameEngine {
         d.mode = null;
         const topics = this.combatTopics().map((t) => t.id);
         const ms = st.pickTime * 1000;
-        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel });
+        const mine = specialTopicOf(st, asker.name);
+        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel, ...(mine ? { specialTopic: mine.id } : {}) });
         const choice = await this.waitInput(epoch, (m) => {
           if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== asker.id) return undefined;
           if (m.value === 'special' && asker.specials > 0) return 'special';
@@ -627,7 +628,8 @@ export class GameEngine {
         if (pickV === 'special') {
           asker.specials--;
           d.special = true;
-          q = this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
+          // своя спецтема игрока, если её нет или вопросы кончились — любой спецвопрос
+          q = (mine ? this.pickQuestion((x) => x.topic === mine.id) : null) ?? this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         } else {
           q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         }
@@ -637,7 +639,7 @@ export class GameEngine {
         // бонусы: сначала атакующий дуэли, потом защитник
         const removed = await this.bonusPhase(epoch, [att.id, def.id], true, q);
         const topicName = this.s.settings.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
-        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? '💥 Спецвопрос' : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
+        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? '💥 ' + (st.topics.find((t) => t.id === q!.topic)?.special ? topicName : 'Спецвопрос') : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
         const okA = res[asker.id] === q.correct, okT = res[target.id] === q.correct;
         const results: Record<string, string> = {};
         if (okA !== okT) {
@@ -750,7 +752,9 @@ export class GameEngine {
   // ───────── вопросы ─────────
 
   private pickQuestion(f: (q: Question) => boolean): Question | null {
-    const all = this.questions.filter((q) => q.answers?.length === 4 && f(q));
+    // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
+    const st = this.s.settings;
+    const all = this.questions.filter((q) => q.answers?.length === 4 && f(isSpecialQ(st, q) && !q.special ? { ...q, special: true } : q));
     if (!all.length) return null;
     const fresh = all.filter((q) => !this.sec.used.includes(q.id));
     const q = pick(fresh.length ? fresh : all);
@@ -765,7 +769,7 @@ export class GameEngine {
     const reading = this.hostPaced;
     const pq: PublicQuestion = {
       qid: q.id, n, context, title, text: q.text, media: q.media, answers: q.answers, answerImages: !!q.answerImages,
-      topic: q.topic, special: !!q.special, startAt: 0, deadline: 0, participants, answered: [], removed, revealed: false,
+      topic: q.topic, special: isSpecialQ(this.s.settings, q), startAt: 0, deadline: 0, participants, answered: [], removed, revealed: false,
       ...(reading ? { reading } : {}),
       ...(pref ? { pref } : {}),
     };

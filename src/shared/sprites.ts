@@ -149,7 +149,7 @@ const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch)
 const MISSING: Grid = diamond('#ff00ff');
 
 /** спецтема: круг с радужным круговым градиентом (если нет своего topic_special.png) */
-function rainbowGrid(n = 11): Grid {
+export function rainbowGrid(n = 11): Grid {
   const c = (n - 1) / 2;
   const STEPS = 12;
   const g: Grid = [];
@@ -204,13 +204,32 @@ function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {
 }
 
 const iconCache = new Map<string, string>();
-export function topicIconUrl(id: string, color: string, scale = 3): string {
-  const k = `${id}|${color}|${scale}`;
+/**
+ * Иконка темы. Порядок: своя иконка из админки (opts.icon) → src/img/icons/topic_<id>.png →
+ * радужный круг для спецтемы → ромб цвета темы.
+ */
+export function topicIconUrl(id: string, color: string, scale = 3, opts: { icon?: Grid; special?: boolean } = {}): string {
+  const k = `${id}|${color}|${scale}|${opts.special ? 1 : 0}|${opts.icon ? JSON.stringify(opts.icon) : ''}`;
   let u = iconCache.get(k);
   if (u) return u;
-  u = drawIcon(grids.get('topic_' + id) ?? (id === 'special' ? rainbowGrid() : diamond(color)), scale, false).toDataURL();
+  const g = opts.icon?.length ? opts.icon : grids.get('topic_' + id) ?? (id === 'special' || opts.special ? rainbowGrid() : diamond(color));
+  u = drawIcon(g, scale, false).toDataURL();
   iconCache.set(k, u);
   return u;
+}
+
+/** готовые иконки для редактора в админке: имя → копия сетки пикселей */
+export function iconPresets(): Record<string, Grid> {
+  const out: Record<string, Grid> = {};
+  for (const [k, g] of grids) out[k] = g.map((r) => [...r]);
+  out['радуга'] = rainbowGrid();
+  out['ромб'] = diamond('#ffffff');
+  return out;
+}
+
+/** превью сетки так, как она выглядит в игре (с контуром); shadow — как у иконок наград */
+export function gridIconUrl(g: Grid, scale = 3, shadow = false): string {
+  return drawIcon(g, scale, shadow).toDataURL();
 }
 
 const pixCache = new Map<string, HTMLCanvasElement>();

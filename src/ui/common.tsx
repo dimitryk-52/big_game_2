@@ -95,8 +95,8 @@ export function skillMax(s: Pick<GameState, 'players' | 'settings'>) {
   return m;
 }
 
-export function SkillIcon({ t, size = 18 }: { t: Pick<Topic, 'id' | 'color' | 'name'>; size?: number }) {
-  return <img class="skill-icon" src={topicIconUrl(t.id, t.color)} width={size} height={size} alt={t.name} title={t.name} draggable={false} />;
+export function SkillIcon({ t, size = 18 }: { t: Pick<Topic, 'id' | 'color' | 'name' | 'icon' | 'special'>; size?: number }) {
+  return <img class="skill-icon" src={topicIconUrl(t.id, t.color, 3, { icon: t.icon, special: t.special })} width={size} height={size} alt={t.name} title={t.name} draggable={false} />;
 }
 
 /** пиксельная иконка из sprites.ts (stars, money, bonus, special, prize, pachinko, ring) */
