@@ -38,6 +38,8 @@ function App() {
           {([['questions', 'Вопросы'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
             <button class={'btn small' + (tab === k ? ' yellow' : '')} onClick={() => setTab(k)}>{l}</button>
           ))}
+          <a class="btn small ghost" href="ui.html" target="_blank" title="Все элементы интерфейса: кнопки, барабан, иконки">UI-кит ↗</a>
+          <a class="btn small ghost" href="tv.html" target="_blank">ТВ ↗</a>
         </nav>
         <span class="muted small">данные: {store.kind} · сеть: {netMode()}</span>
       </header>

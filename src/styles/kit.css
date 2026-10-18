@@ -165,3 +165,6 @@ h1, h2, .banner-text, .pref-intro-ru, .fighter-name { text-shadow: var(--tx-outl
 .wheel-label.done { color: var(--yellow); animation: pop 0.4s both; }
 
 .pixel-img { image-rendering: pixelated; display: block; max-width: none; }
+
+/* ссылка в виде кнопки */
+a.btn { display: inline-block; color: #fff; text-decoration: none; }
