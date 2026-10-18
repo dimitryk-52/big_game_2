@@ -15,6 +15,7 @@ import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
+import { refreshMusic, setMusic } from './bgMusic';
 import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
@@ -134,6 +135,12 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
 
   const st = s.stage;
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
+
+  // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
+  // и в вопросах с аудио/видео; в обычных вопросах тише
+  const qMedia = st.t === 'question' && (s.q?.media?.type === 'audio' || s.q?.media?.type === 'video');
+  const track = st.t === 'lobby' || st.t === 'rhythm' || qMedia ? null : s.duel ? 'duel' : 'map';
+  useEffect(() => { setMusic(track, st.t === 'question'); }, [track, st.t]);
 
   return (
     <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '')}>
@@ -564,7 +571,7 @@ function HostPanel({ s, host, onNewGame, onDebug }: { s: GameState; host: Host; 
       <button class="btn small" title="Пробел" onClick={() => host.ctl(s.phase === 'lobby' ? 'start' : 'next')}>▶ Далее</button>
       <button class="btn small" title="P" onClick={() => host.ctl('pause')}>{s.paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
       <button class="btn small" title="F" onClick={toggleFullscreen}>⛶</button>
-      <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); }}>{snd ? '🔊' : '🔇'}</button>
+      <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); refreshMusic(); }}>{snd ? '🔊' : '🔇'}</button>
       <button class="btn small" onClick={() => { if (confirm('Завершить игру и показать итоги?')) host.ctl('end'); }}>🏁</button>
       <button class="btn small" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна.')) onNewGame(); }}>🆕</button>
       <button class="btn small" title="Отладка: любой экран игры" onClick={onDebug}>🐞</button>

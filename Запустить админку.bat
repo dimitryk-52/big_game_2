@@ -20,5 +20,8 @@ echo   Админка: http://localhost:4173/admin.html
 echo   ТВ:      http://localhost:4173/tv.html  (или «Запустить ТВ.bat»)
 echo Пока это окно открыто — всё работает. Закроешь окно — сервер остановится.
 echo.
+rem новые фоны префектур (src\img\bgs\bg_*_orig.png) превращаем в пиксель-арт; готовые пропускаются
+rem если Python не установлен — просто идём дальше со старыми фонами
+call npm run build:bgs
 call npm run local:admin
 pause

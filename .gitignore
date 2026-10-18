@@ -11,3 +11,6 @@ tools/pixelart/out
 /fonts/
 /ref/
 tools/pixelart/out/
+
+# музыка для карты и боя — только локально (крутится на компьютере с ТВ)
+/music/

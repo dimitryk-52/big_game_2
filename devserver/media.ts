@@ -1,7 +1,9 @@
-// Раздача медиа из папки media/ в корне проекта — и в `npm run dev`, и в `npm run local`.
+// Раздача медиа из папки media/ (вопросы) и music/ (музыка карты и боя) в корне проекта —
+// и в `npm run dev`, и в `npm run local`.
 // ТВ запускается на этом же компьютере, поэтому видео и аудио никуда не загружаются:
 //   /media/<файл>       — сам файл (с поддержкой Range, чтобы видео перематывалось)
 //   /media-list.json    — список файлов (ТВ показывает, каких не хватает; админка подсказывает имена)
+//   /music/<файл>       — музыка (map.mp3, duel.mp3), тоже только локально
 import type { Connect, Plugin } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,16 +26,16 @@ function listFiles(dir: string, base = ''): string[] {
   return out;
 }
 
-function handler(dir: string): Connect.NextHandleFunction {
+function handler(dir: string, prefix = 'media'): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = decodeURIComponent((req.url ?? '').split('?')[0]);
-    if (url.endsWith('/media-list.json')) {
+    if (prefix === 'media' && url.endsWith('/media-list.json')) {
       res.setHeader('content-type', 'application/json; charset=utf-8');
       res.setHeader('cache-control', 'no-store');
       res.end(JSON.stringify(listFiles(dir)));
       return;
     }
-    const m = url.match(/\/media\/(.+)$/);
+    const m = url.match(new RegExp(`/${prefix}/(.+)$`));
     if (!m) return next();
     // ищем по относительному пути, а если нет — по имени файла в любой подпапке
     let file = path.join(dir, m[1]);
@@ -63,13 +65,16 @@ function handler(dir: string): Connect.NextHandleFunction {
 
 export function localMedia(): Plugin {
   const dir = path.resolve('media');
+  const music = path.resolve('music');
   return {
     name: 'local-media',
     configureServer(server) {
       server.middlewares.use(handler(dir));
+      server.middlewares.use(handler(music, 'music'));
     },
     configurePreviewServer(server) {
       server.middlewares.use(handler(dir));
+      server.middlewares.use(handler(music, 'music'));
     },
   };
 }
