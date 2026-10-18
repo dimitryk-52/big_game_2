@@ -92,6 +92,8 @@ export interface PublicQuestion {
   participants: string[];
   answered: string[];
   removed: Record<string, number[]>;
+  /** порядок кнопок на телефоне игрока (позиция → индекс ответа), у всех разный — от подглядывания */
+  orders?: Record<string, number[]>;
   revealed: boolean;
   correct?: number;
   choices?: Record<string, number | null>;

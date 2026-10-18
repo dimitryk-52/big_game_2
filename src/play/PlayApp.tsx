@@ -334,7 +334,8 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
       <div class="q-text">{q.text}</div>
       {q.reading && <div class="center muted">Слушайте вопрос — варианты появятся следом</div>}
       {!q.reading && <div class={imgs ? 'q-grid' : 'q-list'}>
-        {q.answers.map((a, i) => {
+        {(q.orders?.[me.id] ?? [0, 1, 2, 3]).map((i, pos) => {
+          const a = q.answers[i];
           const gone = removed.includes(i);
           let cls = 'q-btn';
           if (choice === i) cls += ' chosen';
@@ -343,7 +344,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           if (gone) cls += ' gone';
           return (
             <button class={cls} disabled={gone || (locked && choice !== i && !q.revealed)} onClick={() => pickAns(i)}>
-              <span class="qletter">{LETTERS[i]}</span>
+              <span class="qletter">{LETTERS[pos]}</span>
               {a.image ? <img src={a.image} alt="" /> : <span>{a.text}</span>}
             </button>
           );

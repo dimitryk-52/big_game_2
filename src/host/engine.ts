@@ -38,6 +38,28 @@ interface Secrets {
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
 
+/** все 24 перестановки четырёх ответов */
+const PERMS4: number[][] = (() => {
+  const out: number[][] = [];
+  const go = (cur: number[]) => {
+    if (cur.length === 4) return void out.push(cur);
+    for (let i = 0; i < 4; i++) if (!cur.includes(i)) go([...cur, i]);
+  };
+  go([]);
+  return out;
+})();
+
+/** каждому игроку свой порядок кнопок; до 24 игроков порядки не повторяются */
+function answerOrders(pids: string[]): Record<string, number[]> {
+  const res: Record<string, number[]> = {};
+  let pool: number[][] = [];
+  for (const id of shuffle(pids)) {
+    if (!pool.length) pool = shuffle(PERMS4);
+    res[id] = pool.pop()!;
+  }
+  return res;
+}
+
 export class GameEngine {
   s: GameState;
   sec: Secrets;
@@ -770,6 +792,7 @@ export class GameEngine {
     const pq: PublicQuestion = {
       qid: q.id, n, context, title, text: q.text, media: q.media, answers: q.answers, answerImages: !!q.answerImages,
       topic: q.topic, special: isSpecialQ(this.s.settings, q), startAt: 0, deadline: 0, participants, answered: [], removed, revealed: false,
+      orders: answerOrders(Object.keys(this.s.players)),
       ...(reading ? { reading } : {}),
       ...(pref ? { pref } : {}),
     };
