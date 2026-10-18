@@ -12,20 +12,13 @@ export interface PrefInfo {
   adj: number[];
 }
 
+/** размер рисунка карты (src/img/map.png), в пикселях; anchor/bb префектур — в этих же координатах */
 export const MAP_W: number = raw.w;
 export const MAP_H: number = raw.h;
-const cellStr: string = raw.cells;
-export const GRID = new Uint8Array(MAP_W * MAP_H);
-for (let i = 0; i < GRID.length; i++) GRID[i] = cellStr.charCodeAt(i) - 48;
 
 export const PREFS: PrefInfo[] = raw.prefs as any;
 export const PREF: Record<number, PrefInfo> = Object.fromEntries(PREFS.map((p) => [p.code, p]));
 export const PREF_CODES = PREFS.map((p) => p.code);
-
-export function cellAt(x: number, y: number) {
-  if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return 0;
-  return GRID[y * MAP_W + x];
-}
 
 export function neighbors(code: number) {
   return PREF[code]?.adj ?? [];

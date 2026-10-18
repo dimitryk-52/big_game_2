@@ -110,10 +110,12 @@ npm run dev
 npm run dev        # dev-сервер + ретранслятор
 npm run build      # проверка типов + сборка в dist/
 npm run sim        # headless-прогон движка с ботами
-npm run build:map  # пересборка карты: node scripts/build-map.mjs <japan.geojson>
+npm run build:map  # пересборка карты из src/img/map.png (python scripts/build-map.py [--debug папка])
 ```
 
-Карта — растр из открытых данных [dataofjapan/land](https://github.com/dataofjapan/land): 46 префектур без Окинавы, соседство вычисляется автоматически плюс морские связи (Сэйкан, мосты на Сикоку, Канмон). Шрифт — [DotGothic16](https://fonts.google.com/specimen/DotGothic16): пиксельный, с кириллицей, латиницей и японским.
+Карта — рисунок `src/img/map.png` (46 префектур без Окинавы). `scripts/build-map.py` находит на нём границы префектур (толстые чёрные линии) и заливает их от «зёрен» из `scripts/map-seeds.json` — по точке-другой на префектуру в пикселях рисунка. Результат: `src/map/assets/map.webp` (рисунок без потерь), `src/map/assets/regions.png` (маска префектур для тапов, тумана и подсветки) и якоря/рамки в `src/map/japan.json`. Если префектура легла не туда — поправь точки в `map-seeds.json`, запусти с `--debug папка` и посмотри `regions-debug.png`. Соседство для ходов — по реальной географии (поле `adj` в `japan.json`, с морскими связями), скрипт только печатает расхождения с рисунком. Нужны Python-пакеты pillow, numpy, scipy, scikit-image.
+
+Шрифт — [DotGothic16](https://fonts.google.com/specimen/DotGothic16): пиксельный, с кириллицей, латиницей и японским.
 
 ### Структура
 

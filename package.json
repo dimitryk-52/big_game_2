@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "build:map": "node scripts/build-map.mjs",
+    "build:map": "python scripts/build-map.py",
     "sim": "tsx scripts/sim.ts",
     "check:supabase": "node scripts/check-supabase.mjs",
     "local": "vite build && vite preview --port 4173 --strictPort --open /tv.html",

@@ -1,10 +1,11 @@
 // Интерактивная карта на PixiJS: камера (зум/драг/пинч), фишки игроков,
 // подсветка вариантов хода, частицы. Используется и на ТВ, и на телефоне.
-import { Application, Container, Sprite, Text, Texture, TilingSprite, Graphics } from 'pixi.js';
+import { Application, Container, Sprite, Text, Texture, ImageSource, Graphics } from 'pixi.js';
 import type { Player, PrefState } from '../shared/types';
-import { PREF, PREF_CODES, cellAt } from './mapData';
+import { PREF, PREF_CODES } from './mapData';
 import {
-  CANVAS_H, CANVAS_W, prefAnchorWorld, prefBoundsWorld, renderMap, renderPrefMask, renderPrefOutline, renderSeaTile, worldToCell,
+  CANVAS_H, CANVAS_W, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderPrefFog, renderPrefMask, renderPrefOutline,
+  worldToImage, type PrefLayer,
 } from './render';
 import { characterCanvas } from '../shared/sprites';
 import { REWARD_INFO } from '../shared/settings';
@@ -46,10 +47,10 @@ const font = () => getComputedStyle(document.documentElement).getPropertyValue('
 export class MapView {
   app!: Application;
   private world = new Container();
-  private sea!: TilingSprite;
-  private mapCanvas = document.createElement('canvas');
-  private mapTex!: Texture;
+  private regions!: Uint8Array;
   private mapSprite!: Sprite;
+  /** туман и затемнение недоступных — спрайты по форме префектур поверх рисунка */
+  private fogLayer = new Container();
   private hiLayer = new Container();
   private arrowG = new Graphics();
   private arrowPts: { x: number; y: number }[] | null = null;
@@ -57,7 +58,7 @@ export class MapView {
   private labelLayer = new Container();
   private tokenLayer = new Container();
   private fxLayer = new Container();
-  private masks = new Map<number, Texture & { ox?: number }>();
+  private layerCache = new Map<string, { tex: Texture; x: number; y: number }>();
   private hiSprites: Sprite[] = [];
   private outline: Sprite | null = null;
   private tokens = new Map<string, Token>();
@@ -82,27 +83,31 @@ export class MapView {
   static async create(el: HTMLElement, opts: { interactive?: boolean; background?: number } = {}) {
     const v = new MapView();
     v.interactive = opts.interactive ?? true;
-    await v.init(el, opts.background ?? 0x1d2b5a);
+    await v.init(el, opts.background ?? 0x4984bc);
     return v;
   }
 
   private async init(el: HTMLElement, bg: number) {
     try { await document.fonts.load('16px ' + font().split(',')[0], 'Привет 日本'); } catch { /* шрифт не обязателен */ }
+    const assets = await loadMapAssets();
+    this.regions = assets.regions;
     this.app = new Application();
     await this.app.init({ resizeTo: el, background: bg, antialias: false, resolution: Math.min(2, window.devicePixelRatio || 1), autoDensity: true });
     el.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
     this.app.canvas.style.display = 'block';
 
-    this.sea = new TilingSprite({ texture: Texture.from(renderSeaTile()), width: CANVAS_W * 6, height: CANVAS_H * 6 });
-    this.sea.texture.source.scaleMode = 'nearest';
-    this.sea.position.set(-CANVAS_W * 2.5, -CANVAS_H * 2.5);
-    this.mapCanvas.width = CANVAS_W;
-    this.mapCanvas.height = CANVAS_H;
-    this.mapTex = Texture.from(this.mapCanvas);
-    this.mapTex.source.scaleMode = 'nearest';
-    this.mapSprite = new Sprite(this.mapTex);
-    this.world.addChild(this.sea, this.mapSprite, this.hiLayer, this.arrowG, this.iconLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
+    // при приближении — чёткие пиксели (nearest), при отдалении — мипмапы без ряби
+    const src = new ImageSource({
+      resource: assets.image,
+      autoGenerateMipmaps: true,
+      magFilter: 'nearest',
+      minFilter: 'linear',
+      mipmapFilter: 'linear',
+    });
+    this.mapSprite = new Sprite(new Texture({ source: src }));
+    this.mapSprite.scale.set(SCALE);
+    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.arrowG, this.iconLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
 
     this.fitAll(false);
@@ -123,8 +128,7 @@ export class MapView {
     const lookKey = revKey + '|' + (u.blocked ?? []).join(',');
     if (lookKey !== this.lastLookKey) {
       this.lastLookKey = lookKey;
-      renderMap(this.mapCanvas.getContext('2d')!, { prefs: u.prefs, blocked: u.blocked });
-      this.mapTex.source.update();
+      this.updateFog(u);
     }
     this.updateHighlights(u);
     this.arrowPts = u.arrow && u.arrow.length >= 2 ? u.arrow.map((c) => prefAnchorWorld(c)) : null;
@@ -133,17 +137,36 @@ export class MapView {
     this.updateTokens(u);
   }
 
-  private maskTex(code: number) {
-    let t = this.masks.get(code);
-    if (!t) {
-      const m = renderPrefMask(code);
-      t = Texture.from(m.canvas) as any;
-      t!.source.scaleMode = 'nearest';
-      (t as any).ox = m.x;
-      (t as any).oy = m.y;
-      this.masks.set(code, t!);
+  /** спрайт слоя префектуры (маска/туман/контур); текстуры строятся один раз и кешируются */
+  private layerSprite(kind: 'mask' | 'fog' | 'outline', code: number) {
+    const key = kind + code;
+    let l = this.layerCache.get(key);
+    if (!l) {
+      const make: (r: Uint8Array, c: number) => PrefLayer = kind === 'mask' ? renderPrefMask : kind === 'fog' ? renderPrefFog : renderPrefOutline;
+      const m = make(this.regions, code);
+      const tex = Texture.from(m.canvas);
+      tex.source.scaleMode = 'nearest';
+      l = { tex, x: m.x, y: m.y };
+      this.layerCache.set(key, l);
     }
-    return t!;
+    const s = new Sprite(l.tex);
+    s.position.set(l.x, l.y);
+    s.scale.set(SCALE);
+    return s;
+  }
+
+  private updateFog(u: MapUpdate) {
+    this.fogLayer.removeChildren().forEach((s) => s.destroy());
+    const blocked = new Set(u.blocked ?? []);
+    for (const c of PREF_CODES) {
+      if (!u.prefs[c]?.rev) this.fogLayer.addChild(this.layerSprite('fog', c));
+      if (blocked.has(c)) {
+        const s = this.layerSprite('mask', c);
+        s.tint = 0x101828;
+        s.alpha = 0.5;
+        this.fogLayer.addChild(s);
+      }
+    }
   }
 
   private updateHighlights(u: MapUpdate) {
@@ -151,9 +174,7 @@ export class MapView {
     this.hiSprites = [];
     const add = (codes: number[] | undefined, tint: number) => {
       for (const c of codes ?? []) {
-        const t = this.maskTex(c) as any;
-        const s = new Sprite(t);
-        s.position.set(t.ox, t.oy);
+        const s = this.layerSprite('mask', c);
         s.tint = tint;
         s.alpha = 0.4;
         (s as any).code = c;
@@ -165,10 +186,7 @@ export class MapView {
     add(u.highlight2, 0xff9df0);
     if (this.outline) { this.outline.destroy(); this.outline = null; }
     if (u.selected) {
-      const o = renderPrefOutline(u.selected, '#ffffff');
-      const s = new Sprite(Texture.from(o.canvas));
-      s.texture.source.scaleMode = 'nearest';
-      s.position.set(o.x, o.y);
+      const s = this.layerSprite('outline', u.selected);
       this.hiLayer.addChild(s);
       this.outline = s;
     }
@@ -444,17 +462,18 @@ export class MapView {
   }
 
   private codeAtWorld(wx: number, wy: number) {
-    const c = worldToCell(wx, wy);
-    let code = cellAt(c.x, c.y);
-    if (code) return code;
-    // промах мимо — ищем ближайшую подсвеченную префектуру в радиусе (удобно пальцем)
+    const p = worldToImage(wx, wy);
     const opts = [...(this.last?.highlight ?? []), ...(this.last?.highlight2 ?? [])];
-    let best = 0, bd = 1e9;
-    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-      const k = cellAt(c.x + dx, c.y + dy);
+    const code = codeAt(this.regions, p.x, p.y);
+    if (code && (!opts.length || opts.includes(code))) return code;
+    // промах мимо — ищем ближайшую подсвеченную префектуру в радиусе ~20px экрана (удобно пальцем)
+    const R = Math.max(8, 20 / (this.cam.z * SCALE)), step = Math.max(1, R / 10);
+    let best = code, bd = 1e9;
+    for (let dy = -R; dy <= R; dy += step) for (let dx = -R; dx <= R; dx += step) {
+      const k = codeAt(this.regions, p.x + dx, p.y + dy);
       if (!k || (opts.length && !opts.includes(k))) continue;
       const d = dx * dx + dy * dy;
-      if (d < bd) { bd = d; best = k; }
+      if (d < bd && d <= R * R) { bd = d; best = k; }
     }
     return best;
   }
@@ -485,7 +504,6 @@ export class MapView {
       if (Math.abs(this.camTarget.z - this.cam.z) < 0.001 && Math.abs(this.camTarget.x - this.cam.x) < 0.3) this.camTarget = null;
     }
     this.applyCam();
-    this.sea.tilePosition.x = Math.floor(this.time / 220) % 64;
     this.drawArrow();
 
     const pulse = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(this.time / 180));
