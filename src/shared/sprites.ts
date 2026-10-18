@@ -226,7 +226,8 @@ export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
   const h = g.length, w = g[0]?.length ?? 0;
   const PAD = 2;
   const bw = w + PAD * 2 + 2, bh = h + PAD * 2 + 2; // плашка с контуром
-  const cx = Math.floor(bw / 2);
+  // середина плашки: один пиксель при нечётной ширине, два — при чётной (кончик тоже в два пикселя)
+  const cl = Math.floor((bw - 1) / 2), cr = Math.ceil((bw - 1) / 2);
   const W = bw, H = bh + 4; // + указатель и тень
   // карта клеток: 0 пусто, 1 контур, 2 фон, 3 тень фона снизу
   const cell = Array.from({ length: H }, () => new Uint8Array(W));
@@ -240,9 +241,9 @@ export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
   // указатель: треугольник, сливается с плашкой
   for (let k = 0; k < 4; k++) {
     const y = bh - 1 + k, half = 3 - k;
-    for (let x = cx - half - 1; x <= cx + half + 1; x++) {
+    for (let x = cl - half - 1; x <= cr + half + 1; x++) {
       if (x < 0 || x >= W) continue;
-      const border = x === cx - half - 1 || x === cx + half + 1 || k === 3;
+      const border = x === cl - half - 1 || x === cr + half + 1 || k === 3;
       cell[y][x] = border ? 1 : 3;
     }
   }

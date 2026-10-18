@@ -15,6 +15,8 @@ export interface PrefInfo {
 /** размер рисунка карты (src/img/map.png), в пикселях; anchor/bb префектур — в этих же координатах */
 export const MAP_W: number = raw.w;
 export const MAP_H: number = raw.h;
+/** рамка Японии на картинке (без дорисованного моря вокруг) */
+export const MAP_FOCUS: [number, number, number, number] = ((raw as any).focus ?? [0, 0, raw.w - 1, raw.h - 1]) as any;
 
 export const PREFS: PrefInfo[] = raw.prefs as any;
 export const PREF: Record<number, PrefInfo> = Object.fromEntries(PREFS.map((p) => [p.code, p]));

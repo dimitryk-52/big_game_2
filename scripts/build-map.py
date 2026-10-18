@@ -8,7 +8,9 @@
 #  2. границы префектур — толстые (≥3px) почти чёрные линии рисунка;
 #  3. заливка водоразделом от «зёрен» из scripts/map-seeds.json (код префектуры → точки на картинке):
 #     регионы растут по светлому и встречаются на чёрных линиях; острова без зерна — ближайшей префектуре;
-#  4. превращает рисунок в настоящий пиксель-арт (scripts/pixelart.py): родная сетка рисунка —
+#  4. если есть src/img/map_wide.png (тот же рисунок, дорисованный по краям — запас для камеры),
+#     находит, где в нём лежит map.png, и переносит метки на широкую картинку;
+#     превращает её в настоящий пиксель-арт (scripts/pixelart.py): родная сетка рисунка —
 #     CELL×CELL пикселей, карта меток уменьшается в ту же сетку, так что границы совпадают с пикселями;
 #  5. пишет src/map/assets/regions.png (R = код*5, 0 — море), src/map/assets/map.png (пиксель-арт) и
 #     обновляет anchor/bb/size в src/map/japan.json (координаты — пиксели пиксель-арта).
@@ -26,6 +28,7 @@ from pixelart import pixelize, labels_down
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'src/img/map.png'
+WIDE = ROOT / 'src/img/map_wide.png'
 SEEDS = ROOT / 'scripts/map-seeds.json'
 DATA = ROOT / 'src/map/japan.json'
 OUT = ROOT / 'src/map/assets'
@@ -85,17 +88,58 @@ miss = land & (reg == 0)
 iy, ix = nd.distance_transform_edt(reg == 0, return_distances=False, return_indices=True)
 reg[miss] = reg[iy[miss], ix[miss]]
 
-# 4. пиксель-арт и метки в его сетке
-pix = pixelize(img, CELL, COLORS)
+# 4. широкая картинка (если есть) и пиксель-арт с метками в его сетке
+def find_offset(big: np.ndarray) -> tuple[int, int]:
+    """где map.png лежит внутри map_wide.png: грубо по уменьшенным копиям, потом точно"""
+    from scipy.signal import fftconvolve
+    g, G = a.mean(2), big.mean(2)
+    k = 4
+    sm = lambda x: x[:x.shape[0] // k * k, :x.shape[1] // k * k].reshape(x.shape[0] // k, k, x.shape[1] // k, k).mean((1, 3))
+    A, B = sm(g), sm(G)
+    ty, tx = A.shape[0] // 3, A.shape[1] // 3
+    t = A[ty:ty * 2, tx:tx * 2]
+    t = t - t.mean()
+    ones = np.ones_like(t)
+    s1, s2 = fftconvolve(B, ones, mode='valid'), fftconvolve(B ** 2, ones, mode='valid')
+    ncc = fftconvolve(B - B.mean(), t[::-1, ::-1], mode='valid') / np.sqrt(np.maximum(s2 - s1 ** 2 / t.size, 1e-6) * (t ** 2).sum())
+    y, x = np.unravel_index(ncc.argmax(), ncc.shape)
+    oy, ox = y * k - ty * k, x * k - tx * k
+    y0, x0, h, w = H // 3, W // 3, 200, 240
+    tt = (g[y0:y0 + h, x0:x0 + w] - g[y0:y0 + h, x0:x0 + w].mean())
+    best = (-1e18, ox, oy)
+    for dy in range(-k * 2, k * 2 + 1):
+        for dx in range(-k * 2, k * 2 + 1):
+            p = G[y0 + oy + dy:y0 + oy + dy + h, x0 + ox + dx:x0 + ox + dx + w]
+            c = (tt * (p - p.mean())).sum() / (p.std() + 1e-6)
+            if c > best[0]:
+                best = (c, ox + dx, oy + dy)
+    return best[1], best[2]
+
+OX = OY = 0
+view, vreg = img, reg
+if WIDE.exists():
+    wide = Image.open(WIDE).convert('RGB')
+    OX, OY = find_offset(np.asarray(wide).astype(float))
+    # обрезаем до целого числа клеток, сдвиг тоже делаем кратным клетке — сетка совпадёт с рисунком
+    cut_x, cut_y = OX % CELL, OY % CELL
+    wide = wide.crop((cut_x, cut_y, cut_x + (wide.width - cut_x) // CELL * CELL, cut_y + (wide.height - cut_y) // CELL * CELL))
+    OX, OY = OX - cut_x, OY - cut_y
+    view = wide
+    vreg = np.zeros((wide.height, wide.width), reg.dtype)
+    vreg[OY:OY + H, OX:OX + W] = reg[:wide.height - OY, :wide.width - OX]
+    print(f'map_wide.png: рисунок карты лежит со сдвигом ({OX}, {OY}), картинка {wide.width}×{wide.height}')
+pix = pixelize(view, CELL, COLORS)
 PW, PH = pix.size
-preg = labels_down(reg, PW, PH)
-fx, fy = PW / W, PH / H
+preg = labels_down(vreg, PW, PH)
+fx, fy = PW / view.width, PH / view.height
 
 # 5. данные префектур (якоря ищем на исходнике — точнее, потом переводим в сетку пиксель-арта)
 data = json.loads(DATA.read_text(encoding='utf-8'))
 for k in ('w', 'h', 'cells'):
     data.pop(k, None)
 data['w'], data['h'] = PW, PH
+# рамка самой Японии (исходный map.png) в пикселях пиксель-арта — её камера показывает «целиком»
+data['focus'] = [int(OX * fx), int(OY * fy), int((OX + W) * fx) - 1, int((OY + H) * fy) - 1]
 pobjs = nd.find_objects(preg)
 codes = [p['code'] for p in data['prefs']]
 objs = nd.find_objects(reg)
@@ -114,7 +158,7 @@ for p in data['prefs']:
         top = cl == cs.argmax()
     dt = nd.distance_transform_edt(top)
     y, x = np.unravel_index(dt.argmax(), dt.shape)
-    p['anchor'] = [int((x + s[1].start) * fx), int((y + s[0].start) * fy)]
+    p['anchor'] = [int((x + s[1].start + OX) * fx), int((y + s[0].start + OY) * fy)]
     ps = pobjs[c - 1] if c - 1 < len(pobjs) else None
     if ps is None:
         raise SystemExit(f'префектура {c} {p["en"]} исчезла при уменьшении — слишком мелкая?')
@@ -160,7 +204,7 @@ if debug:
     d = ImageDraw.Draw(im)
     f = ImageFont.truetype('arial.ttf', 18)
     for p in data['prefs']:
-        x, y = p['anchor'][0] / fx, p['anchor'][1] / fy
+        x, y = p['anchor'][0] / fx - OX, p['anchor'][1] / fy - OY
         d.text((x - 10, y - 10), str(p['code']), fill=(255, 255, 0), font=f, stroke_width=3, stroke_fill=(0, 0, 0))
     for code, pts in seeds.items():
         for x, y in pts:

@@ -4,7 +4,7 @@ import { Application, Container, Sprite, Text, Texture, ImageSource, Graphics } 
 import type { Player, PrefState } from '../shared/types';
 import { PREF, PREF_CODES } from './mapData';
 import {
-  CANVAS_H, CANVAS_W, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
+  CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
 import { characterCanvas, pixelBadge, pixelIcon } from '../shared/sprites';
@@ -240,8 +240,8 @@ export class MapView {
         const tex = Texture.from(w.badge ? pixelBadge(w.icon) : pixelIcon(w.icon));
         tex.source.scaleMode = 'nearest';
         t = Object.assign(new Sprite(tex), { icon: w.icon, bob: Math.random() * 6 });
-        // у выноски якорь — кончик указателя (пиксель посередине снизу)
-        if (w.badge) t.anchor.set((Math.floor(tex.width / 2) + 0.5) / tex.width, (tex.height - 1) / tex.height);
+        // у выноски якорь — кончик указателя (посередине снизу)
+        if (w.badge) t.anchor.set(0.5, (tex.height - 1) / tex.height);
         else t.anchor.set(0.5, 1);
         this.iconLayer.addChild(t);
         this.icons.set(k, t);
@@ -366,7 +366,7 @@ export class MapView {
   fitBounds(b: { x: number; y: number; w: number; h: number }, animate = true, pad = 60, maxZoom = 4) {
     const { w, h } = this.viewSize();
     const z = Math.min(maxZoom, Math.min((w - pad * 2) / Math.max(b.w, 1), (h - pad * 2) / Math.max(b.h, 1)));
-    const target = { x: b.x + b.w / 2, y: b.y + b.h / 2, z };
+    const target = this.clamped({ x: b.x + b.w / 2, y: b.y + b.h / 2, z });
     if (animate) this.camTarget = target;
     else { this.cam = target; this.camTarget = null; this.applyCam(); }
   }
@@ -382,7 +382,7 @@ export class MapView {
 
   fitAll(animate = true) {
     this.focusCodes = null;
-    this.fitBounds({ x: 0, y: 0, w: CANVAS_W, h: CANVAS_H }, animate, 20);
+    this.fitBounds(FOCUS_WORLD, animate, 20);
   }
 
   refocus() {
@@ -390,7 +390,16 @@ export class MapView {
     else this.fitAll(true);
   }
 
+  /** камера в пределах картинки: края карты никогда не видны (не отдалить дальше и не увести за край) */
+  private clamped(c: { x: number; y: number; z: number }) {
+    const { w, h } = this.viewSize();
+    const z = Math.max(c.z, w / CANVAS_W, h / CANVAS_H);
+    const hw = w / 2 / z, hh = h / 2 / z;
+    return { z, x: Math.max(hw, Math.min(CANVAS_W - hw, c.x)), y: Math.max(hh, Math.min(CANVAS_H - hh, c.y)) };
+  }
+
   private applyCam() {
+    this.cam = this.clamped(this.cam);
     const { w, h } = this.viewSize();
     this.world.scale.set(this.cam.z);
     this.world.position.set(w / 2 - this.cam.x * this.cam.z, h / 2 - this.cam.y * this.cam.z);
@@ -480,7 +489,7 @@ export class MapView {
 
   private zoomAt(sx: number, sy: number, k: number) {
     const before = this.screenToWorld(sx, sy);
-    this.cam.z = Math.max(0.3, Math.min(8, this.cam.z * k));
+    this.cam.z = Math.min(8, this.cam.z * k);
     const after = this.screenToWorld(sx, sy);
     this.cam.x += before.x - after.x;
     this.cam.y += before.y - after.y;
@@ -488,8 +497,7 @@ export class MapView {
   }
 
   private clampCam() {
-    this.cam.x = Math.max(0, Math.min(CANVAS_W, this.cam.x));
-    this.cam.y = Math.max(0, Math.min(CANVAS_H, this.cam.y));
+    this.cam = this.clamped(this.cam);
   }
 
   // ───── кадр ─────

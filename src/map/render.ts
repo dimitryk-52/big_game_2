@@ -2,14 +2,18 @@
 // один пиксель картинки = один «пиксель» рисунка, на экране растягивается без сглаживания.
 // Границы префектур — карта меток assets/regions.png (R = код*5); из неё строятся маски
 // для тумана, подсветки и контура выбранной префектуры.
-import { MAP_H, MAP_W, PREF } from './mapData';
+import { MAP_FOCUS, MAP_H, MAP_W, PREF } from './mapData';
 import mapUrl from './assets/map.png';
 import regionsUrl from './assets/regions.png';
 
-/** мировых единиц на пиксель карты: мир всегда 1376 в ширину — зум и размеры фишек не зависят от разрешения карты */
-export const SCALE = 1376 / MAP_W;
+/** мировых единиц на пиксель карты (клетка пиксель-арта = 3 пикселя рисунка по 0.5): размер Японии
+ *  в мире не зависит от того, сколько моря дорисовано вокруг (map_wide.png) */
+export const SCALE = 1.5;
 export const CANVAS_W = MAP_W * SCALE;
 export const CANVAS_H = MAP_H * SCALE;
+/** рамка самой Японии в мире — её камера показывает «целиком» (вокруг — запас моря) */
+const F = MAP_FOCUS;
+export const FOCUS_WORLD = { x: F[0] * SCALE, y: F[1] * SCALE, w: (F[2] - F[0] + 1) * SCALE, h: (F[3] - F[1] + 1) * SCALE };
 
 export interface MapAssets {
   image: HTMLImageElement;
