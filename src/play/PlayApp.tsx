@@ -385,8 +385,6 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
   if (st.t !== 'duelPick' || !s.duel) return null;
   const d = s.duel;
   const foe = s.players[d.attacker === me.id ? d.defender : d.attacker];
-  // своя спецтема игрока («супероружие»), если ведущий её завёл
-  const mySpecial = st.specialTopic ? s.settings.topics.find((t) => t.id === st.specialTopic) : undefined;
   const send = (v: string) => { if (sent) return; setSent(true); client.pick('duel', v); vibrate(30); };
   return (
     <div class="pad col center-screen">
@@ -401,7 +399,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
           </button>
         );
       })}
-      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={mySpecial ?? SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{mySpecial ? mySpecial.name : 'Спецвопрос'}</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
+      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
       {st.canRhythm && <button class="btn yellow big-btn" disabled={sent} onClick={() => send('rhythm')}>🥁 Ритм-баттл (сила музыки)</button>}
     </div>
   );

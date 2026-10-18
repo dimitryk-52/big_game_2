@@ -1,4 +1,4 @@
-import type { BonusId, Question, RewardType, Settings, Topic } from './types';
+import type { BonusId, Question, RewardType, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -57,12 +57,6 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   const out: any = { ...d, ...saved };
   for (const k of ['reward', 'shop', 'pachinko', 'ring'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
   return out;
-}
-
-/** спецтема игрока: тема с отметкой «спец», где владелец совпадает с именем (без учёта регистра) */
-export function specialTopicOf(st: Pick<Settings, 'topics'>, name: string): Topic | undefined {
-  const n = name.trim().toLowerCase();
-  return st.topics.find((t) => t.special && !!t.owner && t.owner.trim().toLowerCase() === n);
 }
 
 /** вопрос — спецвопрос: отмечен сам или лежит в спецтеме */

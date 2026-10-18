@@ -38,7 +38,7 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
   const add = (special: boolean) => setS((c) => ({
     ...c,
     topics: [...c.topics, special
-      ? { id: 'sp_' + uid(6).toLowerCase(), name: 'Новая спецтема', combat: false, special: true, owner: '', color: '#ffffff' }
+      ? { id: 'sp_' + uid(6).toLowerCase(), name: 'Новая спецтема', combat: false, special: true, color: '#ffffff' }
       : { id: 't_' + uid(6).toLowerCase(), name: 'Новая тема', combat: true, color: '#7ad7ff' }],
   }));
   const del = (i: number) => {
@@ -47,8 +47,6 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
     if (!confirm(`Удалить тему «${t.name}»?` + (n ? `\nУ неё ${n} вопр. — они останутся без темы.` : ''))) return;
     setS((c) => ({ ...c, topics: c.topics.filter((_, k) => k !== i) }));
   };
-  const owners = s.topics.filter((t) => t.special && t.owner?.trim()).map((t) => t.owner!.trim().toLowerCase());
-  const dupOwner = (o?: string) => !!o?.trim() && owners.filter((x) => x === o.trim().toLowerCase()).length > 1;
 
   const row = (t: Topic, i: number) => (
     <tr class={t.special ? 'sp-row' : ''}>
@@ -57,9 +55,7 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
       </td>
       <td><input class="inp-s" style={{ width: '100%' }} value={t.name} onInput={(e) => upd(i, { name: (e.target as HTMLInputElement).value })} /></td>
       <td>
-        {t.special ? (
-          <input class={'inp-s' + (dupOwner(t.owner) ? ' bad' : '')} placeholder="имя игрока" value={t.owner ?? ''} title="Имя, которое игрок вводит на телефоне" onInput={(e) => upd(i, { owner: (e.target as HTMLInputElement).value })} />
-        ) : SYSTEM_IDS[t.id] ? <span class="muted small">{SYSTEM_IDS[t.id]}</span> : (
+        {t.special ? null : SYSTEM_IDS[t.id] ? <span class="muted small">{SYSTEM_IDS[t.id]}</span> : (
           <label><input type="checkbox" checked={t.combat} onChange={(e) => upd(i, { combat: (e.target as HTMLInputElement).checked })} /> боевая</label>
         )}
       </td>
@@ -90,15 +86,13 @@ export function Topics({ settings, questions, onSave, onAddQuestion }: {
       </table>
       <div><button class="btn small" onClick={() => add(false)}>+ тема</button></div>
 
-      <h3 style={{ margin: '16px 0 0' }}>Спецтемы игроков</h3>
+      <h3 style={{ margin: '16px 0 0' }}>Спецтемы</h3>
       <div class="note">
-        Своя тема у каждого игрока — его «супероружие». Спецвопросы игрок покупает в магазине и использует в дуэли:
-        вопрос берётся из <b>его</b> спецтемы, и если он ответит верно — удар с силой «спецвопроса» из настроек.
-        Владелец определяется по имени, которое игрок вводит на телефоне (регистр не важен).
-        Нет своей темы или вопросы в ней кончились — берётся любой спецвопрос.
+        Спецтемы ни за кем не закреплены. Спецвопросы игрок покупает в магазине и использует в дуэли:
+        если он ответит верно — удар с силой «спецвопроса» из настроек.
       </div>
       <table class="qtable topics-table">
-        <thead><tr><th style={{ width: 56 }}>Иконка</th><th>Название</th><th style={{ width: 240 }}>Игрок</th><th style={{ width: 50 }}>Цвет</th><th style={{ width: 70 }}>Вопр.</th><th style={{ width: 150 }}></th></tr></thead>
+        <thead><tr><th style={{ width: 56 }}>Иконка</th><th>Название</th><th style={{ width: 240 }}></th><th style={{ width: 50 }}>Цвет</th><th style={{ width: 70 }}>Вопр.</th><th style={{ width: 150 }}></th></tr></thead>
         <tbody>{special.map(([t, i]) => row(t, i))}</tbody>
       </table>
       {!special.length && <div class="muted small">Пока нет ни одной спецтемы.</div>}

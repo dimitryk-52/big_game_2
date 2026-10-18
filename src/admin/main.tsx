@@ -124,12 +124,12 @@ function Questions({ questions, settings, onChange, newIn }: { questions: Questi
     <div class="pad col">
       <div class="row wrap">
         <button class="btn primary small" onClick={() => setEdit(newQ(filter.topic || 'general'))}>+ Новый вопрос</button>
-        <button class="btn small rainbow" title={firstSpecial ? 'Вопрос в спецтему игрока' : 'Сначала создай спецтему на вкладке «Темы»'} onClick={() => { const sp = settings.topics.find((t) => t.id === filter.topic && t.special) ?? firstSpecial; if (sp) setEdit(newQ(sp.id)); else alert('Сначала создай спецтему на вкладке «Темы»'); }}>+ Спецвопрос</button>
+        <button class="btn small rainbow" title={firstSpecial ? 'Вопрос в спецтему' : 'Сначала создай спецтему на вкладке «Темы»'} onClick={() => { const sp = settings.topics.find((t) => t.id === filter.topic && t.special) ?? firstSpecial; if (sp) setEdit(newQ(sp.id)); else alert('Сначала создай спецтему на вкладке «Темы»'); }}>+ Спецвопрос</button>
         <select value={filter.topic} onChange={(e) => setFilter({ ...filter, topic: (e.target as HTMLSelectElement).value })}>
           <option value="">Все темы ({questions.length})</option>
           {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name} ({counts[t.id] ?? 0})</option>)}
-          {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
-            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}{t.owner ? ` — ${t.owner}` : ''} ({counts[t.id] ?? 0})</option>)}
+          {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы">
+            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name} ({counts[t.id] ?? 0})</option>)}
           </optgroup>}
         </select>
         <select value={filter.pref} onChange={(e) => setFilter({ ...filter, pref: (e.target as HTMLSelectElement).value })}>
@@ -152,7 +152,7 @@ function Questions({ questions, settings, onChange, newIn }: { questions: Questi
             const sp = isSpecialQ(settings, q);
             return (
               <tr>
-                <td><span class={'chip topic-chip' + (sp ? ' rainbow' : '')} style={{ borderColor: t?.color }}>{t && <SkillIcon t={t} size={18} />}{t?.name ?? q.topic}{t?.owner ? <span class="muted"> · {t.owner}</span> : ''}</span></td>
+                <td><span class={'chip topic-chip' + (sp ? ' rainbow' : '')} style={{ borderColor: t?.color }}>{t && <SkillIcon t={t} size={18} />}{t?.name ?? q.topic}</span></td>
                 <td>{q.media && `[${q.media.type}] `}{q.text}</td>
                 <td class="muted">{q.answers[q.correct]?.text ?? (q.answers[q.correct]?.image ? '[картинка]' : '')}</td>
                 <td>{q.pref ? PREF[q.pref]?.ru : ''}</td>
@@ -194,15 +194,15 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
         <div class="row wrap">
           <label>Тема <select value={q.topic} onChange={(e) => { const id = (e.target as HTMLSelectElement).value; set({ topic: id, special: settings.topics.find((t) => t.id === id)?.special ? true : undefined }); }}>
             {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name}</option>)}
-            {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
-              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}{t.owner ? ` — ${t.owner}` : ''}</option>)}
+            {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы">
+              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}</option>)}
             </optgroup>}
           </select></label>
           <label>Префектура <select value={String(q.pref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ pref: v ? Number(v) : undefined }); }}>
             <option value="">—</option>
             {PREFS.map((p) => <option value={String(p.code)}>{p.ru} {p.ja}</option>)}
           </select></label>
-          {settings.topics.find((t) => t.id === q.topic)?.special && <span class="chip rainbow"><PixIcon id="special" size={16} /> спецвопрос игрока</span>}
+          {settings.topics.find((t) => t.id === q.topic)?.special && <span class="chip rainbow"><PixIcon id="special" size={16} /> спецвопрос</span>}
           <label>Время, сек <input class="inp-s num" type="number" min={5} max={120} value={q.time ?? ''} placeholder="авто" onInput={(e) => { const v = (e.target as HTMLInputElement).value; set({ time: v ? Number(v) : undefined }); }} /></label>
         </div>
         <div class="row wrap">

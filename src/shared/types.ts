@@ -11,10 +11,8 @@ export interface Topic {
   /** участвует в калибровке и даёт силу в дуэлях */
   combat: boolean;
   color: string;
-  /** спецтема — «супероружие» игрока: её вопросы задаются только как спецвопрос в дуэли */
+  /** спецтема: её вопросы задаются только как спецвопрос в дуэли */
   special?: boolean;
-  /** имя игрока, чья это спецтема (как он вводит его на телефоне; регистр не важен) */
-  owner?: string;
   /** своя пиксельная иконка из админки: строки пикселей, цвет '#rrggbb' или null — пусто */
   icon?: (string | null)[][];
 }
@@ -139,7 +137,7 @@ export type Stage =
   /** интро префектуры при первом входе: фон и название по центру */
   | { t: 'prefIntro'; code: number; pid: string }
   | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number }
-  | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean; specialTopic?: TopicId }
+  | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
   | { t: 'prize'; pid: string; text: string }

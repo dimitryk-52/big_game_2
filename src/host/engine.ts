@@ -5,7 +5,7 @@
 import type {
   BonusId, GameMsg, GameState, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO, isSpecialQ, specialTopicOf } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -617,8 +617,7 @@ export class GameEngine {
         d.mode = null;
         const topics = this.combatTopics().map((t) => t.id);
         const ms = st.pickTime * 1000;
-        const mine = specialTopicOf(st, asker.name);
-        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel, ...(mine ? { specialTopic: mine.id } : {}) });
+        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel });
         const choice = await this.waitInput(epoch, (m) => {
           if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== asker.id) return undefined;
           if (m.value === 'special' && asker.specials > 0) return 'special';
@@ -650,8 +649,8 @@ export class GameEngine {
         if (pickV === 'special') {
           asker.specials--;
           d.special = true;
-          // своя спецтема игрока, если её нет или вопросы кончились — любой спецвопрос
-          q = (mine ? this.pickQuestion((x) => x.topic === mine.id) : null) ?? this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
+          // любой вопрос из спецтем; если их нет — обычный боевой
+          q = this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         } else {
           q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         }
