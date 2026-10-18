@@ -23,6 +23,7 @@ export default defineConfig({
             tv: resolve(import.meta.dirname, 'tv.html'),
             play: resolve(import.meta.dirname, 'play.html'),
             admin: resolve(import.meta.dirname, 'admin.html'),
+            ui: resolve(import.meta.dirname, 'ui.html'),
           },
     },
   },
