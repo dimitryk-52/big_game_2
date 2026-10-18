@@ -11,7 +11,7 @@ import { loadIcons, characterUrl, pixelBadgeUrl, pixelIconUrl, topicIconUrl, SPE
 import { Wheel, makeSpin, wheelLabel, wheelRot, type WheelSeg, type WheelSpin } from './Wheel';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { Player } from '../shared/types';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, useFrame, PixelImg } from './common';
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, useFrame, PixelImg } from './common';
 import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
 
 const topics = DEFAULT_SETTINGS.topics;
@@ -116,7 +116,7 @@ function Catalog() {
           <Label t="HP" /><HpBar hp={7} max={10} />
           <Label t="HP мало (мигает)" /><HpBar hp={2} max={10} />
           <Label t="Скиллы" />
-          {combat.map((t, i) => <SkillRow t={t} value={i + 1} max={DEFAULT_SETTINGS.skillScale} />)}
+          <SkillChips topics={combat} stats={Object.fromEntries(combat.map((t, i) => [t.id, i + 1]))} size={22} grid />
         </div>
       </Section>
 
@@ -156,7 +156,7 @@ function Catalog() {
               <div class="pc-money"><span>¥1 200</span><span class="pc-stars"><PixIcon id="stars" size={18} />3</span></div>
             </div>
           </div>
-          <div class="pc-skills">{combat.map((t) => <SkillRow t={t} value={A.stats[t.id]} max={DEFAULT_SETTINGS.skillScale} />)}</div>
+          <SkillChips topics={combat} stats={A.stats} size={20} grid />
         </div>
         <div class="pcard current" style={{ '--frame': B.color, width: 300 } as any}>
           <div class="pc-top"><Avatar p={B} size={56} /><div class="pc-info"><div class="pc-name"><span class="pname">{B.name} — ходит</span></div><HpBar hp={B.hp} max={B.maxHp} /></div></div>

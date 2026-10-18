@@ -27,8 +27,7 @@
 .pc-name { display: flex; align-items: center; gap: 6px; font-size: 1.05em; }
 .pc-money { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.8em; }
 .pc-stars { display: inline-flex; align-items: center; gap: 3px; }
-.pc-skills { display: flex; flex-direction: column; gap: 3px; font-size: 0.85em; }
-.calib-skill { min-width: 150px; }
+.calib-skill { text-align: center; font-weight: bold; font-size: 1.3em; }
 .pcard.current { animation: glow 1s steps(2) infinite; transform: translateX(-10px); }
 .pcard.ko { opacity: 0.6; }
 .pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

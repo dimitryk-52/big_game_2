@@ -162,7 +162,6 @@ export interface Settings {
   hostPaced?: boolean;
   baseStrength: number;
   /** делений на полоске силы; если у кого-то сила больше — шкала растёт сама */
-  skillScale: number;
   startHp: number;
   specialPower: number;
   duelRounds: number;

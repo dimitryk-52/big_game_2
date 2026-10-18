@@ -101,9 +101,6 @@
 .timer-fill { background: #3cc94a; }
 .hp-fill { background: #e8364e; }
 .timer-num, .hpbar span { text-shadow: var(--tx-outline); }
-.skill-bar { gap: 3px; height: 12px; }
-.skill-bar i { border: 2px solid var(--outline); background: #1a1530; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.4); }
-.skill-bar i:not([style]) { box-shadow: none; }
 
 /* ───── поля ввода ───── */
 .inp { border: var(--px) solid var(--outline); clip-path: var(--notch); box-shadow: inset 0 0 0 var(--px) #fff; background: #11142b; }

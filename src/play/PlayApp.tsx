@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
-import { Avatar, HpBar, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
+import { Avatar, HpBar, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
@@ -271,9 +271,7 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
       <div class="panel col">
         <div class="row"><span class="muted">Где ты:</span> <b>{me.pref ? `${PREF[me.pref].ru} ${PREF[me.pref].ja}` : '—'}</b></div>
         <div class="muted">Сила</div>
-        <div class="col" style={{ gap: 6 }}>
-          {topics.map((t) => <SkillRow t={t} value={me.stats[t.id] ?? 0} max={skillMax(s)} size={22} />)}
-        </div>
+        <SkillChips topics={topics} stats={me.stats} size={26} grid />
         <div class="muted">Бонусы</div>
         <div class="row wrap">
           {(['fifty1', 'fifty2', 'move2'] as const).map((b) => (

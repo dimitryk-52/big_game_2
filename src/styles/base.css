@@ -87,12 +87,11 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 
 /* скиллы */
 .skill-icon, .pix-icon { image-rendering: pixelated; display: inline-block; vertical-align: middle; flex: none; }
-.skill-row { display: flex; align-items: center; gap: 6px; }
-.skill-num { min-width: 1.4em; text-align: right; }
-.skill-bar { display: flex; gap: 2px; flex: 1; height: 10px; }
-.skill-bar i { flex: 1; background: #11142b; border: 1px solid #000; box-shadow: inset 0 0 0 1px #ffffff22; }
 .skill-chips { display: inline-flex; gap: 8px; align-items: center; }
 .skill-chip { display: inline-flex; gap: 3px; align-items: center; }
+/* сетка: сколько влезет колонок «иконка + цифра» */
+.skill-chips.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--ic) + 2.2ch), 1fr)); gap: 4px 6px; }
+.skill-chips.grid .skill-chip { gap: 4px; }
 
 /* интро префектуры: квадратный фон кадрируется по центру под экран (ТВ — во всю ширину, телефон — во всю высоту) */
 .pref-intro { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; overflow: hidden; background: #0b0d1e; animation: fadeIn 0.5s; }

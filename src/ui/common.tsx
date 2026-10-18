@@ -88,13 +88,6 @@ export function PixelImg({ src, scale = 1, class: cls, alt = '' }: { src: string
 
 // ───── скиллы: иконка + цифра + полоска ─────
 
-/** масштаб полосок: из настроек (skillScale), а если кто-то сильнее — по самому сильному игроку */
-export function skillMax(s: Pick<GameState, 'players' | 'settings'>) {
-  let m = Math.max(1, s.settings?.skillScale ?? 5);
-  for (const p of Object.values(s.players ?? {})) for (const v of Object.values(p.stats ?? {})) m = Math.max(m, v);
-  return m;
-}
-
 export function SkillIcon({ t, size = 18 }: { t: Pick<Topic, 'id' | 'color' | 'name' | 'icon' | 'special'>; size?: number }) {
   return <img class="skill-icon" src={topicIconUrl(t.id, t.color, 3, { icon: t.icon, special: t.special })} width={size} height={size} alt={t.name} title={t.name} draggable={false} />;
 }
@@ -118,31 +111,10 @@ export function ResText({ text, topics, size = 18 }: { text: string; topics: Top
   );
 }
 
-/** сегментированная пиксельная полоска */
-export function SkillBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const segs = Math.max(1, Math.min(15, max));
-  const filled = Math.round((Math.min(value, max) / max) * segs);
+/** иконка и цифра; grid — сеткой в несколько строк (тем может быть 10+) */
+export function SkillChips({ topics, stats, size = 16, grid }: { topics: Topic[]; stats: Record<string, number>; size?: number; grid?: boolean }) {
   return (
-    <span class="skill-bar">
-      {Array.from({ length: segs }, (_, i) => <i style={i < filled ? { background: color } : undefined} />)}
-    </span>
-  );
-}
-
-export function SkillRow({ t, value, max, size = 18 }: { t: Topic; value: number; max: number; size?: number }) {
-  return (
-    <div class="skill-row">
-      <SkillIcon t={t} size={size} />
-      <b class="skill-num">{value}</b>
-      <SkillBar value={value} max={max} color={t.color} />
-    </div>
-  );
-}
-
-/** компактно: иконка и цифра в строку */
-export function SkillChips({ topics, stats, size = 16 }: { topics: Topic[]; stats: Record<string, number>; size?: number }) {
-  return (
-    <span class="skill-chips">
+    <span class={'skill-chips' + (grid ? ' grid' : '')} style={grid ? { '--ic': size + 'px' } as any : undefined}>
       {topics.map((t) => <span class="skill-chip"><SkillIcon t={t} size={size} /><b>{stats[t.id] ?? 0}</b></span>)}
     </span>
   );

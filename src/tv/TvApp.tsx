@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax, PixelImg } from '../ui/common';
+import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
@@ -265,7 +265,6 @@ function PlayerList({ s }: { s: GameState }) {
   const cur = s.phase === 'turns' ? s.turnOrder[s.turnIdx] : null;
   const answered = new Set(s.q?.answered ?? []);
   const combat = s.settings.topics.filter((t) => t.combat);
-  const max = skillMax(s);
   const ids = order.filter((id) => s.players[id]);
   return (
     <div class={'plist' + (ids.length > 5 ? ' cols-2' : '')}>
@@ -292,9 +291,7 @@ function PlayerList({ s }: { s: GameState }) {
                 </div>
               </div>
             </div>
-            <div class="pc-skills">
-              {combat.map((t) => <SkillRow t={t} value={p.stats[t.id] ?? 0} max={max} />)}
-            </div>
+            <SkillChips topics={combat} stats={p.stats} size={20} grid />
           </div>
         );
       })}
@@ -374,7 +371,7 @@ function CalibResult({ s }: { s: GameState }) {
               return (
                 <tr class="slide-up" style={{ animationDelay: `${i * 0.12}s` }}>
                   <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
-                  {topics.map((t) => <td class="calib-skill"><SkillRow t={t} value={p.stats[t.id] ?? 0} max={skillMax(s)} size={22} /></td>)}
+                  {topics.map((t) => <td class="calib-skill">{p.stats[t.id] ?? 0}</td>)}
                 </tr>
               );
             })}
