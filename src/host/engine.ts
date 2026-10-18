@@ -661,7 +661,7 @@ export class GameEngine {
         // бонусы: сначала атакующий дуэли, потом защитник
         const removed = await this.bonusPhase(epoch, [att.id, def.id], true, q);
         const topicName = this.s.settings.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
-        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? '💥 ' + (st.topics.find((t) => t.id === q!.topic)?.special ? topicName : 'Спецвопрос') : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
+        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? (st.topics.find((t) => t.id === q!.topic)?.special ? topicName : 'Спецвопрос') : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
         const okA = res[asker.id] === q.correct, okT = res[target.id] === q.correct;
         const results: Record<string, string> = {};
         if (okA !== okT) {

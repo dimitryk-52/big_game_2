@@ -167,7 +167,7 @@ function Catalog() {
         <span class="chip">Калибровка</span>
         <span class="chip">Комната ABCD</span>
         {combat.map((t) => <span class="chip" style={{ '--frame': t.color, color: t.color } as any}>{t.name}</span>)}
-        <span class="chip special">💥 СПЕЦВОПРОС</span>
+        <span class="chip special"><PixIcon id="special" size={18} /> СПЕЦВОПРОС</span>
         <div class="qpart waiting"><Avatar p={A} size={36} /><span>не ответил</span></div>
         <div class="qpart done"><Avatar p={A} size={36} /><span>ответил</span></div>
         <div class="qpart done ok"><Avatar p={A} size={36} /><span>верно</span><span class="qres"><ResText text="+1 {skill:music}" topics={topics} /></span></div>

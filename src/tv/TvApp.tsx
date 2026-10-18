@@ -285,7 +285,7 @@ function PlayerList({ s }: { s: GameState }) {
                 <div class="pc-money">
                   <span>{fmtYen(p.yen)}</span>
                   <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
-                  {p.specials > 0 && <span>💥{p.specials}</span>}
+                  {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
                   {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
                   {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
                 </div>
@@ -413,7 +413,7 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
         <div class="qhead">
           <span class="qtitle">{q.title}</span>
           {topic && <span class="chip" style={{ '--frame': topic.color, color: topic.color } as any}>{topic.name}</span>}
-          {q.special && <span class="chip special">💥 СПЕЦВОПРОС</span>}
+          {q.special && <span class="chip special"><PixIcon id="special" size={18} /> СПЕЦВОПРОС</span>}
         </div>
         {q.media?.type === 'image' && <img class="qmedia" src={resolveMedia(q.media.url)} alt="" />}
         {q.media?.type === 'audio' && <audio class="qaudio" src={resolveMedia(q.media.url)} autoPlay controls />}
@@ -490,7 +490,7 @@ function DuelHud({ s }: { s: GameState }) {
         <HpBar hp={p.hp} max={p.maxHp} />
         <div class="row small-stats">
           <SkillChips topics={s.settings.topics.filter((t) => t.combat)} stats={p.stats} size={18} />
-          {p.specials > 0 && <span>💥{p.specials}</span>}
+          {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
         </div>
       </div>
       {d.lastHit?.to === p.id && <div class="dmg" key={hitKey}>−{d.lastHit.dmg}</div>}

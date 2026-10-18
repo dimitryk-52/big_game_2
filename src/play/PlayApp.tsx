@@ -234,7 +234,7 @@ function Header({ client, s, me, onSecret }: { client: GameClient; s: GameState;
       </div>
       <div class="col" style={{ gap: 2, alignItems: 'flex-end' }}>
         <span>{fmtYen(me.yen)}</span>
-        <span><PixIcon id="stars" size={18} /> {me.stars}{me.specials ? ` · 💥${me.specials}` : ''}</span>
+        <span><PixIcon id="stars" size={18} /> {me.stars}{me.specials ? <> · <PixIcon id="special" size={18} /> {me.specials}</> : ''}</span>
       </div>
     </header>
   );
@@ -277,7 +277,7 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
           {(['fifty1', 'fifty2', 'move2'] as const).map((b) => (
             <span class="chip">{BONUS_INFO[b].icon} {BONUS_INFO[b].short}: <b>{me.bonuses[b]}</b></span>
           ))}
-          <span class="chip">💥 Спецвопросы: <b>{me.specials}</b></span>
+          <span class="chip"><PixIcon id="special" size={18} /> Спецвопросы: <b>{me.specials}</b></span>
         </div>
         {me.prizes.length > 0 && <div class="prizes">🏆 Призы: {me.prizes.join(', ')}</div>}
       </div>
@@ -326,7 +326,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     <>
     {bg && <img class="q-bg" src={bg} alt="" draggable={false} />}
     <div class={'question scroll pad col' + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (bg ? ' has-bg' : '')}>
-      <div class="q-title">{q.title}{q.special ? ' · 💥' : ''}</div>
+      <div class="q-title">{q.title}{q.special ? <> · <PixIcon id="special" size={18} /></> : ''}</div>
       {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
       {q.media?.type === 'audio' && <div class="q-tv">🎵 Слушай на ТВ</div>}
@@ -401,7 +401,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
           </button>
         );
       })}
-      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={mySpecial ?? SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{mySpecial ? `💥 ${mySpecial.name}` : 'Спецвопрос'}</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
+      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={mySpecial ?? SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{mySpecial ? mySpecial.name : 'Спецвопрос'}</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
       {st.canRhythm && <button class="btn yellow big-btn" disabled={sent} onClick={() => send('rhythm')}>🥁 Ритм-баттл (сила музыки)</button>}
     </div>
   );

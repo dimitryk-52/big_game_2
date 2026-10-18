@@ -3,6 +3,7 @@ import type { GameClient } from '../shared/client';
 import type { GameState, Player, Settings } from '../shared/types';
 import { BONUS_INFO } from '../shared/settings';
 import { sfx } from '../shared/sound';
+import { PixIcon } from '../ui/common';
 
 type Item = keyof Settings['shop'];
 
@@ -23,7 +24,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     } catch (e: any) { setMsg(e.message); }
     setBusy(false);
   };
-  const row = (item: Item, title: string, desc: string) => (
+  const row = (item: Item, title: any, desc: string) => (
     <div class="shop-item">
       <div class="col" style={{ gap: 2, flex: 1 }}>
         <b>{title}</b>
@@ -36,7 +37,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     <div class="scroll pad col">
       <h3 style={{ margin: '4px 0' }}>Магазин</h3>
       {msg && <div class="status-card pop">{msg}</div>}
-      {row('special', '💥 Спецвопрос', `Можно задать в дуэли. Сила удара ${s.settings.specialPower}. Есть: ${me.specials}`)}
+      {row('special', <><PixIcon id="special" size={18} /> Спецвопрос</>, `Можно задать в дуэли. Сила удара ${s.settings.specialPower}. Есть: ${me.specials}`)}
       {row('hp', `❤ +${shop.hp.amount} к макс. HP`, `Сейчас ${me.hp}/${me.maxHp}`)}
       <div class="shop-item col" style={{ alignItems: 'stretch' }}>
         <b>💪 +1 к силе темы</b>

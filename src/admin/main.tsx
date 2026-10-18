@@ -11,7 +11,7 @@ import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
 import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
-import { Avatar, SkillIcon } from '../ui/common';
+import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
 import { fmtYen, uid } from '../shared/util';
 
@@ -129,12 +129,12 @@ function Questions({ questions, settings, onChange, newIn }: { questions: Questi
           <option value="">Все темы ({questions.length})</option>
           {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name} ({counts[t.id] ?? 0})</option>)}
           {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
-            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>💥 {t.name}{t.owner ? ` — ${t.owner}` : ''} ({counts[t.id] ?? 0})</option>)}
+            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}{t.owner ? ` — ${t.owner}` : ''} ({counts[t.id] ?? 0})</option>)}
           </optgroup>}
         </select>
         <select value={filter.pref} onChange={(e) => setFilter({ ...filter, pref: (e.target as HTMLSelectElement).value })}>
           <option value="">Любая префектура</option>
-          <option value="special">💥 Только спецвопросы</option>
+          <option value="special">🌈 Только спецвопросы</option>
           {PREFS.map((p) => <option value={String(p.code)}>{p.ru}</option>)}
         </select>
         <input class="inp-s" placeholder="Поиск" value={filter.q} onInput={(e) => setFilter({ ...filter, q: (e.target as HTMLInputElement).value })} />
@@ -195,14 +195,14 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
           <label>Тема <select value={q.topic} onChange={(e) => { const id = (e.target as HTMLSelectElement).value; set({ topic: id, special: settings.topics.find((t) => t.id === id)?.special ? true : undefined }); }}>
             {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name}</option>)}
             {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы игроков">
-              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>💥 {t.name}{t.owner ? ` — ${t.owner}` : ''}</option>)}
+              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}{t.owner ? ` — ${t.owner}` : ''}</option>)}
             </optgroup>}
           </select></label>
           <label>Префектура <select value={String(q.pref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ pref: v ? Number(v) : undefined }); }}>
             <option value="">—</option>
             {PREFS.map((p) => <option value={String(p.code)}>{p.ru} {p.ja}</option>)}
           </select></label>
-          {settings.topics.find((t) => t.id === q.topic)?.special && <span class="chip rainbow">💥 спецвопрос игрока</span>}
+          {settings.topics.find((t) => t.id === q.topic)?.special && <span class="chip rainbow"><PixIcon id="special" size={16} /> спецвопрос игрока</span>}
           <label>Время, сек <input class="inp-s num" type="number" min={5} max={120} value={q.time ?? ''} placeholder="авто" onInput={(e) => { const v = (e.target as HTMLInputElement).value; set({ time: v ? Number(v) : undefined }); }} /></label>
         </div>
         <div class="row wrap">

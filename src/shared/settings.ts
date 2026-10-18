@@ -81,7 +81,7 @@ export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   money: { name: 'Йены', icon: '💴' },
   stars: { name: 'Звёзды', icon: '⭐' },
   bonus: { name: 'Бонус', icon: '🎁' },
-  special: { name: 'Спецвопрос', icon: '💥' },
+  special: { name: 'Спецвопрос', icon: '🌈' },
   prize: { name: 'ПРИЗ', icon: '🏆' },
 };
 

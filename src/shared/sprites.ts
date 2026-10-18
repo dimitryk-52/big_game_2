@@ -95,7 +95,7 @@ export function characterUrl(color: string, hat: number, scale = 4) {
 
 // ───── иконки: рисунки в src/img/icons/*.png ─────
 // Любой PNG с прозрачным фоном, один пиксель файла = один пиксель иконки (обычно 9–12 px).
-// Имя файла — id иконки: money, stars, bonus, special, prize, pachinko, ring (карта, награды)
+// Имя файла — id иконки: money, stars, bonus, prize, pachinko, ring (карта, награды); special — радужный шар спецтемы
 // и topic_<id темы> (скиллы: topic_music, topic_culture, topic_geo). Чёрный контур и тень
 // добавляются автоматически — рисовать их не нужно. Новый файл подхватывается сам.
 const iconFiles = import.meta.glob<string>('../img/icons/*.png', { eager: true, import: 'default', query: '?url' });
@@ -171,6 +171,9 @@ export function rainbowGrid(n = 11): Grid {
 }
 export const SPECIAL_TOPIC = { id: 'special', name: 'Спецтема', color: '#ffffff' };
 
+/** пиксели иконки по id; спецвопрос везде — радужный шар, как на колесе */
+const iconGrid = (id: string): Grid => (id === 'special' ? grids.get('topic_special') ?? rainbowGrid() : grids.get(id) ?? MISSING);
+
 /** холст иконки с контуром (и тенью); scale — размер пикселя иконки */
 function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {
   const h = g.length, w = g[0]?.length ?? 0;
@@ -238,7 +241,7 @@ export function pixelIcon(id: string, scale = 1): HTMLCanvasElement {
   const key = id + '|' + scale;
   let c = pixCache.get(key);
   if (!c) {
-    c = drawIcon(grids.get(id) ?? MISSING, scale, true);
+    c = drawIcon(iconGrid(id), scale, true);
     pixCache.set(key, c);
   }
   return c;
@@ -268,7 +271,7 @@ export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): H
   const key = id + '|' + scale + '|' + kind;
   const c0 = badgeCache.get(key);
   if (c0) return c0;
-  const g = grids.get(id) ?? MISSING;
+  const g = iconGrid(id);
   const h = g.length, w = g[0]?.length ?? 0;
   const PAD = 2;
   const bw = w + PAD * 2 + 2, bh = h + PAD * 2 + 2; // плашка с контуром
