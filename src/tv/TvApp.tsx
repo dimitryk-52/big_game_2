@@ -186,8 +186,13 @@ function toggleFullscreen() {
   else void document.documentElement.requestFullscreen();
 }
 
-function joinUrl(room: string) {
-  const u = new URL('play.html', location.href);
+// Публичный адрес страниц игрока (GitHub Pages). Нужен, когда ТВ запущен локально:
+// телефоны не могут открыть localhost, поэтому QR ведёт на опубликованный сайт.
+const PUBLIC_URL = (import.meta.env.VITE_PUBLIC_URL as string | undefined)?.trim();
+
+function joinUrl(room: string, mode: string) {
+  const base = mode === 'supabase' && PUBLIC_URL ? (PUBLIC_URL.endsWith('/') ? PUBLIC_URL : PUBLIC_URL + '/') : location.href;
+  const u = new URL('play.html', base);
   u.search = `?room=${room}`;
   const net = new URLSearchParams(location.search).get('net');
   if (net) u.search += `&net=${net}`;
@@ -252,7 +257,7 @@ function Log({ s }: { s: GameState }) {
 }
 
 function Lobby({ s, host }: { s: GameState; host: Host }) {
-  const url = joinUrl(s.room);
+  const url = joinUrl(s.room, host.net.mode);
   const [qr, setQr] = useState('');
   useEffect(() => { QRCode.toDataURL(url, { margin: 1, scale: 8 }).then(setQr); }, [url]);
   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
@@ -265,7 +270,12 @@ function Lobby({ s, host }: { s: GameState; host: Host }) {
         {qr && <img class="qr" src={qr} alt="QR" />}
         <div class="room">Комната: <b>{s.room}</b></div>
         <div class="url">{url}</div>
-        {local && host.net.mode !== 'supabase' && <div class="warn">⚠ ТВ открыт по localhost — телефоны не смогут подключиться. Открой эту страницу по сетевому адресу (см. вывод npm run dev).</div>}
+        {local && /localhost|127.0.0.1/.test(url) && (
+          <div class="warn">
+            ⚠ QR ведёт на localhost — телефоны не смогут открыть его.{' '}
+            {host.net.mode === 'supabase' ? 'Добавь VITE_PUBLIC_URL (адрес GitHub Pages) в .env и перезапусти.' : 'Открой эту страницу по сетевому адресу (см. вывод npm run dev).'}
+          </div>
+        )}
       </div>
       <div class="lobby-right">
         <h2>Игроки ({players.length}/10)</h2>
