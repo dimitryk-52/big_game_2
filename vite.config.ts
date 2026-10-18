@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { resolve } from 'node:path';
-import { devRelay } from './devserver/relay';
+import { devRelay } from './devserver/relay.ts';
 
 // PAGES=1 — сборка для GitHub Pages: публикуется только страница игрока.
 // ТВ и админка запускаются локально (npm run local / npm run dev).
@@ -16,12 +16,12 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       input: pagesOnly
-        ? { play: resolve(__dirname, 'play.html') }
+        ? { play: resolve(import.meta.dirname, 'play.html') }
         : {
-            index: resolve(__dirname, 'index.html'),
-            tv: resolve(__dirname, 'tv.html'),
-            play: resolve(__dirname, 'play.html'),
-            admin: resolve(__dirname, 'admin.html'),
+            index: resolve(import.meta.dirname, 'index.html'),
+            tv: resolve(import.meta.dirname, 'tv.html'),
+            play: resolve(import.meta.dirname, 'play.html'),
+            admin: resolve(import.meta.dirname, 'admin.html'),
           },
     },
   },
