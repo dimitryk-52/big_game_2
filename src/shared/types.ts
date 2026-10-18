@@ -79,6 +79,8 @@ export interface PublicQuestion {
   answerImages: boolean;
   topic: TopicId;
   special: boolean;
+  /** ведущий читает вопрос вслух: текст уже на экране, ответов и таймера ещё нет */
+  reading?: boolean;
   startAt: number; // время хоста
   deadline: number; // время хоста
   participants: string[];
@@ -150,6 +152,8 @@ export interface Settings {
   landingTime: number;
   revealMs: number;
   autoAdvance: boolean;
+  /** вопрос ведёт ведущий кнопкой «Далее»: интро → текст (читает вслух) → ответы и таймер → закрыть */
+  hostPaced?: boolean;
   baseStrength: number;
   startHp: number;
   specialPower: number;

@@ -15,6 +15,7 @@
 #  5. пишет src/map/assets/regions.png (R = код*5, 0 — море), src/map/assets/map.png (пиксель-арт) и
 #     обновляет anchor/bb/size в src/map/japan.json (координаты — пиксели пиксель-арта).
 # Если префектура легла не туда — поправьте/добавьте точки в map-seeds.json и перезапустите.
+# Если граница на рисунке не видна (под сакурой и т.п.) — дорисуйте её ломаной в "cuts" того же файла.
 # --debug сохраняет картинку с границами и номерами для проверки.
 # Нужны: pillow, numpy, scipy, scikit-image.
 import json, sys
@@ -74,7 +75,17 @@ thick = nd.binary_opening(ink, np.ones((3, 3), bool))
 elev = nd.gaussian_filter(thick.astype(float), 2.0) * 1000 + (255 - lum) * 0.05
 
 # 3. водораздел от зёрен
-seeds = {int(k): v for k, v in json.loads(SEEDS.read_text(encoding='utf-8')).items()}
+seeds_raw = json.loads(SEEDS.read_text(encoding='utf-8'))
+seeds = {int(k): v for k, v in seeds_raw.items() if k.isdigit()}
+# «cuts» — границы, которых на рисунке не видно (спрятаны под деревьями и т.п.): ломаные в пикселях map.png
+if seeds_raw.get('cuts'):
+    cm = Image.new('L', (W, H), 0)
+    cd = ImageDraw.Draw(cm)
+    for line in seeds_raw['cuts']:
+        cd.line([tuple(pt) for pt in line], fill=255, width=4)
+    cut = np.asarray(cm) > 0
+    thick |= cut
+    elev = np.maximum(elev, np.where(cut, 1e6, 0))
 mk = np.zeros((H, W), np.int32)
 R = 12  # зерно сдвигается в самую «светлую» точку рядом, чтобы не попасть на линию или иконку
 for code, pts in seeds.items():

@@ -311,8 +311,8 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     return () => clearInterval(t);
   }, []);
   const removed = q.removed[me.id] ?? [];
-  const expired = client.hostNow() > q.deadline;
-  const locked = choice !== null || expired || q.revealed || q.answered.includes(me.id);
+  const expired = !q.reading && client.hostNow() > q.deadline;
+  const locked = !!q.reading || choice !== null || expired || q.revealed || q.answered.includes(me.id);
   const pickAns = (i: number) => {
     if (locked || removed.includes(i)) return;
     setChoice(i);
@@ -328,12 +328,13 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     {bg && <img class="q-bg" src={bg} alt="" draggable={false} />}
     <div class={'question scroll pad col' + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (bg ? ' has-bg' : '')}>
       <div class="q-title">{q.title}{q.special ? ' · 💥' : ''}</div>
-      {!q.revealed && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
+      {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
       {q.media?.type === 'audio' && <div class="q-tv">🎵 Слушай на ТВ</div>}
       {q.media?.type === 'video' && <div class="q-tv">🎬 Смотри на ТВ</div>}
       <div class="q-text">{q.text}</div>
-      <div class={imgs ? 'q-grid' : 'q-list'}>
+      {q.reading && <div class="center muted">Слушайте вопрос — варианты появятся следом</div>}
+      {!q.reading && <div class={imgs ? 'q-grid' : 'q-list'}>
         {q.answers.map((a, i) => {
           const gone = removed.includes(i);
           let cls = 'q-btn';
@@ -348,7 +349,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
             </button>
           );
         })}
-      </div>
+      </div>}
       {!q.revealed && choice !== null && <div class="center muted">Ответ принят. Ждём остальных…</div>}
       {!q.revealed && choice === null && expired && <div class="center muted">Время вышло</div>}
       {q.revealed && (

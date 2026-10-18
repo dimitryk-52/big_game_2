@@ -401,7 +401,7 @@ export class GameEngine {
       this.log(`${p.name} высаживается: ${prefName(code)}`);
       this.io.fx?.('land', { pid, code });
       this.setStage({ t: 'prefIntro', code, pid });
-      await this.sleep(epoch, PREF_INTRO_MS);
+      await this.sleep(epoch, this.hostPaced ? 36e5 : PREF_INTRO_MS);
       // первый вопрос — сразу на месте высадки
       await this.gate(epoch);
       await this.prefQuestion(epoch, p, code);
@@ -474,7 +474,7 @@ export class GameEngine {
     if (firstVisit) {
       await this.sleep(epoch, 700);
       this.setStage({ t: 'prefIntro', code: to, pid });
-      await this.sleep(epoch, PREF_INTRO_MS);
+      await this.sleep(epoch, this.hostPaced ? 36e5 : PREF_INTRO_MS);
     }
     await this.gate(epoch);
 
@@ -761,18 +761,26 @@ export class GameEngine {
 
   private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}, pref: number | null = null): Promise<Record<string, number | null>> {
     const n = ++this.sec.qn;
-    const startAt = this.now + LEAD;
-    const deadline = startAt + timeSec * 1000;
     this.curCorrect = q.correct;
+    const reading = this.hostPaced;
     const pq: PublicQuestion = {
       qid: q.id, n, context, title, text: q.text, media: q.media, answers: q.answers, answerImages: !!q.answerImages,
-      topic: q.topic, special: !!q.special, startAt, deadline, participants, answered: [], removed, revealed: false,
+      topic: q.topic, special: !!q.special, startAt: 0, deadline: 0, participants, answered: [], removed, revealed: false,
+      ...(reading ? { reading } : {}),
       ...(pref ? { pref } : {}),
     };
     this.s.q = pq;
     this.choices = {};
     this.setStage({ t: 'question' });
     this.io.fx?.('question', pq);
+    // ведущий читает вопрос вслух; ответы и таймер — по «Далее»
+    if (reading) {
+      await this.sleep(epoch, 36e5);
+      delete pq.reading;
+    }
+    pq.startAt = this.now + LEAD;
+    const deadline = pq.deadline = pq.startAt + timeSec * 1000;
+    this.emit();
     await new Promise<void>((resolve) => {
       const done = () => { clearT(t); this.skipCbs.delete(done); this.qDone = null; resolve(); };
       const t = setT(done, deadline - this.now + ANSWER_GRACE);
@@ -787,9 +795,14 @@ export class GameEngine {
 
   private choices: Record<string, number> = {};
 
+  /** вопрос ведёт ведущий кнопкой «Далее» (по умолчанию да) */
+  private get hostPaced() {
+    return this.s.settings.hostPaced !== false;
+  }
+
   private onAnswer(m: Extract<InputMsg, { t: 'answer' }>) {
     const q = this.s.q;
-    if (!q || q.revealed || q.n !== m.n || !q.participants.includes(m.pid) || m.pid in this.choices) return;
+    if (!q || q.revealed || q.reading || q.n !== m.n || !q.participants.includes(m.pid) || m.pid in this.choices) return;
     if (m.choice < 0 || m.choice > 3 || q.removed[m.pid]?.includes(m.choice)) return;
     const t = this.now;
     // ответ засчитывается по времени нажатия (в часах хоста), с защитой от подделки
@@ -811,7 +824,7 @@ export class GameEngine {
     this.emit();
     this.io.fx?.('reveal', q);
     // без авто-перехода ответ висит, пока ведущий не нажмёт «Далее»
-    await this.sleep(epoch, this.s.settings.autoAdvance ? this.s.settings.revealMs : 36e5);
+    await this.sleep(epoch, this.s.settings.autoAdvance && !this.hostPaced ? this.s.settings.revealMs : 36e5);
     this.s.q = null;
     this.emit();
   }
@@ -1027,7 +1040,7 @@ export class GameEngine {
       });
     }
     const q = this.s.q;
-    if (st.t === 'question' && q && !q.revealed) {
+    if (st.t === 'question' && q && !q.revealed && !q.reading) {
       for (const id of q.participants) if (isBot(id)) {
         const n = q.n;
         this.botLater('ans' + id + n, Math.max(0, q.startAt - this.now) + 1500 + randInt(7000), () => {

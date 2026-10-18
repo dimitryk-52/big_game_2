@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   landingTime: 30,
   revealMs: 4500,
   autoAdvance: true,
+  hostPaced: true,
   baseStrength: 1,
   startHp: 10,
   specialPower: 5,

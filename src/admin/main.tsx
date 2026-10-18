@@ -331,6 +331,7 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
             <input class="inp-s num" type="number" value={getPath(s, path)} onInput={(e) => upd((c) => setPath(c, path, Number((e.target as HTMLInputElement).value)))} />
           </label>
         ))}
+        <label class="set-row"><span>Вопрос ведёт ведущий кнопкой «Далее» (интро → текст → ответы и таймер → закрыть)</span><input type="checkbox" checked={s.hostPaced !== false} onChange={(e) => upd((c) => (c.hostPaced = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Авто-переход после показа ответа</span><input type="checkbox" checked={s.autoAdvance} onChange={(e) => upd((c) => (c.autoAdvance = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Ритм-баттл в дуэлях</span><input type="checkbox" checked={s.rhythmInDuel} onChange={(e) => upd((c) => (c.rhythmInDuel = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Золотая ячейка (настоящий приз) в призовой машине</span><input type="checkbox" checked={s.ring.physicalPrize} onChange={(e) => upd((c) => (c.ring.physicalPrize = (e.target as HTMLInputElement).checked))} /></label>
@@ -393,7 +394,7 @@ function Remote() {
       </div>
       <div class="row wrap remote-btns">
         {s?.phase === 'lobby' && <button class="btn primary" onClick={() => ctl('start')}>▶ Начать игру</button>}
-        <button class="btn primary" onClick={() => ctl('next')}>⏭ Далее</button>
+        <button class="btn primary" onClick={() => ctl('next')}>⏭ {nextLabel(s)}</button>
         <button class="btn" onClick={() => ctl('pause')}>{s?.paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
         {s?.phase === 'lobby' && <button class="btn" onClick={() => ctl('addBot')}>+ бот</button>}
         <button class="btn" onClick={() => ctl('reload')}>🔄 Обновить вопросы и настройки в игре</button>
@@ -438,3 +439,13 @@ function Remote() {
 
 // иконки — PNG из src/img/icons, читаются до первого рендера
 void loadIcons().then(() => render(<App />, document.getElementById('app')!));
+
+/** что сделает «Далее» сейчас — подсказка ведущему на пульте */
+function nextLabel(s: GameState | null) {
+  if (!s || s.settings.hostPaced === false) return 'Далее';
+  const st = s.stage;
+  if (st.t === 'prefIntro') return 'Далее: показать вопрос';
+  if (st.t === 'question' && s.q?.reading) return 'Далее: ответы и таймер';
+  if (st.t === 'question' && s.q?.revealed) return 'Далее: закрыть вопрос';
+  return 'Далее';
+}

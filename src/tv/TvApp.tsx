@@ -422,7 +422,7 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
         {q.media?.type === 'audio' && <audio class="qaudio" src={resolveMedia(q.media.url)} autoPlay controls />}
         {q.media?.type === 'video' && <video class="qmedia" src={resolveMedia(q.media.url)} autoPlay playsInline />}
         <div class="qtext">{q.text}</div>
-        <div class={'qanswers' + (imgs ? ' imgs' : '')}>
+        {!q.reading && <div class={'qanswers' + (imgs ? ' imgs' : '')}>
           {q.answers.map((a, i) => {
             const cls = q.revealed ? (i === q.correct ? ' correct' : choosers(i).length ? ' wrong' : ' dim') : '';
             return (
@@ -437,8 +437,8 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
               </div>
             );
           })}
-        </div>
-        {!q.revealed && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
+        </div>}
+        {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
         {!duel && <div class="qparts">
           {q.participants.map((id) => {
             const p = s.players[id];
