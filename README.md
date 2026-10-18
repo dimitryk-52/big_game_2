@@ -2,11 +2,13 @@
 
 Пиксельная викторина-«конкистадор» по Японии для вечеринки. ТВ показывает карту и вопросы, каждый игрок отвечает со своего телефона, ведущий управляет игрой и наполняет базу вопросов.
 
-| Страница | Для кого |
-|---|---|
-| `tv.html` | Экран на ТВ. Здесь же работает «мозг» игры (хост) |
-| `play.html?room=XXXX` | Телефон игрока (вертикально, Android и iPhone) |
-| `admin.html` | Ведущий: вопросы, награды префектур, настройки, пульт |
+| Страница | Для кого | Где живёт |
+|---|---|---|
+| `tv.html` | Экран на ТВ. Здесь же работает «мозг» игры (хост) | только локально |
+| `admin.html` | Ведущий: вопросы, награды префектур, настройки, пульт | только локально |
+| `play.html?room=XXXX` | Телефон игрока (вертикально, Android и iPhone) | GitHub Pages (и локально) |
+
+На GitHub Pages публикуется **только страница игрока**. ТВ и админка запускаются на компьютере ведущего (`npm run local`) и общаются с телефонами через Supabase.
 
 ## Быстрый старт (без Supabase, по Wi-Fi)
 
@@ -27,12 +29,12 @@ npm run dev
 2. Открой **SQL Editor**, вставь и выполни `supabase/schema.sql`. Он создаст таблицы `questions` и `kv` и публичный bucket `media` для картинок.
 3. Возьми **Project URL** и **anon / publishable key** в Project Settings → API.
 4. Локально: скопируй `.env.example` в `.env` и заполни значения.
-5. GitHub: Settings → Secrets → Actions, добавь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`. Settings → Pages → Source: **GitHub Actions**. Каждый push в `main` публикует сайт (`.github/workflows/deploy.yml`).
+5. GitHub: Settings → Secrets → Actions, добавь `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`. Settings → Pages → Source: **GitHub Actions**. Каждый push в `main` публикует страницу игрока (`.github/workflows/deploy.yml`, сборка с `PAGES=1`; корень сайта перенаправляет на `play.html`).
 6. Бесплатный проект Supabase засыпает примерно после недели без активности. Перед игрой зайди в дашборд и разбуди его.
 
-### ТВ и админка локально, телефоны — через GitHub Pages
+### Запуск игры: ТВ и админка локально, телефоны — через GitHub Pages
 
-ТВ и админку не обязательно открывать с GitHub Pages — их можно запускать на своём компьютере. Они всё равно общаются с телефонами через Supabase.
+ТВ и админка работают на компьютере ведущего и общаются с телефонами через Supabase.
 
 1. В `.env` должны быть `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` и `VITE_PUBLIC_URL` (адрес GitHub Pages, например `https://dimitryk-52.github.io/big_game_2/`).
 2. `npm run local` — соберёт проект и откроет `http://localhost:4173/tv.html`. Админка: `http://localhost:4173/admin.html`. Можно и `npm run dev` (порт 5173).

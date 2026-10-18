@@ -24,10 +24,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # на сайт попадает только страница игрока; ТВ и админка запускаются локально
       - run: npm run build
         env:
+          PAGES: '1'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      - name: Корень сайта ведёт на страницу игрока
+        run: |
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=play.html"><title>Big Game 2</title><a href="play.html">Big Game 2</a>\n' > dist/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
