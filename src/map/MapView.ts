@@ -4,10 +4,10 @@ import { Application, Container, Sprite, Text, Texture, ImageSource, Graphics } 
 import type { Player, PrefState } from '../shared/types';
 import { PREF, PREF_CODES } from './mapData';
 import {
-  CANVAS_H, CANVAS_W, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderPrefFog, renderPrefMask, renderPrefOutline,
+  CANVAS_H, CANVAS_W, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { characterCanvas, pixelIcon } from '../shared/sprites';
+import { characterCanvas, pixelBadge, pixelIcon } from '../shared/sprites';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
@@ -29,6 +29,8 @@ interface Token {
   body: Sprite;
   frames: Texture[];
   label: Text;
+  plate: Graphics;
+  plateFor: string;
   ring: Graphics;
   x: number;
   y: number;
@@ -51,7 +53,9 @@ export class MapView {
   /** туман и затемнение недоступных — спрайты по форме префектур поверх рисунка */
   private fogLayer = new Container();
   private hiLayer = new Container();
-  private arrowG = new Graphics();
+  private arrowLayer = new Container();
+  private arrow: (Sprite & { base: { x: number; y: number }; dir: { x: number; y: number } }) | null = null;
+  private arrowKey = '';
   private arrowPts: { x: number; y: number }[] | null = null;
   private iconLayer = new Container();
   private labelLayer = new Container();
@@ -106,7 +110,7 @@ export class MapView {
     });
     this.mapSprite = new Sprite(new Texture({ source: src }));
     this.mapSprite.scale.set(SCALE);
-    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.arrowG, this.iconLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
+    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.iconLayer, this.arrowLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
 
     this.fitAll(false);
@@ -171,14 +175,16 @@ export class MapView {
   private updateHighlights(u: MapUpdate) {
     this.hiSprites.forEach((s) => s.destroy());
     this.hiSprites = [];
+    // варианты хода: лёгкая заливка + явный контур
     const add = (codes: number[] | undefined, tint: number) => {
       for (const c of codes ?? []) {
-        const s = this.layerSprite('mask', c);
-        s.tint = tint;
-        s.alpha = 0.4;
-        (s as any).code = c;
-        this.hiLayer.addChild(s);
-        this.hiSprites.push(s);
+        for (const kind of ['mask', 'outline'] as const) {
+          const s = this.layerSprite(kind, c);
+          s.tint = tint;
+          (s as any).kind = kind;
+          this.hiLayer.addChild(s);
+          this.hiSprites.push(s);
+        }
       }
     };
     add(u.highlight, 0xfff27a);
@@ -214,28 +220,34 @@ export class MapView {
   }
 
   private updateIcons(u: MapUpdate) {
-    const want = new Map<string, { code: number; icon: string; dx: number }>();
-    for (const c of u.machines?.pachinko ?? []) if (u.prefs[c]?.rev) want.set('p' + c, { code: c, icon: 'pachinko', dx: -14 });
-    for (const c of u.machines?.ring ?? []) if (u.prefs[c]?.rev) want.set('r' + c, { code: c, icon: 'ring', dx: -14 });
+    const want = new Map<string, { code: number; icon: string; dx: number; badge?: boolean }>();
+    for (const c of u.machines?.pachinko ?? []) if (u.prefs[c]?.rev) want.set('p' + c, { code: c, icon: 'pachinko', dx: -22 });
+    for (const c of u.machines?.ring ?? []) if (u.prefs[c]?.rev) want.set('r' + c, { code: c, icon: 'ring', dx: -22 });
+    const occupied = new Set(u.players.map((p) => p.pref));
     if (u.showRewards !== false) for (const c of PREF_CODES) {
       const p = u.prefs[c];
-      if (!p?.rev) continue;
-      want.set('w' + c, { code: c, icon: p.reward, dx: 14 });
+      if (!p?.rev || p.taken) continue;
+      // выноска над центром префектуры; пока там стоит игрок — прячем, чтобы не закрывать его имя
+      if (occupied.has(c)) continue;
+      want.set('w' + c, { code: c, icon: p.reward, dx: 0, badge: true });
     }
     for (const [k, t] of this.icons) if (!want.has(k)) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);
       if (!t || t.icon !== w.icon) {
         t?.destroy();
-        const tex = Texture.from(pixelIcon(w.icon));
+        // награда — на плашке с указателем вниз, автоматы — просто иконкой
+        const tex = Texture.from(w.badge ? pixelBadge(w.icon) : pixelIcon(w.icon));
         tex.source.scaleMode = 'nearest';
         t = Object.assign(new Sprite(tex), { icon: w.icon, bob: Math.random() * 6 });
-        t.anchor.set(0.5, 1);
+        // у выноски якорь — кончик указателя (пиксель посередине снизу)
+        if (w.badge) t.anchor.set((Math.floor(tex.width / 2) + 0.5) / tex.width, (tex.height - 1) / tex.height);
+        else t.anchor.set(0.5, 1);
         this.iconLayer.addChild(t);
         this.icons.set(k, t);
       }
       const a = prefAnchorWorld(w.code);
-      t.position.set(a.x + w.dx, a.y - 4);
+      t.position.set(a.x + w.dx, w.badge ? a.y : a.y - 4);
     }
   }
 
@@ -266,16 +278,18 @@ export class MapView {
         const body = new Sprite(frames[0]);
         body.anchor.set(0.5, 1);
         body.scale.set(1.6);
-        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 22, fontWeight: '700', fill: 0xffffff, stroke: { color: 0x000000, width: 4 } } });
+        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 20, fontWeight: '700', fill: 0xffffff } });
         label.anchor.set(0.5, 1);
         label.resolution = 2;
-        label.position.set(0, -28);
-        root.addChild(ring, body, label);
+        label.position.set(0, -29);
+        const plate = new Graphics();
+        root.addChild(ring, body, plate, label);
         this.tokenLayer.addChild(root);
-        t = { pid: p.id, root, body, frames, label, ring, x: target.x, y: target.y, tx: target.x, ty: target.y, hop: null, flash: 0, color: p.color, hat: p.hat };
+        t = { pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: target.x, y: target.y, tx: target.x, ty: target.y, hop: null, flash: 0, color: p.color, hat: p.hat };
         this.tokens.set(p.id, t);
       }
       t.label.text = p.name;
+      if (t.plateFor !== p.name) { t.plateFor = p.name; drawNamePlate(t.plate, t.label, p.color); }
       t.tx = target.x;
       t.ty = target.y;
       t.body.alpha = p.hp <= 0 ? 0.45 : 1;
@@ -319,42 +333,28 @@ export class MapView {
     if (t) t.flash = 600;
   }
 
-  /** пиксельная стрелка: бегущие точки по пути и наконечник */
+  /** стрелка хода: одна пиксельная дуга от игрока к цели (маршрут целиком не рисуем) */
   private drawArrow() {
-    const g = this.arrowG;
-    g.clear();
     const pts = this.arrowPts;
-    if (!pts) return;
-    const segs: { ax: number; ay: number; dx: number; dy: number; len: number }[] = [];
-    let total = 0;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
-      const len = Math.hypot(dx, dy) || 1;
-      segs.push({ ax: pts[i].x, ay: pts[i].y, dx: dx / len, dy: dy / len, len });
-      total += len;
-    }
-    const at = (d: number) => {
-      for (const sg of segs) {
-        if (d <= sg.len) return { x: sg.ax + sg.dx * d, y: sg.ay + sg.dy * d };
-        d -= sg.len;
+    const key = pts ? `${pts[0].x},${pts[0].y}>${pts[pts.length - 1].x},${pts[pts.length - 1].y}` : '';
+    if (key !== this.arrowKey) {
+      this.arrowKey = key;
+      this.arrow?.destroy({ texture: true });
+      this.arrow = null;
+      if (pts) {
+        const a = worldToImage(pts[0].x, pts[0].y), b = worldToImage(pts[pts.length - 1].x, pts[pts.length - 1].y);
+        const m = renderMoveArrow(a, b);
+        const tex = Texture.from(m.canvas);
+        tex.source.scaleMode = 'nearest';
+        this.arrow = Object.assign(new Sprite(tex), { base: { x: m.x, y: m.y }, dir: m.dir });
+        this.arrow.scale.set(SCALE);
+        this.arrowLayer.addChild(this.arrow);
       }
-      const l = segs[segs.length - 1];
-      return { x: l.ax + l.dx * l.len, y: l.ay + l.dy * l.len };
-    };
-    const step = 7, head = 11, start = 8;
-    const off = (this.time / 45) % step;
-    for (let d = start + off; d < total - head; d += step) {
-      const p = at(d);
-      g.rect(Math.round(p.x) - 2.5, Math.round(p.y) - 2.5, 5, 5).fill({ color: 0x101020 });
-      g.rect(Math.round(p.x) - 1.5, Math.round(p.y) - 1.5, 3, 3).fill({ color: 0xfff27a });
     }
-    const last = segs[segs.length - 1];
-    const tip = at(total - 2);
-    const bx = tip.x - last.dx * head, by = tip.y - last.dy * head;
-    const nx = -last.dy * 6, ny = last.dx * 6;
-    const bob = Math.sin(this.time / 150) * 1.5;
-    const tx = tip.x + last.dx * bob, ty = tip.y + last.dy * bob;
-    g.poly([tx, ty, bx + nx, by + ny, bx - nx, by - ny]).fill({ color: 0xfff27a }).stroke({ width: 1.5, color: 0x101020 });
+    if (!this.arrow) return;
+    // покачивание к цели ступеньками по пикселю карты
+    const step = Math.round((0.5 + 0.5 * Math.sin(this.time / 160)) * 2) * SCALE;
+    this.arrow.position.set(this.arrow.base.x + this.arrow.dir.x * step, this.arrow.base.y + this.arrow.dir.y * step);
   }
 
   // ───── камера ─────
@@ -506,8 +506,8 @@ export class MapView {
     this.applyCam();
     this.drawArrow();
 
-    const pulse = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(this.time / 180));
-    this.hiSprites.forEach((s) => (s.alpha = pulse));
+    const wave = 0.5 + 0.5 * Math.sin(this.time / 180);
+    this.hiSprites.forEach((s) => (s.alpha = (s as any).kind === 'outline' ? 0.7 + 0.3 * wave : 0.1 + 0.12 * wave));
     if (this.outline) this.outline.alpha = 0.6 + 0.4 * Math.sin(this.time / 120);
 
     // подписи: постоянный экранный размер; обычные — только при приближении
@@ -554,7 +554,7 @@ export class MapView {
       t.root.y = t.y;
       const s = Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
       t.root.scale.set(s);
-      t.label.visible = this.cam.z > 0.8;
+      t.label.visible = t.plate.visible = this.cam.z > 0.8;
       // имя рендерится в разрешении экрана: при приближении текстура текста не растягивается
       const res = Math.min(8, Math.ceil(this.cam.z * s * this.app.renderer.resolution));
       if (t.label.resolution !== res) t.label.resolution = res;
@@ -572,4 +572,29 @@ export class MapView {
       if (p.life >= p.max) { p.g.destroy(); this.particles.splice(i, 1); }
     }
   }
+}
+
+/** пиксельная плашка под именем над персонажем: тёмная, рамка цвета игрока, хвостик вниз */
+function drawNamePlate(g: Graphics, label: Text, color: string) {
+  const P = 2; // «пиксель» плашки в единицах фишки
+  const w = Math.ceil((label.width + 12) / P) * P, h = Math.ceil((label.height - 2) / P) * P;
+  const x = -w / 2, y = label.y - h + P;
+  const c = parseInt(color.slice(1), 16);
+  g.clear();
+  // контур со срезанными углами, рамка цвета игрока, тёмная середина
+  const box = (inset: number, fill: number) => {
+    const i = inset * P;
+    g.poly([
+      x + i + P, y + i, x + w - i - P, y + i, x + w - i - P, y + i + P, x + w - i, y + i + P,
+      x + w - i, y + h - i - P, x + w - i - P, y + h - i - P, x + w - i - P, y + h - i, x + i + P, y + h - i,
+      x + i + P, y + h - i - P, x + i, y + h - i - P, x + i, y + i + P, x + i + P, y + i + P,
+    ]).fill({ color: fill });
+  };
+  box(0, 0x0d0b1e);
+  box(1, c);
+  box(2, 0x1b1f3a);
+  // хвостик к голове персонажа
+  g.rect(-2 * P, y + h, 4 * P, P).fill({ color: 0x0d0b1e });
+  g.rect(-P, y + h - P, 2 * P, P).fill({ color: c });
+  g.rect(-P, y + h + P, 2 * P, P).fill({ color: 0x0d0b1e });
 }

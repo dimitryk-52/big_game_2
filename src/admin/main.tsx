@@ -1,7 +1,10 @@
+import '../ui/pxStyles';
 import { render } from 'preact';
+import { loadIcons } from '../shared/sprites';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/admin.css';
+import '../styles/kit.css';
 import type { GameMsg, GameState, Question, RewardType, Settings } from '../shared/types';
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
@@ -433,4 +436,5 @@ function Remote() {
   );
 }
 
-render(<App />, document.getElementById('app')!);
+// иконки — PNG из src/img/icons, читаются до первого рендера
+void loadIcons().then(() => render(<App />, document.getElementById('app')!));

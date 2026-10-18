@@ -11,7 +11,11 @@ type Send = (cmd: string, args?: any) => void;
 
 const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring'];
 
-export function DebugMenu({ s, send, onClose, fx }: { s: GameState; send: Send; onClose: () => void; fx?: boolean }) {
+export function DebugMenu({ s, send, onClose, fx, onGame }: {
+  s: GameState; send: Send; onClose: () => void; fx?: boolean;
+  /** телефон: перенести игрока к автомату и открыть его вкладку */
+  onGame?: (game: 'pachinko' | 'ring', pid: string) => void;
+}) {
   const pids = s.joinOrder.filter((id) => s.players[id]);
   const [pid, setPid] = useState(pids[0] ?? '');
   const [pref, setPref] = useState<number>(s.players[pid]?.pref ?? 13);
@@ -52,6 +56,7 @@ export function DebugMenu({ s, send, onClose, fx }: { s: GameState; send: Send; 
           <button class="btn small" onClick={() => send('pause')}>{s.paused ? '▶ Снять паузу' : '⏸ Пауза игры'}</button>
           <button class="btn small" onClick={() => send('next')}>⏭ Далее</button>
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
+          <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>
           <button class="btn small" onClick={() => send('teleport', { pid, pref })}>Переместить игрока сюда</button>
           <button class="btn small" onClick={() => send('give', { pid, yen: 1000, stars: 3 })}>+1000 ¥ +3 ★</button>
           <button class="btn small" onClick={() => send('give', { pid, hp: -3 })}>−3 HP</button>
@@ -64,6 +69,15 @@ export function DebugMenu({ s, send, onClose, fx }: { s: GameState; send: Send; 
           </>}
         </div>
       </div>
+      {onGame && (
+        <div class="debug-group">
+          <div class="debug-gname">Автоматы (этот телефон)</div>
+          <div class="debug-btns">
+            <button class="btn small" onClick={() => onGame('pachinko', pid)}>🎰 Пачинко</button>
+            <button class="btn small" onClick={() => onGame('ring', pid)}>🎡 Призовая машина</button>
+          </div>
+        </div>
+      )}
       <div class="debug-group">
         <div class="debug-gname">Иконки</div>
         <div class="debug-btns">{ICONS.map((id) => <span class="debug-icon" title={id}><PixIcon id={id} size={36} /></span>)}</div>
@@ -72,7 +86,10 @@ export function DebugMenu({ s, send, onClose, fx }: { s: GameState; send: Send; 
   );
 }
 
-/** телефон: меню включается параметром ?debug=1 (запоминается), ?debug=0 — выключить */
+/** телефон: меню включается параметром ?debug=1 или 5 тапами по своему аватару (запоминается), ?debug=0 — выключить */
+export function setPhoneDebug(on: boolean) {
+  try { if (on) localStorage.setItem('bg_debug', '1'); else localStorage.removeItem('bg_debug'); } catch { /* приватный режим */ }
+}
 export function phoneDebugEnabled() {
   const q = new URLSearchParams(location.search).get('debug');
   try {

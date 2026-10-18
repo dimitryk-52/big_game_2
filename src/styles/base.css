@@ -120,3 +120,7 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 .debug-icon { display: inline-flex; padding: 4px; background: #3b6e3a; }
 .debug-fab { position: fixed; right: 8px; bottom: 70px; z-index: 101; width: 44px; height: 44px; font-size: 22px; background: #11142b; border: 3px solid var(--yellow); box-shadow: 3px 3px 0 #000; }
 .debug-sheet .debug-menu { top: auto; bottom: 8px; left: 8px; width: calc(100vw - 16px); max-height: 70vh; }
+
+/* логотип в меню */
+.menu-logo { display: block; width: min(360px, 80%); height: auto; margin: 0 auto 12px; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.5)); }
+.menu-logo.small { width: min(220px, 60%); margin-bottom: 4px; }

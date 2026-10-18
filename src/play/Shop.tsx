@@ -43,7 +43,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
         <span class="muted small-text">Цена: {price(shop.stat)}</span>
         <div class="row wrap">
           {topics.map((t) => (
-            <button class="btn small" style={{ borderColor: t.color }} disabled={busy || !can(shop.stat)} onClick={() => buy('stat', t.id)}>
+            <button class="btn small" style={{ '--c': t.color } as any} disabled={busy || !can(shop.stat)} onClick={() => buy('stat', t.id)}>
               {t.name} ({me.stats[t.id]})
             </button>
           ))}

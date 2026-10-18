@@ -171,6 +171,17 @@ export class GameEngine {
         for (const c of Object.keys(this.s.prefs)) this.s.prefs[+c].rev = true;
         this.emit();
         break;
+      case 'hideAll': {
+        // закрыть туманом всё, кроме префектур, где стоят игроки; награды вернуть
+        const here = new Set(Object.values(this.s.players).map((p) => p.pref));
+        for (const c of Object.keys(this.s.prefs)) {
+          const ps = this.s.prefs[+c];
+          ps.rev = here.has(+c);
+          ps.taken = false;
+        }
+        this.emit();
+        break;
+      }
       case 'end':
         this.s.phase = 'end';
         this.setStage({ t: 'end' });
@@ -503,6 +514,9 @@ export class GameEngine {
   private async prefReward(epoch: number, p: Player, code: number) {
     const st = this.s.settings;
     const ps = this.s.prefs[code];
+    // награда префектуры одноразовая: кто первым ответил верно, тот и забрал
+    if (ps.taken) return;
+    ps.taken = true;
     let reward = ps.reward;
     if (reward === 'prize' && ps.prizeTaken) reward = 'money';
     let text = '';

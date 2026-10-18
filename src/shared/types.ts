@@ -60,6 +60,8 @@ export interface PrefState {
   rev: boolean;
   reward: RewardType;
   prizeTaken: boolean;
+  /** награду уже забрали — больше не выдаётся и не видна на карте */
+  taken?: boolean;
   visits: number;
 }
 

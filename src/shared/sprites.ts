@@ -93,46 +93,46 @@ export function characterUrl(color: string, hat: number, scale = 4) {
   return u;
 }
 
-// ───── иконки тем (скиллов) 10×10 ─────
-// X — цвет темы, W — белый, . — пусто. Контур рисуется автоматически.
-const TOPIC_ICONS: Record<string, string[]> = {
-  music: [
-    '......XX..',
-    '......XXX.',
-    '......X.XX',
-    '......X..X',
-    '......X...',
-    '......X...',
-    '..XXXXX...',
-    '.XXXXXX...',
-    '.XXXXX....',
-    '..XXX.....',
-  ],
-  culture: [
-    'XXXXXXXXXX',
-    '.XXXXXXXX.',
-    '..X....X..',
-    'XXXXXXXXXX',
-    '..X....X..',
-    '..X....X..',
-    '..X....X..',
-    '..X....X..',
-    '..X....X..',
-    '.XX....XX.',
-  ],
-  geo: [
-    '..........',
-    '....WW....',
-    '...WWWW...',
-    '..WXWWXW..',
-    '..XXXXXX..',
-    '.XXXXXXXX.',
-    '.XXXXXXXX.',
-    'XXXXXXXXXX',
-    'XXXXXXXXXX',
-    '..........',
-  ],
-};
+// ───── иконки: рисунки в src/img/icons/*.png ─────
+// Любой PNG с прозрачным фоном, один пиксель файла = один пиксель иконки (обычно 9–12 px).
+// Имя файла — id иконки: money, stars, bonus, special, prize, pachinko, ring (карта, награды)
+// и topic_<id темы> (скиллы: topic_music, topic_culture, topic_geo). Чёрный контур и тень
+// добавляются автоматически — рисовать их не нужно. Новый файл подхватывается сам.
+const iconFiles = import.meta.glob<string>('../img/icons/*.png', { eager: true, import: 'default', query: '?url' });
+
+/** пиксели иконки: цвет (css) или null — пусто */
+type Grid = (string | null)[][];
+const grids = new Map<string, Grid>();
+
+/** загрузить PNG иконок; вызывается один раз до первого рендера (main.tsx) */
+export async function loadIcons() {
+  await Promise.all(Object.entries(iconFiles).map(([path, url]) => new Promise<void>((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      const g: Grid = [];
+      for (let y = 0; y < c.height; y++) {
+        const row: (string | null)[] = [];
+        for (let x = 0; x < c.width; x++) {
+          const i = (y * c.width + x) * 4;
+          row.push(d[i + 3] < 128 ? null : `rgb(${d[i]},${d[i + 1]},${d[i + 2]})`);
+        }
+        g.push(row);
+      }
+      grids.set(path.replace(/^.*\/|\.png$/g, ''), g);
+      ok();
+    };
+    img.onerror = () => ok();
+    img.src = url;
+  })));
+}
+
+// запасная иконка темы без своего PNG: ромб цвета темы
 const DIAMOND = [
   '....XX....',
   '...XXXX...',
@@ -145,138 +145,16 @@ const DIAMOND = [
   '...XXXX...',
   '....XX....',
 ];
+const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch) => (ch === '.' ? null : ch === 'W' ? '#ffffff' : color)));
+const MISSING: Grid = diamond('#ff00ff');
 
-const iconCache = new Map<string, string>();
-export function topicIconUrl(id: string, color: string, scale = 3): string {
-  const k = `${id}|${color}|${scale}`;
-  let u = iconCache.get(k);
-  if (u) return u;
-  const rows = (TOPIC_ICONS[id] ?? DIAMOND).map((r) => r.split(''));
-  const c = document.createElement('canvas');
-  c.width = 12 * scale;
-  c.height = 12 * scale;
-  const ctx = c.getContext('2d')!;
-  const filled = (x: number, y: number) => rows[y]?.[x] !== undefined && rows[y][x] !== '.';
-  ctx.fillStyle = '#000';
-  for (let y = -1; y <= 10; y++) for (let x = -1; x <= 10; x++) {
-    if (filled(x, y)) continue;
-    if (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1)) ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
-  }
-  rows.forEach((r, y) => r.forEach((ch, x) => {
-    if (ch === '.') return;
-    ctx.fillStyle = ch === 'W' ? '#ffffff' : color;
-    ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
-  }));
-  u = c.toDataURL();
-  iconCache.set(k, u);
-  return u;
-}
-
-// ───── пиксельные иконки (награды на карте, игровые автоматы, звёзды в интерфейсе) ─────
-// Буквы — цвета из ICON_PAL, . — пусто. Чёрный контур и тень снизу рисуются автоматически,
-// чтобы иконка читалась поверх пёстрой карты.
-const ICON_PAL: Record<string, string> = {
-  Y: '#ffd23f', O: '#e0861e', W: '#ffffff', D: '#6b3d10', R: '#ec3a52', M: '#9a1f34',
-  B: '#8fd8ff', G: '#5ce16b', P: '#c77dff', S: '#c9ced8', K: '#2a2a3a',
-};
-const PIXEL_ICONS: Record<string, string[]> = {
-  stars: [
-    '....Y....',
-    '....Y....',
-    '...YWY...',
-    'YYYYWYYYY',
-    '.YYYYYYO.',
-    '..YYYYO..',
-    '..YYOYY..',
-    '.YYO.OYO.',
-    '.YO...OO.',
-  ],
-  money: [
-    '..OOOOOO..',
-    '.OYYYYYYO.',
-    'OYDYYYYDYO',
-    'OYYDYYDYYO',
-    'OYYYDDYYYO',
-    'OYYDDDDYYO',
-    'OYYYDDYYYO',
-    'OYYDDDDYYO',
-    '.OYYDDYYO.',
-    '..OOOOOO..',
-  ],
-  bonus: [
-    '.YY....YY.',
-    'Y..Y..Y..Y',
-    '.YYYYYYYY.',
-    'RRRRYYRRRR',
-    'RWRRYYRRRR',
-    'MMMMYYMMMM',
-    '.RRRYYRRR.',
-    '.RRRYYRRR.',
-    '.RRRYYRRR.',
-    '.MMMYYMMM.',
-  ],
-  special: [
-    '....R.....',
-    '.R..RR..R.',
-    '.RRROORRR.',
-    '..ROYYOR..',
-    'RROYWWYORR',
-    '.ROYWWYOR.',
-    '..ROYYORR.',
-    '.RRROORR..',
-    '.R..RR..R.',
-    '.....R....',
-  ],
-  prize: [
-    'YYYYYYYYYY',
-    'Y.YWYYYO.Y',
-    'Y.YWYYYO.Y',
-    '.YYWYYYOY.',
-    '..YYYYYO..',
-    '...YYYO...',
-    '....YO....',
-    '....YO....',
-    '...YYYO...',
-    '..DDDDDD..',
-  ],
-  pachinko: [
-    '.RRRRRRRR.',
-    'RBBBBBBBBR',
-    'RBWBBWBBBR',
-    'RBBBWBBWBR',
-    'RBWBBSBBBR',
-    'RBBBBBBBBR',
-    'RRRRRRRRRR',
-    'RKKYYYYKKR',
-    'RKKKKKKKKR',
-    '.MM....MM.',
-  ],
-  ring: [
-    '...RRYY...',
-    '..R....Y..',
-    '.P......G.',
-    '.P..YY..G.',
-    '.B..YY..R.',
-    '.B......R.',
-    '..G....P..',
-    '...GBBP...',
-    '....DD....',
-    '...DDDD...',
-  ],
-};
-
-const pixCache = new Map<string, HTMLCanvasElement>();
-/** иконка с контуром; размер холста (w+2)×(h+3) клеток по scale пикселей */
-export function pixelIcon(id: string, scale = 1): HTMLCanvasElement {
-  const key = id + '|' + scale;
-  const c0 = pixCache.get(key);
-  if (c0) return c0;
-  const rows = (PIXEL_ICONS[id] ?? PIXEL_ICONS.stars).map((r) => r.split(''));
-  const h = rows.length, w = rows[0].length;
-  const filled = (x: number, y: number) => (rows[y]?.[x] ?? '.') !== '.';
+/** холст иконки с контуром (и тенью); scale — размер пикселя иконки */
+function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {
+  const h = g.length, w = g[0]?.length ?? 0;
+  const filled = (x: number, y: number) => !!g[y]?.[x];
   const c = document.createElement('canvas');
   c.width = (w + 2) * scale;
-  c.height = (h + 3) * scale;
+  c.height = (h + (shadow ? 3 : 2)) * scale;
   const ctx = c.getContext('2d')!;
   const px = (x: number, y: number) => ctx.fillRect((x + 1) * scale, (y + 1) * scale, scale, scale);
   const near = (x: number, y: number) => {
@@ -284,20 +162,43 @@ export function pixelIcon(id: string, scale = 1): HTMLCanvasElement {
     return false;
   };
   // тень: контур, сдвинутый на клетку вниз
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  for (let y = 0; y <= h + 1; y++) for (let x = -1; x <= w; x++) if (near(x, y - 1)) px(x, y);
+  if (shadow) {
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    for (let y = 0; y <= h + 1; y++) for (let x = -1; x <= w; x++) if (near(x, y - 1)) px(x, y);
+  }
   ctx.fillStyle = '#0d0d1a';
   for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) if (!filled(x, y) && near(x, y)) {
     ctx.clearRect((x + 1) * scale, (y + 1) * scale, scale, scale);
     px(x, y);
   }
-  rows.forEach((r, y) => r.forEach((ch, x) => {
-    if (ch === '.') return;
-    ctx.fillStyle = ICON_PAL[ch] ?? '#f0f';
+  g.forEach((r, y) => r.forEach((col, x) => {
+    if (!col) return;
+    ctx.fillStyle = col;
     ctx.clearRect((x + 1) * scale, (y + 1) * scale, scale, scale);
     px(x, y);
   }));
-  pixCache.set(key, c);
+  return c;
+}
+
+const iconCache = new Map<string, string>();
+export function topicIconUrl(id: string, color: string, scale = 3): string {
+  const k = `${id}|${color}|${scale}`;
+  let u = iconCache.get(k);
+  if (u) return u;
+  u = drawIcon(grids.get('topic_' + id) ?? diamond(color), scale, false).toDataURL();
+  iconCache.set(k, u);
+  return u;
+}
+
+const pixCache = new Map<string, HTMLCanvasElement>();
+/** иконка с контуром и тенью; размер холста (w+2)×(h+3) клеток по scale пикселей */
+export function pixelIcon(id: string, scale = 1): HTMLCanvasElement {
+  const key = id + '|' + scale;
+  let c = pixCache.get(key);
+  if (!c) {
+    c = drawIcon(grids.get(id) ?? MISSING, scale, true);
+    pixCache.set(key, c);
+  }
   return c;
 }
 
@@ -308,6 +209,83 @@ export function pixelIconUrl(id: string, scale = 3) {
   if (!u) {
     u = pixelIcon(id, scale).toDataURL();
     pixUrlCache.set(key, u);
+  }
+  return u;
+}
+
+const badgeCache = new Map<string, HTMLCanvasElement>();
+/**
+ * Иконка награды на плашке-выноске: светлый фон, тёмный контур со срезанными углами
+ * и треугольник-указатель вниз (кончик — нижний центр холста). scale — размер пикселя.
+ */
+export function pixelBadge(id: string, scale = 1): HTMLCanvasElement {
+  const key = id + '|' + scale;
+  const c0 = badgeCache.get(key);
+  if (c0) return c0;
+  const g = grids.get(id) ?? MISSING;
+  const h = g.length, w = g[0]?.length ?? 0;
+  const PAD = 2;
+  const bw = w + PAD * 2 + 2, bh = h + PAD * 2 + 2; // плашка с контуром
+  const cx = Math.floor(bw / 2);
+  const W = bw, H = bh + 4; // + указатель и тень
+  // карта клеток: 0 пусто, 1 контур, 2 фон, 3 тень фона снизу
+  const cell = Array.from({ length: H }, () => new Uint8Array(W));
+  for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+    const cornerOut = (x === 0 || x === bw - 1) && (y === 0 || y === bh - 1);
+    if (cornerOut) continue;
+    const edge = x === 0 || y === 0 || x === bw - 1 || y === bh - 1;
+    const cornerIn = (x === 1 || x === bw - 2) && (y === 1 || y === bh - 2);
+    cell[y][x] = edge || cornerIn ? 1 : y === bh - 2 ? 3 : 2;
+  }
+  // указатель: треугольник, сливается с плашкой
+  for (let k = 0; k < 4; k++) {
+    const y = bh - 1 + k, half = 3 - k;
+    for (let x = cx - half - 1; x <= cx + half + 1; x++) {
+      if (x < 0 || x >= W) continue;
+      const border = x === cx - half - 1 || x === cx + half + 1 || k === 3;
+      cell[y][x] = border ? 1 : 3;
+    }
+  }
+  const c = document.createElement('canvas');
+  c.width = W * scale;
+  c.height = (H + 1) * scale;
+  const ctx = c.getContext('2d')!;
+  const px = (x: number, y: number) => ctx.fillRect(x * scale, y * scale, scale, scale);
+  // тень всей выноски на пиксель ниже
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (cell[y][x]) px(x, y + 1);
+  const colors = ['', '#0d0b1e', '#fff3d6', '#e2c48f'];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = cell[y][x];
+    if (!v) continue;
+    ctx.clearRect(x * scale, y * scale, scale, scale);
+    ctx.fillStyle = colors[v];
+    px(x, y);
+  }
+  // иконка с тонким контуром внутри плашки
+  const ox = 1 + PAD, oy = 1 + PAD;
+  const filled = (x: number, y: number) => !!g[y]?.[x];
+  ctx.fillStyle = '#0d0b1e';
+  for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) {
+    if (filled(x, y)) continue;
+    if (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1)) px(ox + x, oy + y);
+  }
+  g.forEach((r, y) => r.forEach((col, x) => {
+    if (!col) return;
+    ctx.fillStyle = col;
+    px(ox + x, oy + y);
+  }));
+  badgeCache.set(key, c);
+  return c;
+}
+
+const badgeUrlCache = new Map<string, string>();
+export function pixelBadgeUrl(id: string, scale = 3) {
+  const key = id + '|' + scale;
+  let u = badgeUrlCache.get(key);
+  if (!u) {
+    u = pixelBadge(id, scale).toDataURL();
+    badgeUrlCache.set(key, u);
   }
   return u;
 }

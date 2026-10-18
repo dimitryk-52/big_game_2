@@ -3,9 +3,7 @@ import type { GameClient } from '../shared/client';
 import type { GameState, Player, PublicQuestion } from '../shared/types';
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
-import { DebugMenu, phoneDebugEnabled } from '../ui/DebugMenu';
-
-const DEBUG = phoneDebugEnabled();
+import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, SkillRow, TimerBar, skillMax } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
@@ -16,6 +14,7 @@ import { Pachinko } from './Pachinko';
 import { RingGame } from './RingGame';
 import { Shop } from './Shop';
 import { unlockAudio } from '../shared/sound';
+import { LOGO_URL } from '../shared/logo';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -78,8 +77,8 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
   return (
     <div class="phone scroll">
       <div class="join-head">
-        <h2>BIG GAME 2</h2>
-        <div class="jp">ビッグゲーム 2 · комната {client.room}</div>
+        {LOGO_URL ? <img class="menu-logo small" src={LOGO_URL} alt="BIG GAME 2" /> : <h2>BIG GAME 2</h2>}
+        <div class="jp">{LOGO_URL ? '' : 'ビッグゲーム 2 · '}комната {client.room}</div>
       </div>
       <div class="tabs">
         <button class={'tab' + (mode === 'new' ? ' on' : '')} onClick={() => setMode('new')}>Новый игрок</button>
@@ -154,13 +153,27 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
     if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || (tab === 'ring' && !hasRing)) setTab('home');
   }, [hasPachinko, hasRing, tab]);
 
+  const [debug, setDebug] = useState(phoneDebugEnabled);
   const [debugOpen, setDebugOpen] = useState(false);
+  // отладка: перенос к автомату — вкладку открываем, когда хост подтвердит новую префектуру
+  const [pendingTab, setPendingTab] = useState<'pachinko' | 'ring' | null>(null);
+  useEffect(() => {
+    if ((pendingTab === 'pachinko' && hasPachinko) || (pendingTab === 'ring' && hasRing)) { setTab(pendingTab); setPendingTab(null); }
+  }, [pendingTab, hasPachinko, hasRing]);
+  const onGame = (game: 'pachinko' | 'ring', pid: string) => {
+    const prefs = game === 'pachinko' ? s.settings.pachinkoPrefs : s.settings.ringPrefs;
+    if (!prefs.length) return alert('В настройках нет префектур с этим автоматом');
+    if (pid === me.id && me.pref != null && prefs.includes(me.pref)) setTab(game);
+    else { client.send({ t: 'ctl', cmd: 'teleport', args: { pid: me.id, pref: prefs[0] } }); setPendingTab(game); }
+    setDebugOpen(false);
+  };
+  const toggleDebug = () => { setPhoneDebug(!debug); setDebug(!debug); setDebugOpen(!debug); };
   return (
     <div class="phone game">
-      <Header client={client} s={s} me={me} />
-      {DEBUG && <button class="debug-fab" onClick={() => setDebugOpen((x) => !x)}>🐞</button>}
-      {DEBUG && debugOpen && client.s && (
-        <div class="debug-sheet"><DebugMenu s={client.s} send={(cmd, args) => client.send({ t: 'ctl', cmd, args })} onClose={() => setDebugOpen(false)} /></div>
+      <Header client={client} s={s} me={me} onSecret={toggleDebug} />
+      {debug && <button class="debug-fab" onClick={() => setDebugOpen((x) => !x)}>🐞</button>}
+      {debug && debugOpen && client.s && (
+        <div class="debug-sheet"><DebugMenu s={client.s} send={(cmd, args) => client.send({ t: 'ctl', cmd, args })} onClose={() => setDebugOpen(false)} onGame={onGame} /></div>
       )}
       <div class="main">
         {/* мини-игры остаются смонтированными (на паузе), пока идёт вопрос */}
@@ -169,7 +182,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
             <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
-        {s.stage.t === 'prefIntro' && <PrefIntro key={s.stage.code} code={s.stage.code} who={s.players[s.stage.pid]} reward={s.prefs[s.stage.code]?.reward} />}
+        {s.stage.t === 'prefIntro' && <PrefIntro key={s.stage.code} code={s.stage.code} who={s.players[s.stage.pid]} reward={s.prefs[s.stage.code]?.taken ? undefined : s.prefs[s.stage.code]?.reward} />}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
         {(att === 'landing' || att === 'move') && <MapPick key={att} client={client} s={s} me={me} mode={att} />}
@@ -197,10 +210,17 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   );
 }
 
-function Header({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
+function Header({ client, s, me, onSecret }: { client: GameClient; s: GameState; me: Player; onSecret: () => void }) {
+  // 5 быстрых тапов по своему аватару — включить/выключить меню отладки
+  const taps = useRef<number[]>([]);
+  const tap = () => {
+    const t = Date.now();
+    taps.current = [...taps.current.filter((x) => t - x < 2000), t];
+    if (taps.current.length >= 5) { taps.current = []; onSecret(); }
+  };
   return (
     <header class="hdr" style={{ borderColor: me.color }}>
-      <Avatar p={me} size={40} dim={me.hp <= 0} />
+      <span onClick={tap}><Avatar p={me} size={40} dim={me.hp <= 0} /></span>
       <div class="col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
         <div class="row" style={{ gap: 6 }}>
           <b class="ellipsis">{me.name}</b>
@@ -370,7 +390,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
       {st.topics.map((id) => {
         const t = s.settings.topics.find((x) => x.id === id)!;
         return (
-          <button class="btn big-btn" style={{ borderColor: t.color }} disabled={sent} onClick={() => send(id)}>
+          <button class="btn big-btn" style={{ '--c': t.color } as any} disabled={sent} onClick={() => send(id)}>
             <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <b>{me.stats[id]}</b> <span class="muted">против</span> <b>{foe?.stats[id]}</b>
           </button>
         );

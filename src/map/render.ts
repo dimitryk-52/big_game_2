@@ -124,16 +124,90 @@ export function renderPrefFog(regions: Uint8Array, code: number) {
   });
 }
 
-/** контур префектуры толщиной в пиксель карты (для выбранной) */
+/** контур префектуры: по пикселю карты внутри и снаружи границы (для подсветки и выбранной) */
 export function renderPrefOutline(regions: Uint8Array, code: number) {
-  const T = 1;
-  return prefLayer(regions, code, T + 1, (x, y, inside) => {
-    // пиксель контура: снаружи префектуры, но в пределах T от неё
-    if (inside) return null;
-    for (let dy = -T; dy <= T; dy++) for (let dx = -T; dx <= T; dx++) {
-      if (dx * dx + dy * dy > T * T) continue;
-      if (codeAt(regions, x + dx, y + dy) === code) return [255, 255, 255, 255];
+  return prefLayer(regions, code, 2, (x, y, inside) => {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if ((codeAt(regions, x + dx, y + dy) === code) !== inside) return [255, 255, 255, 255];
     }
     return null;
   });
+}
+
+/**
+ * Пиксельная стрелка-дуга от a к b (в пикселях карты): светлое тело, тёмный контур, тень снизу.
+ * Рисуется попиксельно в сетке карты, поэтому на любом зуме остаётся пиксель-артом.
+ * Возвращает холст, его позицию в мире и направление наконечника (для покачивания).
+ */
+export function renderMoveArrow(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  // концы чуть отступают от фишки и от цели; дуга выгибается вверх
+  const p0 = { x: a.x + ux * 4, y: a.y + uy * 4 - 5 };
+  const p2 = { x: b.x - ux * 2, y: b.y - uy * 2 - 5 };
+  let nx = -uy, ny = ux;
+  if (ny > 0) { nx = -nx; ny = -ny; }
+  const bend = Math.min(18, len * 0.3);
+  const p1 = { x: (p0.x + p2.x) / 2 + nx * bend, y: (p0.y + p2.y) / 2 + ny * bend };
+  const at = (t: number) => ({
+    x: (1 - t) * (1 - t) * p0.x + 2 * (1 - t) * t * p1.x + t * t * p2.x,
+    y: (1 - t) * (1 - t) * p0.y + 2 * (1 - t) * t * p1.y + t * t * p2.y,
+  });
+  // наконечник: треугольник по касательной в конце
+  const tx0 = p2.x - p1.x, ty0 = p2.y - p1.y;
+  const tl = Math.hypot(tx0, ty0) || 1;
+  const tx = tx0 / tl, ty = ty0 / tl;
+  const HEAD = 8, HALF = 6, R = 2.2;
+  const base = { x: p2.x - tx * HEAD, y: p2.y - ty * HEAD };
+  const tri = [p2, { x: base.x - ty * HALF, y: base.y + tx * HALF }, { x: base.x + ty * HALF, y: base.y - tx * HALF }];
+  // тело дуги заканчивается у основания наконечника
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i <= 120; i++) {
+    const q = at(i / 120);
+    if (Math.hypot(q.x - p2.x, q.y - p2.y) < HEAD - 0.5) break;
+    pts.push(q);
+  }
+  const xs = [...pts.map((q) => q.x), ...tri.map((q) => q.x)], ys = [...pts.map((q) => q.y), ...tri.map((q) => q.y)];
+  const ox = Math.floor(Math.min(...xs)) - 4, oy = Math.floor(Math.min(...ys)) - 4;
+  const w = Math.ceil(Math.max(...xs)) - ox + 5, h = Math.ceil(Math.max(...ys)) - oy + 6;
+  const side = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => (p.x - r.x) * (q.y - r.y) - (q.x - r.x) * (p.y - r.y);
+  const inTri = (x: number, y: number) => {
+    const pt = { x, y };
+    const d1 = side(pt, tri[0], tri[1]), d2 = side(pt, tri[1], tri[2]), d3 = side(pt, tri[2], tri[0]);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  };
+  const body = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const cx = ox + x + 0.5, cy = oy + y + 0.5;
+    let hit = inTri(cx, cy);
+    for (let i = 0; !hit && i < pts.length; i++) hit = (pts[i].x - cx) ** 2 + (pts[i].y - cy) ** 2 <= R * R;
+    body[y * w + x] = hit ? 1 : 0;
+  }
+  const B = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && body[y * w + x] === 1;
+  const near = (x: number, y: number) => {
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if (B(x + i, y + j)) return true;
+    return false;
+  };
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(w, h);
+  const d = img.data;
+  const put = (x: number, y: number, r: number, g: number, b: number, al = 255) => {
+    const i = (y * w + x) * 4;
+    d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = al;
+  };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (B(x, y)) {
+      // верхняя кромка тела светлее, нижняя темнее — объём как у пиксельных иконок
+      if (!B(x, y - 1)) put(x, y, 0xc8, 0xff, 0xf0);
+      else if (!B(x, y + 1)) put(x, y, 0x2f, 0xa8, 0x9a);
+      else put(x, y, 0x5f, 0xe0, 0xc4);
+    } else if (near(x, y)) put(x, y, 0x0d, 0x1a, 0x2a);
+    else if (near(x, y - 1) || near(x - 1, y - 1)) put(x, y, 0, 0, 0, 90);
+  }
+  ctx.putImageData(img, 0, 0);
+  return { canvas: c, x: ox * SCALE, y: oy * SCALE, dir: { x: tx, y: ty } };
 }

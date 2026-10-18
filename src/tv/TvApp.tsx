@@ -15,6 +15,7 @@ import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
+import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -135,9 +136,11 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
 
   return (
-    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '')}>
+    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '')}>
       <div class="tv-map" ref={mapEl} />
-      {st.t === 'question' && prefBgUrl(s.q?.pref) && <img class="tv-qbg" src={prefBgUrl(s.q?.pref)!} alt="" draggable={false} />}
+      {st.t === 'question' && (prefBgUrl(s.q?.pref)
+        ? <img class="tv-qbg" src={prefBgUrl(s.q?.pref)!} alt="" draggable={false} />
+        : <div class="tv-qdim" />)}
       <TopBar s={s} />
       {s.phase !== 'lobby' && <PlayerList s={s} />}
       <Log s={s} />
@@ -162,9 +165,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         </Prompt>
       )}
       {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} → <b>{PREF[st.to].ru} {PREF[st.to].ja}</b></Prompt>}
-      {inDuel && <DuelHud s={s} />}
+      {inDuel && !(st.t === 'question' && s.q?.context === 'duel') && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
-      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} reward={s.prefs[st.code]?.reward} />}
+      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} reward={s.prefs[st.code]?.taken ? undefined : s.prefs[st.code]?.reward} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
         <div class="duel-pick pop">
@@ -211,7 +214,7 @@ function TopBar({ s }: { s: GameState }) {
   const phase = { lobby: 'Регистрация', calib: 'Калибровка', landing: 'Высадка', turns: `Круг ${s.round}`, end: 'Финал' }[s.phase];
   return (
     <div class="topbar">
-      <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>
+      {LOGO_TEXT_URL ? <img class="logo-img" src={LOGO_TEXT_URL} alt="BIG GAME 2" /> : <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>}
       <div class="chip">{phase}</div>
       {s.phase !== 'lobby' && <div class="chip">Комната {s.room}</div>}
     </div>
@@ -230,7 +233,7 @@ function PlayerList({ s }: { s: GameState }) {
       {ids.map((id) => {
         const p = s.players[id];
         return (
-          <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ borderColor: p.color }}>
+          <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ '--frame': p.color } as any}>
             <div class="pc-top">
               <Avatar p={p} size={56} dim={p.hp <= 0} />
               <div class="pc-info">
@@ -277,8 +280,7 @@ function Lobby({ s, host }: { s: GameState; host: Host }) {
   return (
     <div class="lobby pop">
       <div class="lobby-left">
-        <h1>BIG GAME 2</h1>
-        <div class="jp-title">ビッグゲーム 2</div>
+        {LOGO_URL ? <img class="lobby-logo" src={LOGO_URL} alt="BIG GAME 2" /> : <><h1>BIG GAME 2</h1><div class="jp-title">ビッグゲーム 2</div></>}
         {qr && <img class="qr" src={qr} alt="QR" />}
         <div class="room">Комната: <b>{s.room}</b></div>
         <div class="url">{url}</div>
@@ -374,13 +376,15 @@ function BonusPrompt({ s }: { s: GameState }) {
 function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
   const topic = s.settings.topics.find((t) => t.id === q.topic);
   const imgs = q.answerImages;
+  const duel = q.context === 'duel' && s.duel ? s.duel : null;
   const choosers = (i: number) => Object.entries(q.choices ?? {}).filter(([, c]) => c === i).map(([id]) => s.players[id]).filter(Boolean);
   return (
-    <div class="qwrap">
+    <div class={'qwrap' + (duel ? ' duel' : '')}>
+      {duel && <Fighter s={s} q={q} id={duel.attacker} role="атакует" side="left" />}
       <div class={'qpanel pop' + (q.special ? ' special' : '')}>
         <div class="qhead">
           <span class="qtitle">{q.title}</span>
-          {topic && <span class="chip" style={{ borderColor: topic.color, color: topic.color }}>{topic.name}</span>}
+          {topic && <span class="chip" style={{ '--frame': topic.color, color: topic.color } as any}>{topic.name}</span>}
           {q.special && <span class="chip special">💥 СПЕЦВОПРОС</span>}
         </div>
         {q.media?.type === 'image' && <img class="qmedia" src={resolveMedia(q.media.url)} alt="" />}
@@ -404,24 +408,43 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
           })}
         </div>
         {!q.revealed && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
-        <div class="qparts">
+        {!duel && <div class="qparts">
           {q.participants.map((id) => {
             const p = s.players[id];
             if (!p) return null;
             const done = q.answered.includes(id);
             const ok = q.revealed && q.choices?.[id] === q.correct;
             return (
-              <div class={'qpart' + (done ? ' done' : '') + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
+              <div class={'qpart' + (done || q.revealed ? ' done' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
                 <Avatar p={p} size={36} />
                 <span>{p.name}</span>
-                {!q.revealed && done && <b>✔</b>}
-                {q.revealed && <b>{ok ? '✔' : '✘'}</b>}
                 {q.revealed && q.results?.[id] && <span class="qres"><ResText text={q.results[id]} topics={s.settings.topics} /></span>}
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
+      {duel && <Fighter s={s} q={q} id={duel.defender} role="защищается" side="right" />}
+    </div>
+  );
+}
+
+/** боец дуэли сбоку от вопроса: полупрозрачный, пока не ответил; после ответа — зелёный/красный */
+function Fighter({ s, q, id, role, side }: { s: GameState; q: PublicQuestion; id: string; role: string; side: 'left' | 'right' }) {
+  const p = s.players[id];
+  if (!p) return <div class="fighter" />;
+  const d = s.duel;
+  const done = q.answered.includes(id) || q.revealed;
+  const ok = q.revealed && q.choices?.[id] === q.correct;
+  const hurt = d?.lastHit?.to === id;
+  return (
+    <div class={'fighter ' + side + (done ? '' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (d?.asker === id ? ' asking' : '')}>
+      <div class="fighter-role">{d?.asker === id ? 'спрашивает' : role}</div>
+      <div class={'fighter-av' + (hurt ? ' hurt' : '')} key={hurt ? d!.lastHit!.n : 0}><Avatar p={p} size={128} /></div>
+      <div class="fighter-name">{p.name}</div>
+      <HpBar hp={p.hp} max={p.maxHp} />
+      <SkillChips topics={s.settings.topics.filter((t) => t.combat)} stats={p.stats} size={20} />
+      {q.revealed && q.results?.[id] && <div class="fighter-res"><ResText text={q.results[id]} topics={s.settings.topics} /></div>}
     </div>
   );
 }

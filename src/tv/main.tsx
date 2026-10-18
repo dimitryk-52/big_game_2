@@ -1,7 +1,10 @@
+import '../ui/pxStyles';
 import { render } from 'preact';
+import { loadIcons } from '../shared/sprites';
 import { useEffect, useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/tv.css';
+import '../styles/kit.css';
 import { Host } from '../host/host';
 import { TvApp } from './TvApp';
 import { getStore } from '../shared/store';
@@ -10,6 +13,7 @@ import { unlockAudio } from '../shared/sound';
 import { netMode } from '../shared/net';
 import { MediaBox } from './MediaBox';
 import type { Question } from '../shared/types';
+import { LOGO_URL } from '../shared/logo';
 
 function setRoomInUrl(room: string) {
   const u = new URL(location.href);
@@ -57,8 +61,10 @@ function Boot() {
   return (
     <div class="splash">
       <div class="panel pop" style={{ textAlign: 'center', minWidth: 420 }}>
-        <h1 style={{ margin: 0 }}>BIG GAME 2</h1>
-        <div style={{ color: 'var(--pink)', marginBottom: 20 }}>ビッグゲーム 2</div>
+        {LOGO_URL ? <img class="menu-logo" src={LOGO_URL} alt="BIG GAME 2" /> : <>
+          <h1 style={{ margin: 0 }}>BIG GAME 2</h1>
+          <div style={{ color: 'var(--pink)', marginBottom: 20 }}>ビッグゲーム 2</div>
+        </>}
         <div class="muted" style={{ marginBottom: 16 }}>Комната <b style={{ color: '#fff' }}>{room}</b> · сеть: {netMode()} · данные: {getStore().kind}</div>
         {snap === undefined && <div>Загрузка…</div>}
         {snap !== undefined && (
@@ -83,4 +89,5 @@ function Boot() {
   );
 }
 
-render(<Boot />, document.getElementById('app')!);
+// иконки — PNG из src/img/icons, читаются до первого рендера
+void loadIcons().then(() => render(<Boot />, document.getElementById('app')!));

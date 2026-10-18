@@ -7,6 +7,9 @@
 #   python scripts/pixelart.py вход.png выход.png [--cell 3] [--colors 64]
 #   python scripts/pixelart.py --bgs [--cell 3] [--colors 64] [--force]
 #       все src/img/bgs/bg_*_orig.png → src/img/bgs/bg_*.png (пропускает уже готовые, если не --force)
+#   python scripts/pixelart.py --logo [--cell 6]
+#       src/img/logo.png → logo_menu.webp (уменьшенный, для меню);
+#       src/img/logo_text.png → logo_text_px.png (пиксель-арт для угла ТВ), если файл есть
 #
 # Нужны: pillow, numpy.
 import sys
@@ -26,7 +29,8 @@ def palette(img: Image.Image, colors: int) -> np.ndarray:
 
 
 def pixelize(img: Image.Image, cell: float, colors: int = 64) -> Image.Image:
-    """cell — размер «пикселя» исходника в его пикселях (может быть дробным)"""
+    """cell — размер «пикселя» исходника в его пикселях (может быть дробным); прозрачность сохраняется"""
+    alpha = np.asarray(img.convert('RGBA'))[..., 3] if img.mode in ('RGBA', 'LA', 'P') else None
     img = img.convert('RGB')
     W, H = img.size
     w, h = max(1, round(W / cell)), max(1, round(H / cell))
@@ -43,7 +47,12 @@ def pixelize(img: Image.Image, cell: float, colors: int = 64) -> Image.Image:
     votes = np.zeros(w * h * k, np.float32)
     np.add.at(votes, cid * k + idx.ravel().astype(np.int64), wt)
     best = despeckle(votes.reshape(w * h, k).argmax(1).reshape(h, w))
-    return Image.fromarray(pal[best], 'RGB')
+    if alpha is None:
+        return Image.fromarray(pal[best], 'RGB')
+    # клетка непрозрачна, если непрозрачна большая часть её пикселей
+    op = labels_down((alpha >= 128).astype(np.uint8), w, h)
+    rgba = np.dstack([pal[best], (op * 255).astype(np.uint8)])
+    return Image.fromarray(rgba, 'RGBA')
 
 
 def despeckle(ix: np.ndarray) -> np.ndarray:
@@ -73,7 +82,21 @@ def arg(name, default, cast=float):
 if __name__ == '__main__':
     cell = arg('--cell', 3.0)
     colors = arg('--colors', 64, int)
-    if '--bgs' in sys.argv:
+    if '--logo' in sys.argv:
+        logo = ROOT / 'src/img/logo.png'
+        if logo.exists():
+            im = Image.open(logo).convert('RGBA')
+            im.thumbnail((720, 720), Image.LANCZOS)
+            im.save(ROOT / 'src/img/logo_menu.webp', quality=88, method=6)
+            print('logo.png → logo_menu.webp', im.size)
+        text = ROOT / 'src/img/logo_text.png'
+        if text.exists():
+            out = pixelize(Image.open(text), arg('--cell', 6.0), arg('--colors', 24, int))
+            out.save(ROOT / 'src/img/logo_text_px.png', optimize=True)
+            print('logo_text.png → logo_text_px.png', out.size)
+        else:
+            print('нет src/img/logo_text.png — пиксельный логотип для ТВ не собран')
+    elif '--bgs' in sys.argv:
         for src in sorted(BGS.glob('bg_*_orig.png')):
             dst = src.with_name(src.name.replace('_orig', ''))
             if dst.exists() and '--force' not in sys.argv and dst.stat().st_mtime >= src.stat().st_mtime:
