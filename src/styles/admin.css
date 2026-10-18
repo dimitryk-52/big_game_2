@@ -1,0 +1,26 @@
+.admin { min-height: 100vh; font-size: 15px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.admin button, .admin input, .admin select, .admin textarea { font-family: inherit; }
+.admin-hdr { display: flex; gap: 16px; align-items: center; padding: 10px 16px; background: var(--bg2); border-bottom: 3px solid #fff; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+.admin-hdr nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.pad { padding: 16px; }
+.small { font-size: 12px; }
+.nowrap { white-space: nowrap; }
+.note { background: #2a2f5c; border-left: 4px solid var(--yellow); padding: 8px 12px; font-size: 14px; }
+.warn { background: #5a1a1a; border: 2px solid var(--red); padding: 8px 12px; margin: 8px 16px; }
+select, .inp-s, textarea { background: #11142b; border: 2px solid #fff; color: #fff; padding: 6px 8px; }
+textarea { width: 100%; resize: vertical; }
+.inp-s.num { width: 80px; }
+.qtable { width: 100%; border-collapse: collapse; }
+.qtable th, .qtable td { padding: 6px 8px; border-bottom: 1px solid #ffffff22; text-align: left; vertical-align: middle; }
+.qtable th { position: sticky; top: 56px; background: var(--bg); }
+.qtable tr:hover td { background: #ffffff08; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; z-index: 20; padding: 16px; }
+.modal { width: min(820px, 100%); max-height: 92vh; overflow-y: auto; }
+.ans-row { display: flex; gap: 8px; align-items: center; padding: 4px; border: 2px solid transparent; }
+.ans-row.right { border-color: var(--green); background: #143a1d; }
+.preview { max-height: 180px; max-width: 100%; object-fit: contain; align-self: flex-start; border: 2px solid #fff; }
+.thumb { height: 40px; }
+label { display: inline-flex; gap: 6px; align-items: center; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 6px 24px; }
+.set-row { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; border-bottom: 1px solid #ffffff15; }
+.remote-btns .btn { padding: 14px 18px; }

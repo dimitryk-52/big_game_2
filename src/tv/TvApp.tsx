@@ -1,0 +1,532 @@
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import QRCode from 'qrcode';
+import type { GameState, Player, PublicQuestion } from '../shared/types';
+import type { Host } from '../host/host';
+import { MapView } from '../map/MapView';
+import { PREF, neighbors, prefName } from '../map/mapData';
+import { Avatar, HpBar, LETTERS, TimerBar } from '../ui/common';
+import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import { fmtYen, now } from '../shared/util';
+import { playRhythmMusic, sfx, setSound, soundOn } from '../shared/sound';
+import { RhythmBoard } from '../games/RhythmBoard';
+import { PnPLayer, pnpBus } from '../games/PnP';
+import { resolveMedia } from './localMedia';
+import { MediaBox } from './MediaBox';
+
+export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
+  const [, force] = useState(0);
+  const mapEl = useRef<HTMLDivElement>(null);
+  const map = useRef<MapView | null>(null);
+  const lastStageKey = useRef('');
+  const [panel, setPanel] = useState(true);
+  const s = host.state;
+
+  // подписка на события движка
+  useEffect(() => {
+    let raf: any = 0;
+    const off = host.onFx((k, d) => {
+      if (k === 'state') {
+        // таймер, а не rAF: в фоновой вкладке rAF замирает
+        if (!raf) raf = setTimeout(() => { raf = 0; force((x) => x + 1); }, 30);
+        return;
+      }
+      const m = map.current;
+      switch (k) {
+        case 'question': sfx.question(); break;
+        case 'answered': sfx.answered(); break;
+        case 'reveal': sfx.reveal(); break;
+        case 'join': sfx.join(); break;
+        case 'land': sfx.land(); m?.puff(d.code); break;
+        case 'arrive': sfx.land(); m?.puff(d.code, d.firstVisit ? 0xffffff : 0xfff27a); break;
+        case 'hit': sfx.hit(); m?.hit(d.pid); break;
+        case 'reward': sfx.coin(); break;
+        case 'duel': sfx.duel(); break;
+        case 'prize': {
+          sfx.fanfare();
+          const p = host.state.players[d.pid];
+          if (p?.pref) m?.confetti(p.pref);
+          break;
+        }
+        case 'rhythm': playRhythmMusic(d.seed, d.bpm, d.beats, d.startAt, host.state.settings.audioLatencyMs); break;
+        case 'pnp': pnpBus.emit(d.pid, d.ev); break;
+        case 'ring': pnpBus.emit(d.pid, { k: 'ring', ...d }); break;
+        case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;
+      }
+    });
+    return () => { off(); clearTimeout(raf); };
+  }, [host]);
+
+  // карта
+  useEffect(() => {
+    let dead = false;
+    MapView.create(mapEl.current!, { interactive: true }).then((v) => {
+      if (dead) return v.destroy();
+      map.current = v;
+      force((x) => x + 1);
+    });
+    return () => { dead = true; map.current?.destroy(); };
+  }, []);
+
+  // клавиши ведущего
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); host.ctl(host.state.phase === 'lobby' ? 'start' : 'next'); }
+      if (e.code === 'KeyP') host.ctl('pause');
+      if (e.code === 'KeyH') setPanel((x) => !x);
+      if (e.code === 'KeyF') toggleFullscreen();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [host]);
+
+  // синхронизация карты с состоянием
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const st = s.stage;
+    const players = s.joinOrder.map((id) => s.players[id]).filter(Boolean);
+    const activePid = 'pid' in st ? (st as any).pid : s.turnOrder[s.turnIdx] ?? null;
+    m.update({
+      prefs: s.prefs,
+      players,
+      highlight: st.t === 'move' ? st.options : undefined,
+      highlight2: st.t === 'move' ? st.options2 : undefined,
+      blocked: st.t === 'landing' ? st.blocked : undefined,
+      activePid: s.phase === 'turns' ? activePid : null,
+      machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+    });
+    const key = st.t + ':' + ('pid' in st ? (st as any).pid : '') + ':' + (st.t === 'moving' ? st.to : '');
+    if (key === lastStageKey.current) return;
+    lastStageKey.current = key;
+    const pref = (pid: string) => s.players[pid]?.pref;
+    switch (st.t) {
+      case 'turnStart': {
+        const p = pref(st.pid);
+        if (p) m.focus([p, ...neighbors(p)], true, 2.4);
+        break;
+      }
+      case 'move': {
+        const p = pref(st.pid)!;
+        m.focus([p, ...st.options, ...st.options2], true, 2.6);
+        break;
+      }
+      case 'moving':
+        m.animateMove(st.pid, st.path);
+        m.focus(st.path, true, 2.6);
+        break;
+      case 'landing':
+      case 'lobby':
+      case 'calibResult':
+        m.fitAll();
+        break;
+      case 'banner':
+        if (s.phase === 'calib' || s.phase === 'landing') m.fitAll();
+        break;
+    }
+  });
+
+  const st = s.stage;
+  const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
+
+  return (
+    <div class="tv">
+      <div class="tv-map" ref={mapEl} />
+      <TopBar s={s} />
+      {s.phase !== 'lobby' && <PlayerList s={s} />}
+      <Log s={s} />
+      {st.t === 'lobby' && <Lobby s={s} host={host} />}
+      {st.t === 'banner' && <Banner key={st.text} text={st.text} sub={st.sub} big={st.big} />}
+      {st.t === 'calibResult' && <CalibResult s={s} />}
+      {st.t === 'landing' && (
+        <Prompt>
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> выбирает место высадки
+          <div class="prompt-timer"><TimerBar start={st.deadline - s.settings.landingTime * 1000} end={st.deadline} now={now} /></div>
+        </Prompt>
+      )}
+      {st.t === 'turnStart' && <Banner key={'ts' + st.pid} text={`Ход: ${s.players[st.pid]?.name ?? ''}`} sub={`Круг ${s.round} · ${prefName(s.players[st.pid]?.pref)}`} avatar={s.players[st.pid]} />}
+      {st.t === 'move' && (
+        <Prompt>
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> выбирает, куда идти
+          <div class="prompt-opts">
+            {st.options.map((c) => <span class="chip">{PREF[c].ru}</span>)}
+            {st.options2.map((c) => <span class="chip two">👟 {PREF[c].ru}</span>)}
+          </div>
+          {!s.players[st.pid]?.online && <div class="muted" style={{ fontSize: '0.7em' }}>Игрок не на связи — случайный ход через 15 c (или Пробел)</div>}
+        </Prompt>
+      )}
+      {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} → <b>{PREF[st.to].ru} {PREF[st.to].ja}</b></Prompt>}
+      {inDuel && <DuelHud s={s} />}
+      {st.t === 'bonus' && <BonusPrompt s={s} />}
+      {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
+      {st.t === 'duelPick' && (
+        <div class="duel-pick pop">
+          <b>{s.players[st.pid]?.name}</b> выбирает тему вопроса…
+          <TimerBar start={st.deadline - s.settings.pickTime * 1000} end={st.deadline} now={now} />
+        </div>
+      )}
+      {st.t === 'rhythm' && s.rhythm && (
+        <div class="tv-rhythm">
+          <RhythmBoard r={s.rhythm} now={now} spectator players={s.players} />
+        </div>
+      )}
+      {st.t === 'duelResult' && s.duel && <DuelResult s={s} />}
+      {st.t === 'reward' && <RewardPopup s={s} />}
+      {st.t === 'prize' && <PrizePopup s={s} />}
+      {st.t === 'end' && <EndScreen s={s} />}
+      {s.paused && <div class="paused">ПАУЗА</div>}
+      <PnPLayer s={s} />
+      {panel && <HostPanel s={s} host={host} onNewGame={onNewGame} />}
+    </div>
+  );
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen();
+}
+
+function joinUrl(room: string) {
+  const u = new URL('play.html', location.href);
+  u.search = `?room=${room}`;
+  const net = new URLSearchParams(location.search).get('net');
+  if (net) u.search += `&net=${net}`;
+  return u.toString();
+}
+
+function TopBar({ s }: { s: GameState }) {
+  const phase = { lobby: 'Регистрация', calib: 'Калибровка', landing: 'Высадка', turns: `Круг ${s.round}`, end: 'Финал' }[s.phase];
+  return (
+    <div class="topbar">
+      <div class="logo">BIG GAME 2 <span>ビッグゲーム 2</span></div>
+      <div class="chip">{phase}</div>
+      {s.phase !== 'lobby' && <div class="chip">Комната {s.room}</div>}
+    </div>
+  );
+}
+
+function PlayerList({ s }: { s: GameState }) {
+  const order = s.turnOrder.length ? s.turnOrder : s.joinOrder;
+  const cur = s.phase === 'turns' ? s.turnOrder[s.turnIdx] : null;
+  const answered = new Set(s.q?.answered ?? []);
+  const combat = s.settings.topics.filter((t) => t.combat);
+  return (
+    <div class="plist">
+      {order.map((id, i) => {
+        const p = s.players[id];
+        if (!p) return null;
+        return (
+          <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ borderColor: p.color }}>
+            <div class="pcard-head">
+              <span class="pnum">{i + 1}</span>
+              <Avatar p={p} size={34} dim={p.hp <= 0} />
+              <span class="pname">{p.name}</span>
+              <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
+              {p.busy && <span title={p.busy}>{p.busy === 'pachinko' ? '🎰' : '🎡'}</span>}
+              {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
+            </div>
+            <HpBar hp={p.hp} max={p.maxHp} />
+            <div class="pcard-stats">
+              <span>{fmtYen(p.yen)}</span>
+              <span>⭐{p.stars}</span>
+              {p.specials > 0 && <span>💥{p.specials}</span>}
+              {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
+            </div>
+            <div class="pcard-stats small">
+              {combat.map((t) => <span style={{ color: t.color }}>{t.name.slice(0, 3)} {p.stats[t.id] ?? 0}</span>)}
+              {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Log({ s }: { s: GameState }) {
+  return (
+    <div class="log">
+      {s.log.slice(-4).map((l) => <div key={l.id} class="slide-up">{l.text}</div>)}
+    </div>
+  );
+}
+
+function Lobby({ s, host }: { s: GameState; host: Host }) {
+  const url = joinUrl(s.room);
+  const [qr, setQr] = useState('');
+  useEffect(() => { QRCode.toDataURL(url, { margin: 1, scale: 8 }).then(setQr); }, [url]);
+  const local = ['localhost', '127.0.0.1'].includes(location.hostname);
+  const players = s.joinOrder.map((id) => s.players[id]).filter(Boolean);
+  return (
+    <div class="lobby pop">
+      <div class="lobby-left">
+        <h1>BIG GAME 2</h1>
+        <div class="jp-title">ビッグゲーム 2</div>
+        {qr && <img class="qr" src={qr} alt="QR" />}
+        <div class="room">Комната: <b>{s.room}</b></div>
+        <div class="url">{url}</div>
+        {local && host.net.mode !== 'supabase' && <div class="warn">⚠ ТВ открыт по localhost — телефоны не смогут подключиться. Открой эту страницу по сетевому адресу (см. вывод npm run dev).</div>}
+      </div>
+      <div class="lobby-right">
+        <h2>Игроки ({players.length}/10)</h2>
+        <div class="lobby-players">
+          {players.map((p) => (
+            <div class="lobby-p pop" key={p.id}>
+              <Avatar p={p} size={72} />
+              <div>{p.name}</div>
+            </div>
+          ))}
+          {!players.length && <div class="muted">Сканируйте QR-код телефоном…</div>}
+        </div>
+        <div class="row" style={{ marginTop: 24, gap: 16 }}>
+          <button class="btn primary" disabled={!players.length} onClick={() => host.ctl('start')}>▶ Начать игру</button>
+          <button class="btn small" onClick={() => host.ctl('addBot')}>+ бот</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Banner({ text, sub, big, avatar }: { text: string; sub?: string; big?: boolean; avatar?: Player }) {
+  return (
+    <div class={'banner' + (big ? ' big' : '')}>
+      <div class="banner-inner pop">
+        {avatar && <Avatar p={avatar} size={80} />}
+        <div class="banner-text">{text}</div>
+        {sub && <div class="banner-sub">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Prompt({ children }: { children: any }) {
+  return <div class="prompt slide-up">{children}</div>;
+}
+
+function CalibResult({ s }: { s: GameState }) {
+  const topics = s.settings.topics.filter((t) => t.combat);
+  return (
+    <div class="overlay-center">
+      <div class="panel calib pop">
+        <h2>Итоги калибровки</h2>
+        <table>
+          <thead>
+            <tr><th>Ход</th><th>Игрок</th>{topics.map((t) => <th style={{ color: t.color }}>{t.name}</th>)}</tr>
+          </thead>
+          <tbody>
+            {s.turnOrder.map((id, i) => {
+              const p = s.players[id];
+              return (
+                <tr class="slide-up" style={{ animationDelay: `${i * 0.12}s` }}>
+                  <td>{i + 1}</td>
+                  <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
+                  {topics.map((t) => <td class="big">{p.stats[t.id]}</td>)}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div class="muted">Самый слабый ходит первым. Высадка — в обратном порядке.</div>
+      </div>
+    </div>
+  );
+}
+
+function BonusPrompt({ s }: { s: GameState }) {
+  const st = s.stage;
+  if (st.t !== 'bonus') return null;
+  return (
+    <div class="bonus-prompt slide-up">
+      <div>Выбор бонусов</div>
+      <div class="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+        {st.pids.map((id) => (
+          <span class="chip">
+            <Avatar p={s.players[id]} size={24} /> {s.players[id].name}
+            {st.picked[id] ? (st.picked[id] === 'none' ? ' — нет' : ' ' + BONUS_INFO[st.picked[id] as 'fifty1'].icon) : ' …'}
+          </span>
+        ))}
+      </div>
+      <TimerBar start={st.deadline - s.settings.bonusTime * 1000} end={st.deadline} now={now} />
+    </div>
+  );
+}
+
+function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
+  const topic = s.settings.topics.find((t) => t.id === q.topic);
+  const imgs = q.answerImages;
+  const choosers = (i: number) => Object.entries(q.choices ?? {}).filter(([, c]) => c === i).map(([id]) => s.players[id]).filter(Boolean);
+  return (
+    <div class="qwrap">
+      <div class={'qpanel pop' + (q.special ? ' special' : '')}>
+        <div class="qhead">
+          <span class="qtitle">{q.title}</span>
+          {topic && <span class="chip" style={{ borderColor: topic.color, color: topic.color }}>{topic.name}</span>}
+          {q.special && <span class="chip special">💥 СПЕЦВОПРОС</span>}
+        </div>
+        {q.media?.type === 'image' && <img class="qmedia" src={resolveMedia(q.media.url)} alt="" />}
+        {q.media?.type === 'audio' && <audio class="qaudio" src={resolveMedia(q.media.url)} autoPlay controls />}
+        {q.media?.type === 'video' && <video class="qmedia" src={resolveMedia(q.media.url)} autoPlay playsInline />}
+        <div class="qtext">{q.text}</div>
+        <div class={'qanswers' + (imgs ? ' imgs' : '')}>
+          {q.answers.map((a, i) => {
+            const cls = q.revealed ? (i === q.correct ? ' correct' : choosers(i).length ? ' wrong' : ' dim') : '';
+            return (
+              <div class={'qans' + cls}>
+                <span class="qletter">{LETTERS[i]}</span>
+                {a.image ? <img src={a.image} alt="" /> : <span class="qans-text">{a.text}</span>}
+                {q.revealed && (
+                  <span class="qchoosers">
+                    {choosers(i).map((p) => <Avatar p={p} size={30} />)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {!q.revealed && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
+        <div class="qparts">
+          {q.participants.map((id) => {
+            const p = s.players[id];
+            if (!p) return null;
+            const done = q.answered.includes(id);
+            const ok = q.revealed && q.choices?.[id] === q.correct;
+            return (
+              <div class={'qpart' + (done ? ' done' : '') + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
+                <Avatar p={p} size={36} />
+                <span>{p.name}</span>
+                {!q.revealed && done && <b>✔</b>}
+                {q.revealed && <b>{ok ? '✔' : '✘'}</b>}
+                {q.revealed && q.results?.[id] && <span class="qres">{q.results[id]}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DuelHud({ s }: { s: GameState }) {
+  const d = s.duel!;
+  const a = s.players[d.attacker], b = s.players[d.defender];
+  if (!a || !b) return null;
+  const hitKey = d.lastHit ? d.lastHit.n : 0;
+  const side = (p: Player, role: string) => (
+    <div class={'duel-side' + (d.asker === p.id ? ' asking' : '') + (d.lastHit?.to === p.id ? ' hurt' : '')} key={p.id + (d.lastHit?.to === p.id ? hitKey : '')}>
+      <Avatar p={p} size={64} />
+      <div class="col" style={{ gap: 4, minWidth: 160 }}>
+        <div><b>{p.name}</b> <span class="muted">{role}</span></div>
+        <HpBar hp={p.hp} max={p.maxHp} />
+        <div class="row small-stats">
+          {s.settings.topics.filter((t) => t.combat).map((t) => <span style={{ color: t.color }}>{t.name.slice(0, 3)} {p.stats[t.id]}</span>)}
+          {p.specials > 0 && <span>💥{p.specials}</span>}
+        </div>
+      </div>
+      {d.lastHit?.to === p.id && <div class="dmg" key={hitKey}>−{d.lastHit.dmg}</div>}
+    </div>
+  );
+  return (
+    <div class="duel-hud slide-up">
+      {side(a, 'атакует')}
+      <div class="duel-vs">
+        <div>VS</div>
+        <div class="muted">раунд {d.round}/{s.settings.duelRounds}</div>
+      </div>
+      {side(b, 'защищается')}
+    </div>
+  );
+}
+
+function DuelResult({ s }: { s: GameState }) {
+  const d = s.duel!;
+  const w = d.winner ? s.players[d.winner] : null;
+  return (
+    <div class="banner">
+      <div class="banner-inner pop">
+        {d.over ? (
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+{s.settings.reward.duelWinYen} ¥ · +{s.settings.reward.duelWinStars} ★</div></>
+            : <div class="banner-text">Дуэль окончена</div>
+        ) : d.mode === 'rhythm' && s.rhythm ? (
+          <>
+            <div class="banner-text">Ритм: итог</div>
+            {s.rhythm.players.map((id) => <div class="banner-sub">{s.players[id]?.name}: {s.rhythm!.scores[id] ?? '—'}</div>)}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function RewardPopup({ s }: { s: GameState }) {
+  const st = s.stage;
+  if (st.t !== 'reward') return null;
+  const p = s.players[st.pid];
+  return (
+    <div class="banner">
+      <div class="banner-inner reward pop">
+        <div class="reward-icon">{REWARD_INFO[st.reward].icon}</div>
+        <div class="banner-text">{p?.name}</div>
+        <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: {st.text}</div>
+      </div>
+    </div>
+  );
+}
+
+function PrizePopup({ s }: { s: GameState }) {
+  const st = s.stage;
+  if (st.t !== 'prize') return null;
+  const p = s.players[st.pid];
+  return (
+    <div class="banner prize">
+      <div class="banner-inner pop">
+        <div class="reward-icon spin">🏆</div>
+        <div class="banner-text">ПРИЗ!</div>
+        {p && <Avatar p={p} size={96} />}
+        <div class="banner-text">{p?.name}</div>
+        <div class="banner-sub">{st.text}</div>
+      </div>
+    </div>
+  );
+}
+
+function EndScreen({ s }: { s: GameState }) {
+  const ps = Object.values(s.players).sort((a, b) => b.prizes.length - a.prizes.length || b.stars - a.stars || b.yen - a.yen);
+  return (
+    <div class="overlay-center">
+      <div class="panel calib pop">
+        <h2>Финал</h2>
+        <table>
+          <tbody>
+            {ps.map((p, i) => (
+              <tr>
+                <td>{i + 1}</td>
+                <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
+                <td>🏆 {p.prizes.length}</td>
+                <td>⭐ {p.stars}</td>
+                <td>{fmtYen(p.yen)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function HostPanel({ s, host, onNewGame }: { s: GameState; host: Host; onNewGame: () => void }) {
+  const [snd, setSnd] = useState(soundOn);
+  const netLabel = useMemo(() => ({ supabase: 'Supabase', ws: 'LAN (dev)', local: 'вкладки' }[host.net.mode]), [host]);
+  return (
+    <div class="host-panel">
+      <button class="btn small" title="Пробел" onClick={() => host.ctl(s.phase === 'lobby' ? 'start' : 'next')}>▶ Далее</button>
+      <button class="btn small" title="P" onClick={() => host.ctl('pause')}>{s.paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
+      <button class="btn small" title="F" onClick={toggleFullscreen}>⛶</button>
+      <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); }}>{snd ? '🔊' : '🔇'}</button>
+      <button class="btn small" onClick={() => { if (confirm('Завершить игру и показать итоги?')) host.ctl('end'); }}>🏁</button>
+      <button class="btn small" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна.')) onNewGame(); }}>🆕</button>
+      <MediaBox questions={host.engine.questions} compact />
+      <span class="chip" title="Режим сети">{netLabel} · {host.net.status === 'online' ? 'онлайн' : host.net.status}</span>
+      <span class="muted" style={{ fontSize: 12 }}>H — скрыть</span>
+    </div>
+  );
+}
