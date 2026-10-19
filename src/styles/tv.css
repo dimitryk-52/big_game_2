@@ -200,3 +200,9 @@
 .podium-name { display: flex; align-items: center; gap: 6px; font-size: 1.1em; }
 .medal { font-size: 1.5em; }
 .podium-pts { color: var(--yellow); }
+/* фукуварай — картинка как есть; сэнрю — стих на листе */
+.sheet.plain img { mix-blend-mode: normal; }
+.sheet.poem { container-type: inline-size; }
+.poem-lines { position: absolute; inset: 9% 8% 18%; display: flex; flex-direction: column; justify-content: center; gap: 0.5em; color: #2a1d14; font-size: 8.5cqw; line-height: 1.15; text-align: left; }
+.poem-lines .poem-mine { color: #b3141c; font-size: 1.15em; margin-left: 1.2em; }
+.sheet.poem .hanko { font-size: 10cqw; }

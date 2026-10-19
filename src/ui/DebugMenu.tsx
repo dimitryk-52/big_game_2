@@ -55,7 +55,9 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
         <div class="debug-btns">
           <button class="btn small" onClick={() => send('pause')}>{s.paused ? '▶ Снять паузу' : '⏸ Пауза игры'}</button>
           <button class="btn small" onClick={() => send('next')}>⏭ Далее</button>
-          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref })}>🖌 Каллиграфия</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'calligraphy' })}>🖌 Каллиграфия</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'fukuwarai' })}>👺 Фукуварай</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'senryu' })}>📜 Сэнрю</button>
           <button class="btn small" title="Открыть магазин игроку сейчас (ход начнётся заново)" onClick={() => send('shopTest', { pid })}>🛒 Магазин</button>
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
           <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>

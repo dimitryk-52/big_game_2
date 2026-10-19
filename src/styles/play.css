@@ -121,3 +121,23 @@
 .vote-btn.on { background: #c8262a; color: #fff; border-color: #fff; }
 .vote-btn:disabled:not(.on) { opacity: 0.35; }
 .shop-door img { image-rendering: pixelated; }
+
+/* фукуварай */
+.face-pad { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.face-blank { display: block; border: 3px solid #2a2016; box-shadow: 4px 4px 0 var(--shadow); }
+.face-blank.target { outline: 3px dashed var(--yellow); outline-offset: 3px; }
+.face-tray { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; min-height: 64px; }
+.face-part { width: 72px; height: 46px; padding: 2px; background: #f4eddc; border: 3px solid #2a2016; box-shadow: 3px 3px 0 var(--shadow); touch-action: none; }
+.face-part img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.face-part.lifted { opacity: 0.25; }
+.face-hint { width: 100%; text-align: center; }
+.face-ghost { position: fixed; width: 110px; transform: translate(-50%, -50%); pointer-events: none; z-index: 60; filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5)); }
+.face-finger { position: fixed; width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--yellow); transform: translate(-50%, -50%); pointer-events: none; z-index: 60; }
+.face-mine { width: min(70vw, 260px); border: 3px solid #2a2016; }
+/* сэнрю */
+.senryu-pad { gap: 12px; }
+.tanzaku { background: #f4eddc; color: #2a1d14; border: 3px solid #2a2016; box-shadow: 4px 4px 0 var(--shadow); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; font-size: 22px; }
+.tz-line.mine { color: #b3141c; min-height: 1.2em; margin-left: 18px; }
+.syl { text-align: center; color: #aab; }
+.syl.ok { color: var(--green); }
+.senryu-mine { font-size: 22px; color: var(--yellow); text-align: center; }

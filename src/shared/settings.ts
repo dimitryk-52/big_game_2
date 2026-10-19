@@ -1,4 +1,4 @@
-import type { BonusId, GroupGameId, Question, RewardType, Settings } from './types';
+import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -54,9 +54,19 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'cal3', game: 'calligraphy', text: 'Нарисуйте кандзи «сердце» 心' },
     { id: 'cal4', game: 'calligraphy', text: 'Нарисуйте кандзи «огонь» 火' },
     { id: 'cal5', game: 'calligraphy', text: 'Нарисуйте свой кандзи года — какой хотите' },
+    { id: 'fuku1', game: 'fukuwarai', text: 'Соберите лицо Окамэ — богини веселья', face: 'okame' },
+    { id: 'fuku2', game: 'fukuwarai', text: 'Соберите лицо Дарумы', face: 'daruma' },
+    { id: 'fuku3', game: 'fukuwarai', text: 'Соберите лицо демона Óни', face: 'oni' },
+    { id: 'sen1', game: 'senryu', text: 'Остыл мой рамен / Пока я его снимал' },
+    { id: 'sen2', game: 'senryu', text: 'Токийский вагон / Все спят стоя, как кони' },
+    { id: 'sen3', game: 'senryu', text: 'Сакура в цвету / Начальник под деревом' },
+    { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок' },
+    { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт' },
+    { id: 'sen6', game: 'senryu', text: 'Синкансэн летит / Фудзи мелькнула в окне' },
   ],
   group: {
     drawTime: 30,
+    times: { fukuwarai: 40, senryu: 60 },
     voteTime: 20,
     showMs: 4000,
     prizes: [{ yen: 1000, stars: 3 }, { yen: 600, stars: 2 }, { yen: 300, stars: 1 }],
@@ -99,9 +109,32 @@ export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   prize: { name: 'ПРИЗ', icon: '🏆' },
 };
 
-export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string }> = {
-  calligraphy: { name: 'Каллиграфия', ja: '書道' },
+export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji: string; how: string; doing: string }> = {
+  calligraphy: { name: 'Каллиграфия', ja: '書道', kanji: '書', how: 'У всех на телефонах — холст и кисть', doing: 'Рисуют…' },
+  fukuwarai: { name: 'Фукуварай', ja: '福笑い', kanji: '福', how: 'Собираем лицо вслепую: положенные детали сразу исчезают', doing: 'Собирают лица вслепую…' },
+  senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допишите последнюю строку стиха (5 слогов)', doing: 'Сочиняют…' },
 };
+
+/** время на работу в групповой игре, сек */
+export function groupTime(st: Settings, game: GroupGameId) {
+  return game === 'calligraphy' ? st.group.drawTime : st.group.times?.[game] ?? DEFAULT_SETTINGS.group.times![game]!;
+}
+
+/** задания игры; если в сохранённых настройках их нет (игра новее настроек) — стандартные */
+export function groupTasksFor(st: Settings, game: GroupGameId): GroupTask[] {
+  const own = (st.groupTasks ?? []).filter((t) => t.game === game && t.text.trim());
+  return own.length ? own : DEFAULT_SETTINGS.groupTasks.filter((t) => t.game === game);
+}
+
+/** сэнрю: строки задания (через « / » или перевод строки) */
+export function senryuLines(text: string) {
+  return text.split(/\s*\/\s*|\n/).map((x) => x.trim()).filter(Boolean);
+}
+
+/** слоги в русском тексте = гласные */
+export function syllables(text: string) {
+  return (text.toLowerCase().match(/[аеёиоуыэюяaeiouy]/g) ?? []).length;
+}
 
 export const PLAYER_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff', '#ff9f43', '#2ee6d6', '#ff7ad9', '#a3a3ff', '#f5f5f5'];
 export const HATS = ['Кепка', 'Хатимаки', 'Корона', 'Ушки', 'Без шляпы'];

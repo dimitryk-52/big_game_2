@@ -72,13 +72,17 @@ export interface PrefState {
 }
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu';
+/** лицо для фукуварай */
+export type FaceId = 'okame' | 'daruma' | 'oni';
 
 /** задание групповой игры (например, «Нарисуйте кандзи „человек“») */
 export interface GroupTask {
   id: string;
   game: GroupGameId;
   text: string;
+  /** фукуварай: какое лицо собирать */
+  face?: FaceId;
 }
 
 /** публичная часть групповой игры; сами рисунки в состояние не попадают (их видит только ТВ) */
@@ -86,6 +90,7 @@ export interface GroupPublic {
   id: number;
   game: GroupGameId;
   prompt: string;
+  face?: FaceId;
   pref: number;
   phase: 'intro' | 'draw' | 'show' | 'vote' | 'results';
   players: string[];
@@ -236,6 +241,8 @@ export interface Settings {
   groupTasks: GroupTask[];
   group: {
     drawTime: number;
+    /** время на работу в остальных играх, сек (каллиграфия — drawTime) */
+    times?: Partial<Record<GroupGameId, number>>;
     voteTime: number;
     /** сколько показывать каждую работу на ТВ, мс */
     showMs: number;

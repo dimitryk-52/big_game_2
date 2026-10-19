@@ -2,18 +2,24 @@
 import type { GameState, GroupPublic } from '../shared/types';
 import { washiCanvas } from '../games/brush';
 import { Avatar, TimerBar } from '../ui/common';
-import { GROUP_GAMES } from '../shared/settings';
+import { GROUP_GAMES, groupTime, senryuLines } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { now } from '../shared/util';
 
 let paperUrl: string | undefined;
 const paper = () => (paperUrl ??= washiCanvas(450, 600, 7).toDataURL());
 
-/** лист васи с тушью и красной печатью-номером */
-export function Sheet({ img, n, big }: { img: string | null | undefined; n?: number; big?: boolean }) {
+/** работа на листе васи с красной печатью-номером: тушь (каллиграфия), лицо (фукуварай) или стих (сэнрю) */
+export function Sheet({ g, img, n, big }: { g: GroupPublic; img: string | null | undefined; n?: number; big?: boolean }) {
+  const poem = g.game === 'senryu';
   return (
-    <div class={'sheet' + (big ? ' big' : '')} style={{ backgroundImage: `url(${paper()})` }}>
-      {img ? <img src={img} alt="" draggable={false} /> : <div class="sheet-empty">{img === null ? 'пустой лист' : '…'}</div>}
+    <div class={'sheet' + (big ? ' big' : '') + (g.game === 'fukuwarai' ? ' plain' : '') + (poem ? ' poem' : '')} style={{ backgroundImage: `url(${paper()})` }}>
+      {poem ? (
+        <div class="poem-lines">
+          {senryuLines(g.prompt).map((l) => <div>{l}</div>)}
+          <div class="poem-mine">{img?.startsWith('text:') ? img.slice(5) : '…'}</div>
+        </div>
+      ) : img ? <img src={img} alt="" draggable={false} /> : <div class="sheet-empty">{img === null ? 'пустой лист' : '…'}</div>}
       {n != null && <div class="hanko">{n}</div>}
     </div>
   );
@@ -33,18 +39,18 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
     <div class="group-tv">
       {g.phase === 'intro' && (
         <div class="group-intro pop">
-          <div class="group-kanji">書</div>
+          <div class="group-kanji">{info.kanji}</div>
           <div class="group-sub">Групповая игра · {PREF[g.pref]?.ru}</div>
           <div class="group-title">{info.name}</div>
           <div class="group-prompt">{g.prompt}</div>
-          <div class="muted">У всех на телефонах — холст и кисть. Время: {s.settings.group.drawTime} c</div>
+          <div class="muted">{info.how}. Время: {groupTime(s.settings, g.game)} c</div>
         </div>
       )}
       {(g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
-          <div class="group-brush">🖌️</div>
-          <div class="group-sub">{g.phase === 'draw' ? 'Рисуют…' : 'Собираем работы…'}</div>
+          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️' }[g.game]}</div>
+          <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />
         </div>
@@ -53,7 +59,7 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
         <div class="group-show">
           {head}
           <div class="group-sub">Работа {g.showIdx + 1} из {g.order.length}</div>
-          <Sheet key={g.showIdx} img={imgs[g.order[g.showIdx]]} n={g.showIdx + 1} big />
+          <Sheet key={g.showIdx} g={g} img={imgs[g.order[g.showIdx]]} n={g.showIdx + 1} big />
         </div>
       )}
       {g.phase === 'vote' && (
@@ -76,7 +82,7 @@ function Gallery({ g, imgs }: { g: GroupPublic; imgs: Record<string, string | nu
   const n = g.order.length;
   return (
     <div class={'gallery' + (n > 6 ? ' many' : '')}>
-      {g.order.map((id, i) => <Sheet key={id} img={imgs[id]} n={i + 1} />)}
+      {g.order.map((id, i) => <Sheet key={id} g={g} img={imgs[id]} n={i + 1} />)}
     </div>
   );
 }
@@ -110,7 +116,7 @@ function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<st
           const pl = g.places![id];
           return (
             <div class={'podium-item place' + pl + ' pop'}>
-              <Sheet img={imgs[id]} n={g.order.indexOf(id) + 1} />
+              <Sheet g={g} img={imgs[id]} n={g.order.indexOf(id) + 1} />
               <div class="podium-name"><span class="medal">{medal[pl]}</span> <Avatar p={p} size={32} /> {p.name}</div>
               <div class="podium-pts">{g.points?.[id]} очк. · {g.awards?.[id]}</div>
             </div>

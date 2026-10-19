@@ -6,6 +6,7 @@ import { InkBrush, washiCanvas } from '../games/brush';
 import { TimerBar } from '../ui/common';
 import { vibrate } from '../shared/util';
 import { GROUP_GAMES } from '../shared/settings';
+import { FacePad, SenryuPad, MyWork } from './GroupPads';
 
 export const CANVAS_W = 600;
 export const CANVAS_H = 800;
@@ -31,12 +32,15 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
   const drawing = g.phase === 'intro' || g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0);
   return (
     <div class="group-phone">
-      {drawing && <DrawPad key={g.id} client={client} g={g} me={me} />}
+      {drawing && g.game === 'calligraphy' && <DrawPad key={g.id} client={client} g={g} me={me} />}
+      {drawing && g.game === 'fukuwarai' && <FacePad key={g.id} client={client} g={g} me={me} />}
+      {drawing && g.game === 'senryu' && <SenryuPad key={g.id} client={client} g={g} me={me} />}
       {g.phase === 'show' && g.showIdx >= 0 && (
         <div class="pad col center-screen">
           <h2>Смотрим работы на ТВ</h2>
           <div class="muted">Работа {g.showIdx + 1} из {g.order.length}</div>
           <MyNumber g={g} me={me} />
+          <MyWork g={g} />
         </div>
       )}
       {g.phase === 'vote' && <Vote key={g.voteRound} client={client} s={s} g={g} me={me} />}
@@ -45,7 +49,7 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
   );
 }
 
-function MyNumber({ g, me }: { g: GroupPublic; me: Player }) {
+export function MyNumber({ g, me }: { g: GroupPublic; me: Player }) {
   const n = g.order.indexOf(me.id) + 1;
   return n ? <div class="group-mynum">Твоя работа — <b>№{n}</b></div> : null;
 }
@@ -58,6 +62,7 @@ function DrawPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Pl
   const [size, setSize] = useState(0);
   const [canUndo, setCanUndo] = useState(false);
   const [sent, setSent] = useState(sentFor.has(g.id));
+  void sent;
   const [box, setBox] = useState({ w: 300, h: 400 });
   const [, tick] = useState(0);
 
@@ -151,26 +156,11 @@ function DrawPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Pl
     };
   }, []);
 
-  // время вышло или ведущий закончил — сдаём рисунок (и досылаем, пока хост не подтвердит)
-  const submitted = g.submitted.includes(me.id);
-  const over = g.phase !== 'intro' && (g.phase !== 'draw' || client.hostNow() >= g.deadline);
-  const lastSend = useRef(0);
-  useEffect(() => {
-    if (!over || submitted) return;
-    if (Date.now() - lastSend.current < 4000) return;
-    lastSend.current = Date.now();
+  const { submitted, submit } = useSubmit(client, g, me, () => {
     brush.current?.end(performance.now());
-    send();
+    return exportInk(cv.current!);
   });
-
-  const send = () => {
-    sentFor.add(g.id);
-    setSent(true);
-    const url = exportInk(cv.current!);
-    const total = Math.ceil(url.length / CHUNK);
-    for (let i = 0; i < total; i++) client.send({ t: 'draw', pid: me.id, id: g.id, part: i, total, data: url.slice(i * CHUNK, (i + 1) * CHUNK) });
-    vibrate(40);
-  };
+  useEffect(() => { if (submitted || sentFor.has(g.id)) setSent(true); });
 
   const doUndo = () => {
     const d = undo.current.pop();
@@ -209,9 +199,37 @@ function DrawPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Pl
         ))}
         <button class="btn small" disabled={!canUndo || done || !live} onClick={doUndo}>↶</button>
         <button class="btn small" disabled={done || !live} onClick={clear}>🗑</button>
+        <button class="btn small primary" disabled={done || !live} onClick={submit}>✔</button>
       </div>
     </div>
   );
+}
+
+/**
+ * Сдача работы: по кнопке «Готово», когда вышло время или ведущий закончил раньше.
+ * Досылаем каждые 4 c, пока хост не подтвердит (сообщения могут теряться).
+ */
+export function useSubmit(client: GameClient, g: GroupPublic, me: Player, make: () => string) {
+  const submitted = g.submitted.includes(me.id);
+  const over = g.phase !== 'intro' && (g.phase !== 'draw' || client.hostNow() >= g.deadline);
+  const lastSend = useRef(0);
+  const data = useRef<string | null>(null);
+  const send = () => {
+    if (submitted) return;
+    lastSend.current = Date.now();
+    data.current ??= make();
+    sentFor.add(g.id);
+    const url = data.current;
+    const total = Math.ceil(url.length / CHUNK) || 1;
+    for (let i = 0; i < total; i++) client.send({ t: 'draw', pid: me.id, id: g.id, part: i, total, data: url.slice(i * CHUNK, (i + 1) * CHUNK) });
+    vibrate(40);
+  };
+  useEffect(() => {
+    if (submitted || (!over && !data.current)) return;
+    if (Date.now() - lastSend.current < 4000) return;
+    send();
+  });
+  return { submitted, sent: sentFor.has(g.id) || submitted, submit: send };
 }
 
 /** тушь на белом, JPEG: ТВ кладёт её на бумагу «умножением». Ужимаем, чтобы влезть в лимит сообщений */

@@ -3,9 +3,9 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, GameMsg, GameState, GroupPublic, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, GameMsg, GameState, GroupGameId, GroupPublic, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO, isSpecialQ } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, groupTasksFor, groupTime, isSpecialQ } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -202,7 +202,7 @@ export class GameEngine {
         this.s.g = null;
         void (async () => {
           try {
-            if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26);
+            if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26, args?.game ?? 'calligraphy');
             else if (p) await this.shopVisit(ep, p, true);
           } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
           if (ep === this.epoch) void this.run(ep);
@@ -533,7 +533,7 @@ export class GameEngine {
     const game = st.groupPrefs?.[to];
     if (game && !ps.groupDone && this.s.joinOrder.length >= 2) {
       ps.groupDone = true;
-      await this.groupGame(epoch, to);
+      await this.groupGame(epoch, to, game);
     } else await this.prefQuestion(epoch, p, to);
 
     // магазин — после вопроса, до дуэли
@@ -816,16 +816,17 @@ export class GameEngine {
   private votes: Record<string, number[]> = {};
   private groupDone: (() => void) | null = null;
 
-  private async groupGame(epoch: number, code: number) {
+  private async groupGame(epoch: number, code: number, game: GroupGameId) {
     const st = this.s.settings;
-    const tasks = (st.groupTasks ?? []).filter((t) => t.game === 'calligraphy' && t.text.trim());
+    const tasks = groupTasksFor(st, game);
     const used = (this.sec.usedTasks ??= []);
     const fresh = tasks.filter((t) => !used.includes(t.id));
     const task = fresh.length ? pick(fresh) : tasks.length ? pick(tasks) : null;
     if (task) used.push(task.id);
     const players = this.s.joinOrder.filter((id) => this.s.players[id]);
     const g: GroupPublic = {
-      id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game: 'calligraphy', prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
+      id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game, prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
+      ...(game === 'fukuwarai' ? { face: task?.face ?? 'okame' } : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
       voteRounds: Math.min(3, players.length - 1), voted: [],
     };
@@ -841,7 +842,7 @@ export class GameEngine {
     // ── рисуем ──
     g.phase = 'draw';
     g.startAt = this.now + LEAD;
-    g.deadline = g.startAt + st.group.drawTime * 1000;
+    g.deadline = g.startAt + groupTime(st, game) * 1000;
     this.emit();
     this.botDraw(g);
     await new Promise<void>((resolve) => {
@@ -944,19 +945,20 @@ export class GameEngine {
     if (parts.some((x) => !x)) return;
     const url = parts.join('');
     delete this.drawParts[m.pid];
-    this.groupImgs[m.pid] = url.startsWith('data:image/') ? url : null;
+    this.groupImgs[m.pid] = url.startsWith('data:image/') || (url.startsWith('text:') && url.length < 300) ? url : null;
     g.submitted.push(m.pid);
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
     this.groupDone?.();
   }
 
-  /** боты «сдают» пустой лист незадолго до конца времени */
+  /** боты сдают работу незадолго до конца времени: в сэнрю — готовую строку, иначе пустой лист */
   private botDraw(g: GroupPublic) {
+    const lines = ['И снова понедельник', 'Сакэ закончилось', 'Где же мой зонтик?', 'А я сплю в метро', 'Котик съел суши', 'Опять дедлайн'];
     for (const id of g.players) if (this.s.players[id]?.bot) {
       setT(() => {
         if (this.s.g !== g || g.submitted.includes(id)) return;
-        this.groupImgs[id] = null;
+        this.groupImgs[id] = g.game === 'senryu' ? 'text:' + pick(lines) : null;
         g.submitted.push(id);
         this.emit();
         this.groupDone?.();

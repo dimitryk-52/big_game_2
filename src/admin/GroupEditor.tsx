@@ -1,7 +1,8 @@
 // Админка: групповые игры — задания, время, награды за места.
-import { useState } from 'preact/hooks';
-import type { GroupGameId, Settings } from '../shared/types';
-import { GROUP_GAMES } from '../shared/settings';
+import { useEffect, useState } from 'preact/hooks';
+import type { FaceId, GroupGameId, Settings } from '../shared/types';
+import { DEFAULT_SETTINGS, GROUP_GAMES, groupTime } from '../shared/settings';
+import { FACES } from '../games/faces';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
 
@@ -10,6 +11,12 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
   const [saved, setSaved] = useState(false);
   const [game, setGame] = useState<GroupGameId>('calligraphy');
   const upd = (fn: (x: Settings) => void) => { const c = structuredClone(s); fn(c); setS(c); };
+  // в старых сохранённых настройках нет заданий новых игр — подставляем стандартные
+  useEffect(() => {
+    if (s.groupTasks.some((t) => t.game === game)) return;
+    const def = DEFAULT_SETTINGS.groupTasks.filter((t) => t.game === game);
+    if (def.length) upd((c) => { c.groupTasks.push(...structuredClone(def)); });
+  }, [game]);
   const tasks = s.groupTasks.filter((t) => t.game === game);
   const prefs = Object.entries(s.groupPrefs).filter(([, g]) => g === game).map(([c]) => PREF[+c]?.ru).filter(Boolean);
   const num = (label: string, get: () => number, set: (c: Settings, v: number) => void) => (
@@ -27,21 +34,31 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         </select>
       </div>
       <div class="note">
-        Каллиграфия: у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
+        {game === 'calligraphy' && <>Каллиграфия:</>}
+        {game === 'fukuwarai' && <>Фукуварай: на телефоне пустое лицо и детали. Детали перетаскивают на лицо, и они сразу исчезают — собираем вслепую. Не успел — оставшиеся детали падают куда попало. Потом лица раскрываются на ТВ и все голосуют.<br /></>}
+        {game === 'senryu' && <>Сэнрю: в задании две первые строки через « / » (5 и 7 слогов), игроки дописывают последнюю (5 слогов), телефон считает слоги. Потом стихи по одному на ТВ и голосование.<br /></>}
+        {game === 'calligraphy' && <> у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
         и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
-        <br />Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задания берутся по очереди в случайном порядке.
+        <br /></>}Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задания берутся по очереди в случайном порядке.
       </div>
       <h3 style={{ margin: '8px 0 0' }}>Задания</h3>
       {tasks.map((t) => (
         <div class="row">
-          <input class="inp-s grow" value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />
+          {game === 'fukuwarai' && (
+            <select value={t.face ?? 'okame'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.face = (e.target as HTMLSelectElement).value as FaceId; })}>
+              {(Object.keys(FACES) as FaceId[]).map((f) => <option value={f}>{FACES[f].name}</option>)}
+            </select>
+          )}
+          <input class="inp-s grow" placeholder={game === 'senryu' ? 'Первая строка / Вторая строка' : 'Текст задания'} value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />
           <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
         </div>
       ))}
-      <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '' }); })}>+ Задание</button></div>
+      <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}) }); })}>+ Задание</button></div>
       <h3 style={{ margin: '8px 0 0' }}>Время и награды</h3>
       <div class="settings-grid">
-        {num('Время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
+        {num('Каллиграфия: время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
+        {num('Фукуварай: время, сек', () => groupTime(s, 'fukuwarai'), (c, v) => { (c.group.times ??= {}).fukuwarai = v; })}
+        {num('Сэнрю: время, сек', () => groupTime(s, 'senryu'), (c, v) => { (c.group.times ??= {}).senryu = v; })}
         {num('Время на голос, сек', () => s.group.voteTime, (c, v) => (c.group.voteTime = v))}
         {num('Показ каждой работы, мс', () => s.group.showMs, (c, v) => (c.group.showMs = v))}
         {[0, 1, 2].flatMap((i) => [
