@@ -1,4 +1,4 @@
-// Доска с рыбой для «Сашими» (телефон и ТВ): пиксельная рыба, нож, разрезы, отодвигающийся кусок.
+// Доска с рыбой для «Сашими» (телефон и ТВ): пиксельная рыба, нож, разрезы, улетающие обрезки.
 import { useEffect, useRef } from 'preact/hooks';
 import type { FishId } from '../shared/types';
 import { SH, SW, drawSashimi, type SashimiView } from './sashimi';
@@ -20,10 +20,10 @@ export function FishBoard({ fish, view, scale = 4, class: cls, onRef }: {
       if (!c) return;
       const vv = viewRef.current;
       const v: SashimiView = 'current' in vv ? vv.current : vv;
-      // кусок отъезжает за 300 мс после разреза
+      // обрезки улетают за 600 мс после разреза
       if (v.cut != null && v.cut !== cutAt) { cutAt = v.cut; t0 = t; }
       if (v.cut == null) cutAt = null;
-      const split = v.cut != null ? Math.min(1, (t - t0) / 300) : 0;
+      const split = v.cut != null ? Math.min(1, (t - t0) / 600) : 0;
       drawSashimi(c.getContext('2d')!, c.width, c.height, fish, { ...v, split: v.split ?? split });
     };
     raf = requestAnimationFrame(loop);

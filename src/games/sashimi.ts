@@ -183,6 +183,27 @@ export function fishCanvas(fish: FishId): HTMLCanvasElement {
   return c;
 }
 
+const darkCache = new Map<FishId, HTMLCanvasElement>();
+/** затемнённая рыба — обрезки, которые уйдут в отходы */
+function darkFish(fish: FishId): HTMLCanvasElement {
+  let c = darkCache.get(fish);
+  if (c) return c;
+  const src = fishCanvas(fish);
+  c = document.createElement('canvas');
+  c.width = SW;
+  c.height = SH;
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(src, 0, 0);
+  const d = ctx.getImageData(0, 0, SW, SH);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const g = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 3;
+    for (let j = 0; j < 3; j++) d.data[i + j] = Math.round((d.data[i + j] * 0.6 + g * 0.4) * 0.5);
+  }
+  ctx.putImageData(d, 0, 0);
+  darkCache.set(fish, c);
+  return c;
+}
+
 let woodUrl: HTMLCanvasElement | null = null;
 /** разделочная доска из хиноки */
 function wood(): HTMLCanvasElement {
@@ -206,7 +227,7 @@ function wood(): HTMLCanvasElement {
 export interface SashimiView {
   /** нож (доля длины) — пока не отрезано */
   knife?: number | null;
-  /** разрез сделан здесь; split 0..1 — насколько отодвинут кусок */
+  /** разрез сделан здесь; split 0..1 — насколько улетели обрезки (1 — их уже нет) */
   cut?: number | null;
   split?: number;
   /** отметки разрезов других игроков */
@@ -223,18 +244,23 @@ export function drawSashimi(ctx: CanvasRenderingContext2D, w: number, h: number,
   const img = fishCanvas(fish);
   const cut = v.cut ?? null;
   if (cut == null) {
-    ctx.drawImage(img, ox, oy, SW * k, SH * k);
     if (v.knife != null) {
-      // кусок справа от ножа слегка подсвечен
+      // слева от ножа — обрезки (затемнены), справа — кусок игрока, чистый
       const sx = tToX(v.knife);
-      ctx.fillStyle = 'rgba(255, 210, 63, 0.18)';
-      ctx.fillRect(ox + sx * k, oy + 2 * k, (X1 - sx) * k, (SH - 6) * k);
-    }
+      ctx.drawImage(darkFish(fish), 0, 0, sx, SH, ox, oy, sx * k, SH * k);
+      ctx.drawImage(img, sx, 0, SW - sx, SH, ox + sx * k, oy, (SW - sx) * k, SH * k);
+    } else ctx.drawImage(img, ox, oy, SW * k, SH * k);
   } else {
+    // разрез: обрезки улетают с доски и тают, кусок игрока остаётся на месте
     const sx = tToX(cut);
-    const gap = (v.split ?? 1) * 6 * k;
-    ctx.drawImage(img, 0, 0, sx, SH, ox, oy, sx * k, SH * k);
-    ctx.drawImage(img, sx, 0, SW - sx, SH, ox + sx * k + gap, oy, (SW - sx) * k, SH * k);
+    const a = v.split ?? 1;
+    if (a < 1) {
+      ctx.save();
+      ctx.globalAlpha = 1 - a;
+      ctx.drawImage(darkFish(fish), 0, 0, sx, SH, ox - a * 30 * k, oy + a * a * 14 * k, sx * k, SH * k);
+      ctx.restore();
+    }
+    ctx.drawImage(img, sx, 0, SW - sx, SH, ox + sx * k, oy, (SW - sx) * k, SH * k);
   }
   for (const m of v.marks ?? []) {
     const x = Math.round(ox + tToX(m.t) * k);
