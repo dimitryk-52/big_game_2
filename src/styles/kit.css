@@ -148,18 +148,65 @@ h1, h2, .banner-text, .pref-intro-ru, .fighter-name { text-shadow: var(--tx-outl
 @keyframes rb-spin { to { --rb: 360deg; } }
 .btn.rainbow { --c: #3b2a6e; }
 
-/* ───── барабан ───── */
-.wheel { position: relative; flex: none; }
-.wheel-cv { display: block; image-rendering: pixelated; }
-.wheel-item { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; pointer-events: none; transition: opacity 0.2s; }
-.wheel-item img { image-rendering: pixelated; display: block; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45)); }
-.wheel-item b { color: #fff; text-shadow: var(--tx-outline); white-space: nowrap; }
-.wheel-item.dim { opacity: 0.35; }
-.wheel-item.win { animation: wheel-win 0.5s steps(2) infinite; }
-@keyframes wheel-win { 50% { transform: translate(-50%, -50%) scale(1.25); } }
-.wheel-box { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.wheel-label { min-height: 1.6em; font-size: 28px; text-shadow: var(--tx-outline); }
-.wheel-label.done { color: var(--yellow); animation: pop 0.4s both; }
+/* ───── барабан (однорукий бандит) ───── */
+.reel {
+  --px: var(--rp, 3px);
+  --c: #f2b51f;
+  position: relative; flex: none; box-sizing: border-box; padding: calc(var(--px) * 3);
+  background: var(--c);
+  border: var(--px) solid var(--outline);
+  clip-path: var(--notch);
+  box-shadow:
+    inset 0 var(--px) 0 #ffe08a,
+    inset 0 calc(var(--px) * -2) 0 #b07a0c;
+}
+.reel-win {
+  position: relative; overflow: hidden; margin: 0 auto;
+  background: #1b1838;
+  outline: var(--px) solid var(--outline);
+  box-shadow: 0 0 0 calc(var(--px) * 2) #b07a0c;
+}
+.reel-cell {
+  position: absolute; left: 0; right: 0; overflow: hidden;
+  box-shadow: inset 0 -1px 0 var(--outline), inset 0 1px 0 color-mix(in srgb, var(--c), #fff 35%);
+}
+.reel-in {
+  position: absolute; left: 0; right: 0; top: 0; transform-origin: top;
+  display: flex; align-items: center; justify-content: center; gap: 0.5em; padding: 0 0.6em;
+}
+.reel-in img { image-rendering: pixelated; display: block; flex: none; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45)); }
+.reel-in b { color: #fff; text-shadow: var(--tx-outline); line-height: 1.1; text-align: center; }
+.reel-cell.lit { filter: brightness(1.3) !important; }
+.reel-cell.win .reel-in img { animation: reel-win 0.5s steps(2) infinite; }
+@keyframes reel-win { 50% { transform: scale(1.15); } }
+/* выпуклость барабана: ступенчатые тёмные полосы у верхнего и нижнего края, блик посередине */
+.reel-shade {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.55) 0 4%, rgba(0, 0, 0, 0.35) 0 9%, rgba(0, 0, 0, 0.15) 0 15%, transparent 0 85%,
+      rgba(0, 0, 0, 0.15) 0 91%, rgba(0, 0, 0, 0.35) 0 96%, rgba(0, 0, 0, 0.55) 0),
+    linear-gradient(transparent 0 40%, rgba(255, 255, 255, 0.07) 0 44%, transparent 0);
+}
+/* рамка выбора по центру */
+.reel-sel {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  box-shadow:
+    inset 0 0 0 var(--px) var(--outline),
+    inset 0 0 0 calc(var(--px) * 2) #ffe08a,
+    inset 0 0 0 calc(var(--px) * 3) var(--outline);
+}
+.reel-sel.lit { box-shadow: inset 0 0 0 var(--px) var(--outline), inset 0 0 0 calc(var(--px) * 2) #fff, inset 0 0 0 calc(var(--px) * 3) var(--outline); }
+.reel-arrows {
+  position: absolute; left: var(--px); right: var(--px); transform: translateY(-50%);
+  display: flex; justify-content: space-between; pointer-events: none;
+}
+.reel-arrow { display: block; }
+.reel-arrow.flip { transform: scaleX(-1); }
+.reel.spinning .reel-arrow { animation: reel-tick 0.12s steps(2) infinite; }
+@keyframes reel-tick { 50% { translate: 0 calc(var(--px) * -1); } }
+.reel-box { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.reel-label { min-height: 1.6em; font-size: 28px; text-shadow: var(--tx-outline); }
+.reel-label.done { color: var(--yellow); animation: pop 0.4s both; }
 
 .pixel-img { image-rendering: pixelated; display: block; max-width: none; }
 

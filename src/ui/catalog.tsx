@@ -8,7 +8,7 @@ import '../styles/tv.css';
 import '../styles/play.css';
 import '../styles/kit.css';
 import { loadIcons, characterUrl, pixelBadgeUrl, pixelIconUrl, topicIconUrl, SPECIAL_TOPIC } from '../shared/sprites';
-import { Wheel, makeSpin, wheelLabel, wheelRot, type WheelSeg, type WheelSpin } from './Wheel';
+import { Reel, makeSpin, reelLabel, reelPos, type ReelSeg, type ReelSpin } from './Reel';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { Player } from '../shared/types';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, useFrame, PixelImg } from './common';
@@ -40,7 +40,7 @@ function Section({ title, note, children }: { title: string; note?: string; chil
 const Label = ({ t }: { t: string }) => <div class="ui-label">{t}</div>;
 
 // ───── барабан: примеры секторов (иконки строятся после loadIcons) ─────
-function bonusSegs(): WheelSeg[] {
+function bonusSegs(): ReelSeg[] {
   return [
     { id: 'money', label: '¥300', short: '¥300', color: '#3cb54a', icon: pixelIconUrl('money', 4) },
     { id: 'fifty1', label: 'Убрать 1 неверный ответ', short: '−1', color: '#4a55a8', icon: pixelIconUrl('bonus_fifty1', 4) },
@@ -53,23 +53,23 @@ function bonusSegs(): WheelSeg[] {
     { id: 'none', label: 'Мимо!', short: '✕', color: '#5b5f7e' },
   ];
 }
-function topicSegs(): WheelSeg[] {
-  const seg = (t: (typeof combat)[number]): WheelSeg => ({ id: t.id, label: t.name, color: t.color, icon: topicIconUrl(t.id, t.color, 4) });
+function topicSegs(): ReelSeg[] {
+  const seg = (t: (typeof combat)[number]): ReelSeg => ({ id: t.id, label: t.name, color: t.color, icon: topicIconUrl(t.id, t.color, 4) });
   return [...combat.map(seg), { id: 'special', label: 'Спецтема!', color: '#fff', rainbow: true, icon: topicIconUrl('special', '#fff', 4) }, ...combat.map(seg)];
 }
 
-function WheelDemo({ title, segs }: { title: string; segs: WheelSeg[] }) {
-  const [spin, setSpin] = useState<WheelSpin | null>(null);
+function ReelDemo({ title, segs }: { title: string; segs: ReelSeg[] }) {
+  const [spin, setSpin] = useState<ReelSpin | null>(null);
   useFrame(true);
   const t = Date.now();
-  const busy = !!spin && !wheelRot(segs, spin, t).done && t >= spin.startAt;
-  const lab = wheelLabel(segs, spin, t);
+  const busy = !!spin && !reelPos(segs, spin, t).done && t >= spin.startAt;
+  const lab = reelLabel(segs, spin, t);
   return (
-    <div class="wheel-box panel" style={{ padding: 16 }}>
+    <div class="reel-box panel" style={{ padding: 16 }}>
       <b>{title}</b>
-      <Wheel segs={segs} spin={spin} now={Date.now} size={380} sound />
-      <div class={'wheel-label' + (lab.done ? ' done' : '')}>{lab.text}</div>
-      <button class="btn primary" disabled={busy} onClick={() => setSpin(makeSpin(segs, Date.now() + 100, spin ? wheelRot(segs, spin, Date.now()).rot : 0))}>Крутить</button>
+      <Reel segs={segs} spin={spin} now={Date.now} size={380} sound />
+      <div class={'reel-label' + (lab.done ? ' done' : '')}>{lab.text}</div>
+      <button class="btn primary" disabled={busy} onClick={() => setSpin(makeSpin(segs, Date.now() + 100, spin ? reelPos(segs, spin, Date.now()).pos : 0))}>Крутить</button>
     </div>
   );
 }
@@ -128,9 +128,9 @@ function Catalog() {
         </Section>
       )}
 
-      <Section title="Барабан" note="Хост выбирает сектор заранее (makeSpin) и рассылает время старта — все экраны останавливаются на одном секторе. Размер сектора = шанс выпасть (weight). Радужный сектор — спецтема.">
-        <WheelDemo title="Бонус игроку" segs={bonusSegs()} />
-        <WheelDemo title="Тема вопроса" segs={topicSegs()} />
+      <Section title="Барабан" note="Хост выбирает сектор заранее (makeSpin) и рассылает время старта — все экраны останавливаются на одной ячейке. Окошко на три ячейки, выпавшая встаёт в центральную рамку. Шанс выпасть — weight. Радужная ячейка — спецтема.">
+        <ReelDemo title="Бонус игроку" segs={bonusSegs()} />
+        <ReelDemo title="Тема вопроса" segs={topicSegs()} />
       </Section>
 
       <Section title="Спецтема" note="Иконка — круг с радужным градиентом (своя картинка: src/img/icons/topic_special.png). Рамка .rainbow — у спецвопроса при выборе темы в дуэли.">
