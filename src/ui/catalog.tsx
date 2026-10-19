@@ -9,6 +9,7 @@ import '../styles/play.css';
 import '../styles/kit.css';
 import { loadIcons, characterUrl, pixelBadgeUrl, pixelIconUrl, topicIconUrl, SPECIAL_TOPIC } from '../shared/sprites';
 import { Reel, makeSpin, reelLabel, reelPos, type ReelSeg, type ReelSpin } from './Reel';
+import { Wheel, makeSpin as makeWheelSpin, wheelLabel, wheelRot, type WheelSpin } from './Wheel';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { Player } from '../shared/types';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, useFrame, PixelImg } from './common';
@@ -74,6 +75,22 @@ function ReelDemo({ title, segs }: { title: string; segs: ReelSeg[] }) {
   );
 }
 
+function WheelDemo({ title, segs }: { title: string; segs: ReelSeg[] }) {
+  const [spin, setSpin] = useState<WheelSpin | null>(null);
+  useFrame(true);
+  const t = Date.now();
+  const busy = !!spin && !wheelRot(segs, spin, t).done && t >= spin.startAt;
+  const lab = wheelLabel(segs, spin, t);
+  return (
+    <div class="wheel-box panel" style={{ padding: 16 }}>
+      <b>{title}</b>
+      <Wheel segs={segs} spin={spin} now={Date.now} size={380} sound />
+      <div class={'wheel-label' + (lab.done ? ' done' : '')}>{lab.text}</div>
+      <button class="btn primary" disabled={busy} onClick={() => setSpin(makeWheelSpin(segs, Date.now() + 100, spin ? wheelRot(segs, spin, Date.now()).rot : 0))}>Крутить</button>
+    </div>
+  );
+}
+
 function Catalog() {
   return (
     <div class="ui-page">
@@ -131,6 +148,11 @@ function Catalog() {
       <Section title="Барабан" note="Хост выбирает сектор заранее (makeSpin) и рассылает время старта — все экраны останавливаются на одной ячейке. Окошко на три ячейки, выпавшая встаёт в центральную рамку. Шанс выпасть — weight. Радужная ячейка — спецтема.">
         <ReelDemo title="Бонус игроку" segs={bonusSegs()} />
         <ReelDemo title="Тема вопроса" segs={topicSegs()} />
+      </Section>
+
+      <Section title="Колесо" note="Круговой вариант барабана (пока не используется в игре). Те же сектора; размер сектора = шанс выпасть (weight).">
+        <WheelDemo title="Бонус игроку" segs={bonusSegs()} />
+        <WheelDemo title="Тема вопроса" segs={topicSegs()} />
       </Section>
 
       <Section title="Спецтема" note="Иконка — круг с радужным градиентом (своя картинка: src/img/icons/topic_special.png). Рамка .rainbow — у спецвопроса при выборе темы в дуэли.">
