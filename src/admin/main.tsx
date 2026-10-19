@@ -15,9 +15,10 @@ import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
 import { GroupEditor } from './GroupEditor';
 import { PrefMap } from './PrefMap';
+import { IntrosTab, SoundsTab } from './Sounds';
 import { fmtYen, uid } from '../shared/util';
 
-type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'settings' | 'remote';
+type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'sounds' | 'intros' | 'settings' | 'remote';
 
 function App() {
   const [tab, setTab] = useState<Tab>('questions');
@@ -40,7 +41,7 @@ function App() {
       <header class="admin-hdr">
         <b>BIG GAME 2 · ведущий</b>
         <nav>
-          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['group', 'Групповые игры'], ['prefs', 'Префектуры'], ['map', 'Карта'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
+          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['group', 'Групповые игры'], ['prefs', 'Префектуры'], ['map', 'Карта'], ['sounds', '🔊 Звуки'], ['intros', '🎬 Интро'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
             <button class={'btn small' + (tab === k ? ' yellow' : '')} onClick={() => setTab(k)}>{l}</button>
           ))}
           <a class="btn small ghost" href="ui.html" target="_blank" title="Все элементы интерфейса: кнопки, барабан, иконки">UI-кит ↗</a>
@@ -57,6 +58,8 @@ function App() {
           {tab === 'prefs' && <Prefs settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'map' && <PrefMap settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'settings' && <SettingsEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
+          {tab === 'sounds' && <SoundsTab />}
+          {tab === 'intros' && <IntrosTab settings={settings} />}
           {tab === 'remote' && <Remote />}
         </>
       )}

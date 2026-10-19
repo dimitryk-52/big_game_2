@@ -161,16 +161,19 @@ export function playRhythmMusic(seed: number, bpm: number, beats: number, startA
 /**
  * Иайдо: «кин!» точно в момент сигнала (время хоста) и «ток» бамбука на ложной тревоге.
  * Ставим в очередь AudioContext заранее, чтобы звук не зависел от кадров.
+ * parts — какие встроенные звуки нужны (на остальные ведущий поставил свои файлы).
  */
-export function iaiSounds(at: number, decoyAt?: number) {
+export function iaiSounds(at: number, decoyAt?: number, parts = { signal: true, decoy: true }) {
   const a = audio();
   const outLat = ((a as any).outputLatency ?? 0) + (a.baseLatency ?? 0);
   const when = (t: number) => Math.max(0, (t - now()) / 1000 - outLat);
   const w = when(at);
-  tone(2093, 0.25, 'square', 0.3, w);
-  tone(3136, 0.35, 'triangle', 0.25, w);
-  noise(0.08, 0.3, w, 4000);
-  if (decoyAt != null && decoyAt < at) {
+  if (parts.signal) {
+    tone(2093, 0.25, 'square', 0.3, w);
+    tone(3136, 0.35, 'triangle', 0.25, w);
+    noise(0.08, 0.3, w, 4000);
+  }
+  if (parts.decoy && decoyAt != null && decoyAt < at) {
     const d = when(decoyAt);
     tone(330, 0.07, 'triangle', 0.5, d, -120);
     tone(250, 0.09, 'triangle', 0.4, d + 0.09, -100);

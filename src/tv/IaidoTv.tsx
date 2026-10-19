@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import type { GameState, GroupPublic } from '../shared/types';
 import { Avatar, useFrame } from '../ui/common';
 import { iaiSounds } from '../shared/sound';
+import { hasCustom, playSound } from '../shared/sounds';
 import { now } from '../shared/util';
 import { runPetals } from '../games/petals';
 import bgUrl from '../img/iaido/bg.png';
@@ -24,7 +25,11 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
     const k = g.id + ':' + iai.round;
     if (queued.current === k) return;
     queued.current = k;
-    iaiSounds(sig.at, sig.decoyAt);
+    // свои файлы ведущего (вкладка «Звуки») ставим на то же время; без них — встроенные
+    const own = { signal: hasCustom('iaiSignal'), decoy: hasCustom('iaiDecoy') };
+    if (own.signal) playSound('iaiSignal', sig.at);
+    if (own.decoy && sig.decoyAt != null && sig.decoyAt < sig.at) playSound('iaiDecoy', sig.decoyAt);
+    iaiSounds(sig.at, sig.decoyAt, { signal: !own.signal, decoy: !own.decoy });
   }, [iai?.round]);
   if (!iai) return null;
 

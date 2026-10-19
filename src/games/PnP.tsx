@@ -10,7 +10,7 @@ import { PACHI, ringCellAt, ringLayout, type RingLayout } from './logic';
 import { drawRing } from './ring';
 import { CH_H, CH_W, drawChohan } from './chohan';
 import { now } from '../shared/util';
-import { sfx } from '../shared/sound';
+import { playSound } from '../shared/sounds';
 
 type Listener = (ev: any) => void;
 class Bus {
@@ -91,7 +91,7 @@ function ChohanPnP({ pid }: { pid: string }) {
       dice = [ev.d1, ev.d2];
       t0 = performance.now();
       setRes(null);
-      setTimeout(() => { setRes(ev); if (ev.win) sfx.coin(); }, 1300);
+      setTimeout(() => { setRes(ev); if (ev.win) playSound('soloWin'); }, 1300);
     });
     let raf = 0;
     const loop = (t: number) => {
@@ -118,7 +118,7 @@ function SudokuPnP({ pid }: { pid: string }) {
   const [st, setSt] = useState<{ size: number; filled: number; total: number; win?: boolean } | null>(null);
   useEffect(() => pnpBus.on(pid, (ev) => {
     if (ev.k === 'sudoku') setSt({ size: ev.size, filled: ev.filled, total: ev.total });
-    if (ev.k === 'sudokuWin') { setSt((x) => ({ size: ev.size, filled: x?.total ?? 1, total: x?.total ?? 1, win: true })); sfx.coin(); }
+    if (ev.k === 'sudokuWin') { setSt((x) => ({ size: ev.size, filled: x?.total ?? 1, total: x?.total ?? 1, win: true })); playSound('soloWin'); }
   }), [pid]);
   const n = st?.size ?? 4;
   const k = st ? st.filled / st.total : 0;
@@ -137,7 +137,7 @@ function PachiPnP({ pid }: { pid: string }) {
   const [balls, setBalls] = useState<number | null>(null);
   useEffect(() => {
     const sim = new PachinkoSim();
-    sim.onSpinEnd = (sp) => { if (sp.jackpot) sfx.jackpot(); };
+    sim.onSpinEnd = (sp) => { if (sp.jackpot) playSound('soloJackpot'); };
     const off = pnpBus.on(pid, (ev) => {
       if (ev.k !== 'pachi') return;
       if (typeof ev.b === 'number') setBalls(ev.b);
@@ -176,7 +176,7 @@ function RingPnP({ pid }: { pid: string }) {
       }
       if (ev.k === 'ringStop' && st.current) {
         st.current.stop = { cell: ev.cell, res: ev.res };
-        if (ev.res !== 'miss') sfx.coin();
+        if (ev.res !== 'miss') playSound('soloWin');
       }
     });
     let raf = 0;

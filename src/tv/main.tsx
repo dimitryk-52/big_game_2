@@ -14,6 +14,7 @@ import { netMode } from '../shared/net';
 import { MediaBox } from './MediaBox';
 import type { Question } from '../shared/types';
 import { LOGO_URL } from '../shared/logo';
+import { IntroPreview } from './IntroPreview';
 
 function setRoomInUrl(room: string) {
   const u = new URL(location.href);
@@ -90,4 +91,5 @@ function Boot() {
 }
 
 // иконки — PNG из src/img/icons, читаются до первого рендера
-void loadIcons().then(() => render(<Boot />, document.getElementById('app')!));
+// ?preview=1 — только предпросмотр интро для админки, без игры
+void loadIcons().then(() => render(getParam('preview') ? <IntroPreview /> : <Boot />, document.getElementById('app')!));

@@ -10,7 +10,7 @@ import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg'
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
 import { fmtYen, now } from '../shared/util';
-import { playRhythmMusic, sfx, setSound, soundOn } from '../shared/sound';
+import { playRhythmMusic, setSound, soundOn } from '../shared/sound';
 import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
@@ -18,6 +18,8 @@ import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
 import { DragonTv } from './DragonTv';
 import { refreshMusic, setMusic } from './bgMusic';
+import { playSound } from '../shared/sounds';
+import { useTvSounds } from './tvSounds';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
@@ -28,6 +30,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const [panel, setPanel] = useState(true);
   const [debug, setDebug] = useState(false);
   const s = viewState(host.state);
+  useTvSounds(s);
 
   // подписка на события движка
   useEffect(() => {
@@ -40,20 +43,20 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       }
       const m = map.current;
       switch (k) {
-        case 'question': sfx.question(); break;
-        case 'answered': sfx.answered(); break;
-        case 'reveal': sfx.reveal(); break;
-        case 'join': sfx.join(); break;
-        case 'land': sfx.land(); m?.puff(d.code); break;
-        case 'arrive': sfx.land(); m?.puff(d.code, d.firstVisit ? 0xffffff : 0xfff27a); break;
-        case 'hit': sfx.hit(); m?.hit(d.pid); break;
-        case 'reward': sfx.coin(); break;
-        case 'duel': sfx.duel(); break;
-        case 'iaiCut': sfx.slash(); break;
-        case 'iaiEarly': sfx.early(); break;
-        case 'dragonOut': sfx.stumble(); break;
+        case 'question': playSound('question'); break;
+        case 'answered': playSound('answered'); break;
+        case 'reveal': playSound('reveal'); break;
+        case 'join': playSound('join'); break;
+        case 'land': playSound('land'); m?.puff(d.code); break;
+        case 'arrive': playSound('arrive'); m?.puff(d.code, d.firstVisit ? 0xffffff : 0xfff27a); break;
+        case 'hit': playSound('hit'); m?.hit(d.pid); break;
+        case 'reward': playSound('reward'); break;
+        case 'duel': playSound('duel'); break;
+        case 'iaiCut': playSound('iaiCut'); break;
+        case 'iaiEarly': playSound('iaiEarly'); break;
+        case 'dragonOut': playSound('dragonOut'); break;
         case 'prize': {
-          sfx.fanfare();
+          playSound('prize');
           const p = host.state.players[d.pid];
           if (p?.pref) m?.confetti(p.pref);
           break;
@@ -63,7 +66,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'ring': pnpBus.emit(d.pid, { k: 'ring', ...d }); break;
         case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;
         case 'chohan': pnpBus.emit(d.pid, { k: 'chohan', ...d }); break;
-        case 'chop': sfx.chop(); break;
+        case 'chop': playSound('chop'); break;
         case 'sudoku': pnpBus.emit(d.pid, { k: 'sudokuWin', ...d }); break;
       }
     });

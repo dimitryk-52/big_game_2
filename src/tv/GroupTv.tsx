@@ -36,7 +36,7 @@ const FACE_CALL: Record<string, string> = { okame: 'Собери лицо Ока
  * Баннер начала групповой игры — свиток-какэдзику поверх фона префектуры
  * (интро префектуры — горизонтальная полоса, обычные баннеры — тёмная плашка).
  */
-function GroupScroll({ g }: { g: GroupPublic }) {
+export function GroupScroll({ g }: { g: GroupPublic }) {
   const info = GROUP_GAMES[g.game];
   const call = g.game === 'calligraphy' ? g.prompt : g.game === 'fukuwarai' ? FACE_CALL[g.face ?? ''] ?? info.call
     : g.game === 'sashimi' ? `${g.prompt}: отрежь ${g.target} г` : info.call;
