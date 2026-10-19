@@ -177,8 +177,8 @@ export function stopAllSounds() {
   playing.clear();
 }
 
-/** сыграть файл; at — время хоста (для точных сигналов), иначе сразу */
-export async function playFile(file: string, vol = 1, at?: number) {
+/** сыграть файл; at — время хоста (для точных сигналов), иначе сразу. Вернёт узел — чтобы узнать, когда доиграл */
+export async function playFile(file: string, vol = 1, at?: number): Promise<AudioBufferSourceNode | undefined> {
   if (!soundOn) return;
   const b = await buffer(file);
   if (!b) return;
@@ -190,9 +190,18 @@ export async function playFile(file: string, vol = 1, at?: number) {
   src.connect(g).connect(a.destination);
   const outLat = ((a as any).outputLatency ?? 0) + (a.baseLatency ?? 0);
   const when = at != null ? Math.max(0, (at - now()) / 1000 - outLat) : 0;
-  src.onended = () => playing.delete(src);
+  src.addEventListener('ended', () => playing.delete(src));
   playing.add(src);
   src.start(a.currentTime + when);
+  return src;
+}
+
+/** подпись события или интро по id — для «где уже стоит этот файл» */
+export function soundLabel(id: string) {
+  if (SOUND_EVENTS[id]) return SOUND_EVENTS[id].name;
+  const [k, x] = id.split(':');
+  const it = INTRO_LIST.find((i) => i.kind === k && i.id === x);
+  return it ? `Интро: ${it.name}` : id;
 }
 
 /** есть ли у события свой файл (или оно выключено) — тогда встроенный звук не нужен */

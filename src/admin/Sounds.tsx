@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Settings } from '../shared/types';
 import {
-  INTRO_LIST, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundMap, stopAllSounds, uploadSound,
+  INTRO_LIST, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundLabel, soundMap, stopAllSounds, uploadSound,
   type IntroKind, type SoundCfg, type SoundMap,
 } from '../shared/sounds';
 import { unlockAudio } from '../shared/sound';
@@ -55,11 +55,18 @@ function NoServer({ files }: { files: string[] | null | undefined }) {
 }
 
 /** выбор звука для одного события: файл из папки / загрузить / встроенный / тишина + громкость */
-function Picker({ id, snd, synth, onPlay }: { id: string; snd: Snd; synth: boolean; onPlay?: (cfg: SoundCfg) => void }) {
+function Picker({ id, snd, synth, onPlay, label }: { id: string; snd: Snd; synth: boolean; onPlay?: (cfg: SoundCfg) => void; label?: string }) {
   const cfg = snd.map[id] ?? {};
   const inp = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [lib, setLib] = useState(false);
+  const choose = (file: string) => {
+    const next = { ...cfg, file, mute: false };
+    void snd.set(id, next);
+    if (onPlay) onPlay(next);
+    else preview(id, next);
+  };
   const take = async (f: File | undefined) => {
     if (!f) return;
     setBusy(true);
@@ -89,8 +96,12 @@ function Picker({ id, snd, synth, onPlay }: { id: string; snd: Snd; synth: boole
         <option value="">{synth ? '8-бит (встроенный)' : '— нет звука —'}</option>
         {synth && <option value="__mute">🔇 выключить</option>}
         {cfg.file && !files.includes(cfg.file) && <option value={cfg.file}>⚠ {cfg.file} (нет в папке)</option>}
-        {files.map((f) => <option value={f}>{f}</option>)}
+        {folders(files).map(([dir, fs]) => (
+          <optgroup label={folderName(dir)}>{fs.map((f) => <option value={f}>{f.split('/').pop()}</option>)}</optgroup>
+        ))}
       </select>
+      <button class="btn small" title="Открыть библиотеку: все звуки из папки sounds/ с прослушиванием" onClick={() => setLib(true)}>🎵 Библиотека</button>
+      {lib && <Library snd={snd} current={cfg.file} title={label ?? soundLabel(id)} onPick={(f) => { setLib(false); choose(f); }} onClose={() => { stopAllSounds(); setLib(false); }} />}
       <button class="btn small ghost" disabled={busy} title="Выбрать файл на компьютере — он скопируется в папку sounds/. Можно и перетащить файл сюда." onClick={() => inp.current?.click()}>{busy ? '…' : '📁 Файл'}</button>
       <input ref={inp} type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.opus,.flac" hidden onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = ''; void take(f); }} />
       {cfg.file && (
@@ -100,6 +111,67 @@ function Picker({ id, snd, synth, onPlay }: { id: string; snd: Snd; synth: boole
           <span>{Math.round((cfg.vol ?? 1) * 100)}%</span>
         </label>
       )}
+    </div>
+  );
+}
+
+/** файлы по папкам: корень sounds/ (загруженные) и подпапки (stock/ и т. п.) */
+function folders(files: string[]): [string, string[]][] {
+  const m = new Map<string, string[]>();
+  for (const f of files) {
+    const dir = f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '';
+    if (!m.has(dir)) m.set(dir, []);
+    m.get(dir)!.push(f);
+  }
+  return [...m.entries()].sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
+}
+const folderName = (dir: string) => (dir ? `📂 ${dir}` : '📂 загруженные (sounds/)');
+
+/** библиотека: все файлы из sounds/ с прослушиванием, поиском и «где уже стоит» */
+function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?: string; title: string; onPick: (f: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => { if (e.code === 'Escape') onClose(); };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
+  const listen = async (f: string) => {
+    unlockAudio();
+    stopAllSounds();
+    if (now === f) return setNow(null);
+    setNow(f);
+    const src = await playFile(f);
+    src?.addEventListener('ended', () => setNow((x) => (x === f ? null : x)));
+  };
+  const used = (f: string) => Object.entries(snd.map).filter(([, c]) => c.file === f).map(([k]) => soundLabel(k));
+  const files = (snd.files ?? []).filter((f) => !q || f.toLowerCase().includes(q.toLowerCase().replace(/ /g, '_')) || f.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div class="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="panel modal snd-lib col">
+        <div class="row">
+          <b style={{ flex: 1 }}>Библиотека звуков → «{title}»</b>
+          <button class="btn small ghost" onClick={onClose}>✕</button>
+        </div>
+        <input class="inp-s" placeholder="Поиск по названию: gong, bell, intro…" value={q} autoFocus onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+        {!files.length && <div class="muted">Ничего не нашлось. Свои файлы можно добавить кнопкой «📁 Файл» или положить в папку sounds/.</div>}
+        {folders(files).map(([dir, fs]) => (
+          <section>
+            <h4>{folderName(dir)} <span class="muted small">{fs.length}</span></h4>
+            {fs.map((f) => {
+              const u = used(f);
+              return (
+                <div class={'snd-lib-row' + (f === current ? ' cur' : '') + (f === now ? ' play' : '')}>
+                  <button class="btn small" title="Прослушать" onClick={() => void listen(f)}>{f === now ? '■' : '▶'}</button>
+                  <span class="snd-lib-name">{f.split('/').pop()}</span>
+                  {u.length > 0 && <span class="muted small" title={u.join(', ')}>уже: {u.slice(0, 2).join(', ')}{u.length > 2 ? ` и ещё ${u.length - 2}` : ''}</span>}
+                  {f === current ? <span class="snd-badge own">выбран</span> : <button class="btn small primary" onClick={() => onPick(f)}>Выбрать</button>}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -121,7 +193,7 @@ export function SoundsTab() {
     <div class="pad col snd">
       <div class="note">
         Здесь — звуки событий игры. Все они играют <b>только на ТВ</b>, поэтому файлы никуда не загружаются: кнопка «📁 Файл» (или перетаскивание файла на строку)
-        копирует его в папку <code>sounds/</code> проекта, а выбор сохраняется в <code>sounds/sounds.json</code>. Нет своего файла — играет встроенный 8-битный звук,
+        копирует его в папку <code>sounds/</code> проекта, а «🎵 Библиотека» показывает все звуки оттуда (стоковые — в <code>sounds/stock/</code>) с прослушиванием; а выбор сохраняется в <code>sounds/sounds.json</code>. Нет своего файла — играет встроенный 8-битный звук,
         а у событий с пометкой «молчит» звука пока нет вовсе — им можно его дать. Открытый ТВ подхватывает изменения сам (за ~10 c).
         Интро префектур и игр — на вкладке «Интро». Музыка карты и дуэли — это <code>music/map.mp3</code> и <code>music/duel.mp3</code>.
       </div>
@@ -145,7 +217,7 @@ export function SoundsTab() {
                 {evs.map((e) => (
                   <tr>
                     <td class="snd-name"><b>{e.name}</b> {badge(snd.map[e.id], !!e.synth)}<div class="muted small">{e.when}</div></td>
-                    <td><Picker id={e.id} snd={snd} synth={!!e.synth} /></td>
+                    <td><Picker id={e.id} snd={snd} synth={!!e.synth} label={e.name} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -290,7 +362,7 @@ export function IntrosTab({ settings }: { settings: Settings }) {
         </div>
         <div class="row wrap">
           <b>Звук:</b>
-          <Picker id={sid} snd={snd} synth={false} onPlay={(c) => play(true, c)} />
+          <Picker id={sid} snd={snd} synth={false} onPlay={(c) => play(true, c)} label={'Интро: ' + sel.name} />
           <span class="muted small">{snd.status}</span>
         </div>
         <div class="muted small">Совет: перетащи файл прямо на строку «Звук» — он скопируется в папку sounds/ и сразу проиграется вместе с анимацией.</div>

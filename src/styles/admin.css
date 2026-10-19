@@ -79,3 +79,10 @@ label { display: inline-flex; gap: 6px; align-items: center; }
 .intro-frame iframe { position: absolute; left: 0; top: 0; width: 1600px; height: 900px; border: 0; transform-origin: 0 0; pointer-events: none; }
 @media (max-width: 760px) { .intros { flex-direction: column; height: auto; } .intros-list { width: auto; max-height: 40vh; border-right: 0; border-bottom: 3px solid #fff; } }
 .intros-main .btn { white-space: nowrap; }
+.snd-lib { width: min(720px, 100%); gap: 8px; }
+.snd-lib h4 { margin: 10px 0 4px; }
+.snd-lib-row { display: flex; gap: 8px; align-items: center; padding: 3px 6px; border: 2px solid transparent; }
+.snd-lib-row:hover { background: #ffffff0a; }
+.snd-lib-row.cur { border-color: var(--green); }
+.snd-lib-row.play { background: #ffd23f22; }
+.snd-lib-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
