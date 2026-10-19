@@ -189,7 +189,20 @@
 .gscroll-seal { position: absolute; right: 0.6em; bottom: 0.6em; width: 1.5em; height: 2.6em; display: grid; place-items: center; background: #c8262a; color: #fff3e6; font-size: 0.95em; line-height: 1; writing-mode: vertical-rl; border: 3px solid #8e1418; transform: rotate(-6deg); opacity: 0.9; }
 
 /* иайдо */
-.group-tv > .iai-stage { position: relative; width: 100%; height: 100%; justify-content: space-between; overflow: hidden; background: linear-gradient(#1c0f2e 0%, #4a1636 45%, #c2453a 78%, #f2a65a 100%); }
+.group-tv > .iai-stage { position: relative; width: 100%; height: 100%; justify-content: space-between; overflow: hidden; background: #0e0a26; }
+.iai-stage > :not(.iai-art):not(.iai-flash):not(.iai-slash) { position: relative; z-index: 1; }
+/* картина 16:9 «cover» на всю сцену: фон, самурай, лепестки (картинки — src/img/iaido/README.md) */
+.iai-art { position: absolute; inset: 0; z-index: 0; overflow: hidden; container-type: size; pointer-events: none; }
+.iai-pic { position: absolute; left: 50%; top: 50%; width: max(100cqw, 177.78cqh); height: max(56.25cqw, 100cqh); transform: translate(-50%, -50%); }
+.iai-bg, .iai-petals { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+/* самурай: 96×96 на картине 480×270 */
+.iai-sam { position: absolute; left: 35.4%; top: 63%; width: 20%; height: 35.56%; image-rendering: pixelated; }
+.iai-sam.drawn { animation: iaiDash 0.25s steps(3) both; }
+.iai-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 55% 40%, transparent 50%, rgba(5, 2, 15, 0.65) 100%); animation: iaiBreath 3s ease-in-out infinite; }
+.iai-slash { position: absolute; left: -10%; top: 50%; z-index: 2; width: 120%; height: 0.9vh; background: linear-gradient(90deg, transparent, #fff 30%, #fff 70%, transparent); box-shadow: 0 0 2vh #ffd6e8; transform: rotate(-14deg) scaleX(0); transform-origin: left; animation: iaiSlash 0.6s cubic-bezier(.2,.9,.2,1) forwards; pointer-events: none; }
+@keyframes iaiSlash { 0% { transform: rotate(-14deg) scaleX(0); opacity: 1; } 40% { transform: rotate(-14deg) scaleX(1); opacity: 1; } 100% { transform: rotate(-14deg) scaleX(1); opacity: 0; } }
+@keyframes iaiDash { 0% { transform: translateX(-6%); } 100% { transform: translateX(0); } }
+@keyframes iaiBreath { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
 .iai-top { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
 .iai-round { font-size: 1.4em; color: var(--yellow); text-shadow: 3px 3px 0 #000; }
 .iai-sign { flex: 1; min-height: 0; display: grid; place-items: center; font-size: min(30vh, 16em); line-height: 1; color: #fff; text-shadow: 8px 8px 0 #000; }
@@ -199,10 +212,10 @@
 .iai-ready { font-size: 0.22em; color: #ffd9c2; animation: pulse 1s ease-in-out infinite; }
 .iai-hush { font-size: 0.25em; color: rgba(255, 255, 255, 0.35); }
 @keyframes pulse { 50% { opacity: 0.4; } }
-.iai-flash { position: absolute; inset: 0; background: #fff; z-index: 2; pointer-events: none; }
+.iai-flash { position: absolute !important; inset: 0; background: #fff; z-index: 2 !important; pointer-events: none; }
 .iai-verdict { font-size: 1.6em; display: flex; align-items: center; gap: 0.4em; background: rgba(10, 8, 20, 0.7); padding: 0.2em 0.8em; border: 3px solid var(--yellow); }
 .iai-verdict b { color: var(--yellow); }
-.iai-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em 1.4em; padding-top: 0.4em; border-top: 4px solid #1a0d14; width: 100%; }
+.iai-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em 1.4em; padding: 0.4em 0; border-top: 4px solid #f7a6c9; width: 100%; background: rgba(14, 8, 30, 0.75); }
 .iai-samurai { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 5.5em; }
 .iai-samurai.out { opacity: 0.45; filter: grayscale(1); }
 .iai-samurai.win .avatar { animation: pop 0.4s both; }

@@ -1,10 +1,32 @@
-// Иайдо на телефоне: весь экран — кнопка удара. Сигнал «!» только на ТВ — телефон его не знает.
+// Иайдо на телефоне: весь экран — кнопка удара, на нём катана в ножнах. Сигнал «!» только на ТВ — телефон его не знает.
 // Время нажатия шлём по часам хоста (как ответы на вопросы), поэтому сеть не влияет на победителя.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GroupPublic, Player } from '../shared/types';
 import { useFrame } from '../ui/common';
 import { vibrate } from '../shared/util';
+import { runPetals } from '../games/petals';
+import bgUrl from '../img/iaido/bg.png';
+import katanaUrl from '../img/iaido/katana.png';
+import sayaUrl from '../img/iaido/saya.png';
+
+/** фон (ночная сакура, лепестки) и меч; drawn — клинок выхвачен, foul — фальстарт */
+function IaiScene({ drawn, foul, live, children }: { drawn: boolean; foul: boolean; live: boolean; children: any }) {
+  const cv = useRef<HTMLCanvasElement>(null);
+  useEffect(() => runPetals(cv.current!, 30), []);
+  return (
+    <>
+      <img class="iai-pad-bg" src={bgUrl} alt="" draggable={false} />
+      <canvas ref={cv} class="iai-pad-petals" width={180} height={320} />
+      <div class="iai-pad-top">{children}</div>
+      <div class={'iai-sword' + (drawn ? ' drawn' : '') + (foul ? ' foul' : '') + (live ? ' live' : '')}>
+        <img class="iai-katana" src={katanaUrl} alt="" draggable={false} />
+        <img class="iai-saya" src={sayaUrl} alt="" draggable={false} />
+        {drawn && !foul && <div class="iai-pad-slash" />}
+      </div>
+    </>
+  );
+}
 
 /** нажатия по раундам: «игра:раунд» → время хоста (переживает перерисовки) */
 const presses = new Map<string, number>();
@@ -31,9 +53,11 @@ export function IaidoPad({ client, g, me }: { client: GameClient; g: GroupPublic
   if (g.phase === 'intro' || !iai) {
     return (
       <div class="iai-pad wait">
-        <div class="iai-pad-big">斬</div>
-        <div class="iai-pad-text">Иайдо: жми, когда на ТВ вспыхнет «!»</div>
-        <div class="muted small-text">Слушай ведущего</div>
+        <IaiScene drawn={false} foul={false} live={false}>
+          <div class="iai-pad-big">斬</div>
+          <div class="iai-pad-text">Иайдо: жми, когда на ТВ вспыхнет «!»</div>
+          <div class="muted small-text">Слушай ведущего</div>
+        </IaiScene>
       </div>
     );
   }
@@ -68,10 +92,12 @@ export function IaidoPad({ client, g, me }: { client: GameClient; g: GroupPublic
   }
   return (
     <div class={cls} onPointerDown={strike}>
-      <div class="iai-pad-round">Раунд {iai.round} / {iai.rounds}</div>
-      <div class="iai-pad-big">{big}</div>
-      <div class="iai-pad-text">{text}</div>
-      <div class="muted small-text">Смотри на ТВ, а не в телефон</div>
+      <IaiScene drawn={early || at != null || myTime != null} foul={early} live={open && at == null && !early}>
+        <div class="iai-pad-round">Раунд {iai.round} / {iai.rounds}</div>
+        <div class="iai-pad-big">{big}</div>
+        <div class="iai-pad-text">{text}</div>
+        <div class="muted small-text">Смотри на ТВ, а не в телефон</div>
+      </IaiScene>
     </div>
   );
 }

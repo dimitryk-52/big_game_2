@@ -142,16 +142,34 @@
 .syl.ok { color: var(--green); }
 .senryu-mine { font-size: 22px; color: var(--yellow); text-align: center; }
 
-/* иайдо: весь экран — кнопка удара */
-.iai-pad { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; background: radial-gradient(circle at 50% 45%, #a3202a 0 34%, #3a1022 35% 100%); }
-.iai-pad.wait { background: radial-gradient(circle at 50% 45%, #4a3a5a 0 34%, #1c1430 35% 100%); }
-.iai-pad.hit { background: radial-gradient(circle at 50% 45%, #2f8f4a 0 34%, #10301c 35% 100%); }
-.iai-pad.out { background: radial-gradient(circle at 50% 45%, #555 0 34%, #222 35% 100%); }
-.iai-pad.done { background: #1c1430; }
-.iai-pad:active:not(.wait):not(.done) { filter: brightness(1.3); }
+/* иайдо: весь экран — кнопка удара; ночная сакура и катана в ножнах (картинки — src/img/iaido/README.md) */
+.iai-pad { flex: 1; min-height: 0; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; touch-action: none; user-select: none; -webkit-user-select: none; background: #0e0a26; }
+.iai-pad-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; image-rendering: pixelated; filter: brightness(0.6); }
+.iai-pad-petals { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; pointer-events: none; }
+.iai-pad-top { position: relative; z-index: 2; text-align: center; padding: 12px 12px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; text-shadow: 3px 3px 0 #000; }
 .iai-pad-round { font-size: 18px; color: var(--yellow); }
-.iai-pad-big { font-size: 34vw; line-height: 1; text-shadow: 6px 6px 0 #000; }
+.iai-pad-big { font-size: 64px; line-height: 1; text-shadow: 5px 5px 0 #000; }
 .iai-pad-text { font-size: 22px; }
+.iai-pad.wait .iai-pad-big, .iai-pad.out .iai-pad-big { color: #ff3b55; }
+.iai-pad.hit .iai-pad-big { color: var(--green); }
+.iai-pad.done .iai-pad-big { color: var(--yellow); }
+/* меч: катана за ножнами; низ цубы — 25% высоты катаны, ножны — остальные 75% */
+.iai-sword { position: relative; z-index: 1; flex: 1; min-height: 0; aspect-ratio: 16 / 160; max-height: 60vh; margin: auto 0 4vh; }
+.iai-katana, .iai-saya { position: absolute; left: 0; width: 100%; image-rendering: pixelated; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.6)); }
+.iai-katana { top: 0; height: 100%; transition: transform 0.09s steps(3); }
+.iai-saya { top: 25%; height: 75%; transition: transform 0.35s ease-in, opacity 0.35s ease-in; }
+/* выхватил: ножны отлетают вниз, клинок открыт целиком и сверкает */
+.iai-sword.drawn .iai-saya { transform: translateY(18%) rotate(6deg); opacity: 0; }
+.iai-sword.drawn .iai-katana { transform: translateY(-3%); filter: drop-shadow(0 0 10px #fff) drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.6)); }
+/* фальстарт: клинок только чуть показался, ножны на месте, всё серое */
+.iai-sword.foul .iai-saya { transform: none; opacity: 1; }
+.iai-sword.foul .iai-katana { transform: translateY(-6%); filter: grayscale(0.8) brightness(0.7); }
+.iai-sword.foul { animation: iaiShake 0.4s; }
+.iai-sword.live .iai-katana { animation: iaiHilt 1.6s ease-in-out infinite; }
+.iai-pad-slash { position: absolute; left: 50%; top: 10%; width: 140vw; height: 6px; background: linear-gradient(90deg, transparent, #fff 35%, #fff 65%, transparent); transform: translateX(-50%) rotate(-25deg); animation: iaiPadSlash 0.4s ease-out forwards; pointer-events: none; }
+@keyframes iaiHilt { 0%, 100% { filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.6)); } 50% { filter: drop-shadow(0 0 8px #f7a6c9) drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.6)); } }
+@keyframes iaiPadSlash { 0% { opacity: 1; clip-path: inset(0 100% 0 0); } 50% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; } }
+@keyframes iaiShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 
 /* онсэн на телефоне */
 .onsen { flex: 1; display: flex; flex-direction: column; min-height: 0; }

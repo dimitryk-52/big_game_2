@@ -1,10 +1,15 @@
 // Иайдо на ТВ: «приготовились» → тишина (иногда ложный «?») → вспышка «!» → время каждого игрока.
 // Момент сигнала знает только ТВ (хост), телефоны его не получают.
+// Фон — ночная сакура с самураем и летящими лепестками; на «!» лепестки почти замирают, самурай выхватывает меч.
 import { useEffect, useRef } from 'preact/hooks';
 import type { GameState, GroupPublic } from '../shared/types';
 import { Avatar, useFrame } from '../ui/common';
 import { iaiSounds } from '../shared/sound';
 import { now } from '../shared/util';
+import { runPetals } from '../games/petals';
+import bgUrl from '../img/iaido/bg.png';
+import samuraiUrl from '../img/iaido/samurai.png';
+import samuraiCutUrl from '../img/iaido/samurai_cut.png';
 
 type Signal = { round: number; at: number; decoyAt?: number } | null;
 
@@ -35,7 +40,9 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
 
   return (
     <div class="iai-stage">
+      <IaiArt drawn={go} at={go && s0 ? s0.at : null} />
       {flash && <div class="iai-flash" />}
+      {go && s0 && t - s0.at < 1000 && <div class="iai-slash" key={s0.at} />}
       <div class="iai-top">
         <span class="iai-round">Раунд {iai.round} / {iai.rounds}</span>
         <span class="group-task">{g.prompt}</span>
@@ -69,6 +76,29 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** картина: фон, самурай и лепестки. После сигнала время почти замирает и через полторы секунды оживает */
+function IaiArt({ drawn, at }: { drawn: boolean; at: number | null }) {
+  const cv = useRef<HTMLCanvasElement>(null);
+  const cut = useRef<number | null>(null);
+  cut.current = at;
+  useEffect(() => runPetals(cv.current!, 90, () => {
+    const c = cut.current;
+    if (c == null) return 1;
+    const k = (now() - c) / 1500;
+    return k < 1 ? 0.04 : Math.min(1, 0.04 + (k - 1) * 0.6);
+  }), []);
+  return (
+    <div class="iai-art">
+      <div class="iai-pic">
+        <img class="iai-bg" src={bgUrl} alt="" draggable={false} />
+        <img class={'iai-sam' + (drawn ? ' drawn' : '')} src={drawn ? samuraiCutUrl : samuraiUrl} alt="" draggable={false} />
+        <canvas ref={cv} class="iai-petals" width={480} height={270} />
+      </div>
+      <div class="iai-vignette" />
     </div>
   );
 }
