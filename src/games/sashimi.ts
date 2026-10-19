@@ -246,15 +246,26 @@ export function drawSashimi(ctx: CanvasRenderingContext2D, w: number, h: number,
   const knife = cut == null ? v.knife : null;
   if (knife != null) {
     const x = ox + tToX(knife) * k;
-    // лезвие янагиба: стальная полоса, рукоять сверху
+    // нож янагиба в руке игрока: рукоять снизу (у игрока), острие уходит вверх
     const bw = Math.max(3, Math.round(k * 1.5));
-    ctx.fillStyle = '#0d0d1a';
-    ctx.fillRect(x - bw / 2 - 1, oy + 1 * k, bw + 2, (SH - 4) * k);
-    ctx.fillStyle = '#dfe6ee';
-    ctx.fillRect(x - bw / 2, oy + 1 * k, bw, (SH - 4) * k);
+    const px = (y0: number, y1: number, w: number, col: string) => {
+      ctx.fillStyle = '#0d0d1a';
+      ctx.fillRect(x - w / 2 - 1, oy + y0 * k - 1, w + 2, (y1 - y0) * k + 2);
+      ctx.fillStyle = col;
+      ctx.fillRect(x - w / 2, oy + y0 * k, w, (y1 - y0) * k);
+    };
+    // лезвие с заострённым кончиком
+    px(2, 4, Math.max(1, bw - 2), '#dfe6ee');
+    px(4, 48, bw, '#dfe6ee');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x - bw / 2, oy + 1 * k, 1, (SH - 4) * k);
-    ctx.fillStyle = '#5a3a1e';
-    ctx.fillRect(x - bw, oy, bw * 2, 4 * k);
+    ctx.fillRect(x - bw / 2, oy + 4 * k, 1, 44 * k);
+    // латунное кольцо и деревянная рукоять
+    const hw = bw + 3 * k;
+    px(47, 50, hw + 2, '#c9a24a');
+    px(50, SH - 1, hw, '#6b4423');
+    ctx.fillStyle = '#8a5a2e';
+    ctx.fillRect(x - hw / 2 + k, oy + 50 * k, k, (SH - 51) * k);
+    ctx.fillStyle = '#3e2512';
+    for (let y = 52; y < SH - 2; y += 3) ctx.fillRect(x - hw / 2, oy + y * k, hw, Math.max(1, k / 2));
   }
 }

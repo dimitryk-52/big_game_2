@@ -160,6 +160,15 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   useEffect(() => {
     if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || ((tab === 'ring' || tab === 'chohan' || tab === 'sudoku') && !solo.includes(tab))) setTab('home');
   }, [solo.join(), hasBalls, tab]);
+  // открытые соло-игры остаются смонтированными (на паузе), пока идёт вопрос или групповая игра:
+  // после неё игрок возвращается ровно туда, где остановился
+  const [opened, setOpened] = useState<SoloGameId[]>([]);
+  useEffect(() => {
+    if ((tab === 'ring' || tab === 'chohan' || tab === 'sudoku') && !opened.includes(tab)) setOpened([...opened, tab]);
+  }, [tab]);
+  const soloView = (g: SoloGameId, el: (paused: boolean) => any) => opened.includes(g) && solo.includes(g) && (
+    <div style={{ display: !att && tab === g ? 'contents' : 'none' }}>{el(!!att || tab !== g)}</div>
+  );
 
   const [debug, setDebug] = useState(phoneDebugEnabled);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -208,9 +217,9 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         )}
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
-        {!att && tab === 'ring' && hasRing && <RingGame client={client} s={s} me={me} onExit={() => setTab('home')} />}
-        {!att && tab === 'chohan' && solo.includes('chohan') && <ChoHan client={client} s={s} me={me} onExit={() => setTab('home')} />}
-        {!att && tab === 'sudoku' && solo.includes('sudoku') && <Sudoku client={client} s={s} me={me} onExit={() => setTab('home')} />}
+        {soloView('ring', (paused) => <RingGame client={client} s={s} me={me} paused={paused} onExit={() => setTab('home')} />)}
+        {soloView('chohan', (paused) => <ChoHan client={client} s={s} me={me} paused={paused} onExit={() => setTab('home')} />)}
+        {soloView('sudoku', (paused) => <Sudoku client={client} s={s} me={me} paused={paused} onExit={() => setTab('home')} />)}
       </div>
       {!att && s.stage.t !== 'prefIntro' && (
         <nav class="tabbar">

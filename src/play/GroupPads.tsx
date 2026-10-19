@@ -242,7 +242,7 @@ export function SashimiPad({ client, g, me }: { client: GameClient; g: GroupPubl
         <div class="sashimi-target">Отрежь <b>{g.target} г</b></div>
       </div>
       <FishBoard fish={fish} view={view} onRef={(c) => (cvEl.current = c)} class={live && !sent ? 'live' : ''} />
-      <Scale grams={null} label={`${f.name} целиком: ${f.total} г · кусок — справа от ножа`} />
+      <Scale grams={null} label={`${f.name} целиком: ${f.total} г · твой кусок — справа от ножа (подсвечен)`} />
       {g.phase === 'intro' && <div class="muted center">Слушай задание — нож появится по сигналу</div>}
       {!sent && g.phase !== 'intro' && (
         <>

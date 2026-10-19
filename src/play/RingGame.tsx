@@ -10,7 +10,9 @@ import { sfx } from '../shared/sound';
 
 interface Run { layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: 'gold' | 'green' | 'miss' } }
 
-export function RingGame({ client, s, me, onExit }: { client: GameClient; s: GameState; me: Player; onExit: () => void }) {
+/** paused — экран спрятан (вопрос, групповая игра): указатель идёт по часам хоста, поэтому
+ *  запущенная попытка не теряется — вернувшись, игрок жмёт СТОП как обычно */
+export function RingGame({ client, s, me, onExit }: { client: GameClient; s: GameState; me: Player; paused?: boolean; onExit: () => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const run = useRef<Run | null>(null);
   const [phase, setPhase] = useState<'idle' | 'running' | 'stopping' | 'done'>('idle');

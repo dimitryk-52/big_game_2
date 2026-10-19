@@ -10,7 +10,7 @@ import { sfx } from '../shared/sound';
 type Phase = 'idle' | 'shaking' | 'bet' | 'rolling' | 'reveal' | 'done';
 type Guess = 'cho' | 'han';
 
-export function ChoHan({ client, s, me, onExit }: { client: GameClient; s: GameState; me: Player; onExit: () => void }) {
+export function ChoHan({ client, s, me, paused, onExit }: { client: GameClient; s: GameState; me: Player; paused: boolean; onExit: () => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const view = useRef<ChohanView>({ shake: 0, lift: 0, air: false, dice: null });
   const anim = useRef<{ kind: 'shake' | 'lift'; t0: number } | null>(null);
@@ -21,7 +21,6 @@ export function ChoHan({ client, s, me, onExit }: { client: GameClient; s: GameS
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    void client.req('busy', { busy: 'chohan' }).catch(() => {});
     let raf = 0;
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop);
@@ -41,8 +40,14 @@ export function ChoHan({ client, s, me, onExit }: { client: GameClient; s: GameS
       if (c) drawChohan(c.getContext('2d')!, v);
     };
     raf = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(raf); void client.req('busy', { busy: null }).catch(() => {}); };
+    return () => cancelAnimationFrame(raf);
   }, []);
+  // ТВ показывает окно игры, пока игрок за столом (на паузе — нет)
+  useEffect(() => {
+    if (paused) return;
+    void client.req('busy', { busy: 'chohan' }).catch(() => {});
+    return () => { void client.req('busy', { busy: null }).catch(() => {}); };
+  }, [paused]);
 
   const shake = () => {
     setErr('');

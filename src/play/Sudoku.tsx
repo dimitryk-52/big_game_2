@@ -9,7 +9,7 @@ import { sfx } from '../shared/sound';
 
 interface Cur { level: number; done: boolean; size?: number; puzzle?: number[] }
 
-export function Sudoku({ client, s, me, onExit }: { client: GameClient; s: GameState; me: Player; onExit: () => void }) {
+export function Sudoku({ client, s, me, paused, onExit }: { client: GameClient; s: GameState; me: Player; paused: boolean; onExit: () => void }) {
   const [cur, setCur] = useState<Cur | null>(null);
   const [err, setErr] = useState('');
   const [won, setWon] = useState('');
@@ -17,11 +17,13 @@ export function Sudoku({ client, s, me, onExit }: { client: GameClient; s: GameS
     setErr('');
     try { setCur(await client.req<Cur>('sudokuGet')); } catch (e: any) { setErr(e.message); }
   };
+  useEffect(() => { void load(); }, []);
+  // ТВ показывает окно игры, пока игрок решает (на паузе — нет)
   useEffect(() => {
-    void load();
+    if (paused) return;
     void client.req('busy', { busy: 'sudoku' }).catch(() => {});
     return () => { void client.req('busy', { busy: null }).catch(() => {}); };
-  }, []);
+  }, [paused]);
   const rewards = s.settings.sudoku?.rewards ?? [];
   const rw = (i: number) => [rewards[i]?.yen ? `¥${rewards[i].yen}` : '', rewards[i]?.stars ? `${rewards[i].stars}★` : ''].filter(Boolean).join(' + ');
 
