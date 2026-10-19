@@ -62,20 +62,56 @@
   .actions .msg { font-size: 12px; color: var(--ok); align-self: center; }
   .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button { padding: 5px 12px; }
+  .tabs button.on { border-color: var(--accent); color: var(--accent); }
+  body.q-mode main { display: none; }
+  body:not(.q-mode) #queue { display: none; }
+  #queue { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+  #queue .qhead { color: var(--muted); font-size: 13px; }
+  #queue h2 { margin: 0 0 8px; font-size: 16px; display: flex; gap: 10px; align-items: baseline; }
+  #queue h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .qlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+  .qtask { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: grid; grid-template-columns: 72px 1fr; gap: 10px; }
+  .qtask.done { opacity: .55; }
+  .qtask .thumb { width: 72px; height: 72px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--muted); text-align: center;
+    background-color: #2a2d36; background-image: linear-gradient(45deg,#353946 25%,transparent 25%,transparent 75%,#353946 75%),linear-gradient(45deg,#353946 25%,transparent 25%,transparent 75%,#353946 75%);
+    background-size: 12px 12px; background-position: 0 0, 6px 6px; }
+  .qtask .thumb img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+  .qtask .t { font-weight: 600; }
+  .qtask .meta { font-size: 11px; color: var(--muted); }
+  .qtask .qh { font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+  .qtask .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .qtask .btns button { font-size: 12px; padding: 4px 10px; }
+  .qtask .btns button.take { border-color: var(--accent); color: var(--accent); }
+  .badge { font-size: 11px; border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line); }
+  .badge.done { border-color: var(--ok); color: var(--ok); }
+  .badge.todo { border-color: var(--accent2); color: var(--accent2); }
+  .badge.nowire { border-color: var(--muted); color: var(--muted); }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } section#results { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <header>
   <h1>👾 Пиксель-арт · Nano Banana</h1>
+  <div class="tabs">
+    <button id="tabGen" class="on">🎨 Генератор</button>
+    <button id="tabQueue">📋 Очередь</button>
+  </div>
   <span id="status">проверяю ключ…</span>
 </header>
 <main>
   <aside>
     <div>
-      <label class="h" for="preset">Готовые задания для игры</label>
+      <label class="h" for="preset">Задание из очереди</label>
       <select id="preset"><option value="">— свой рисунок —</option></select>
       <div class="hint" id="presetHint"></div>
+    </div>
+
+    <div>
+      <label class="h" for="pref">Задник города — префектура</label>
+      <select id="pref"><option value="">— не выбрана —</option></select>
+      <div class="hint">Подставит готовое описание с достопримечательностями и сезоном. Его можно поправить ниже.</div>
     </div>
 
     <div>
@@ -158,6 +194,12 @@
   </section>
 </main>
 
+<section id="queue">
+  <div class="qhead">Задания из <code>art/queue.json</code>. «Взять» — подставит промпт, размеры и референсы в генератор. На удачной карточке жми «В игру»: картинка ляжет в игру, а задание отметится готовым.</div>
+  <div id="qbody"></div>
+</section>
+
+<script src="/prefectures.js"></script>
 <script>
 const $ = (s, el = document) => el.querySelector(s);
 
@@ -177,46 +219,8 @@ const BGS = {
   'Белый':     'on a plain flat white background',
   'Без указания': '',
 };
-// Готовые задания: картинки, которые игра ищет в src/img/. Кнопка «В игру» кладёт результат туда (в 1×).
-const DRAGON = 'the festival dragon puppet from the Nagasaki Kunchi ja-odori dance (carried on poles by performers)';
-const PRESETS = [
-  {
-    id: 'dragon-street', name: 'Джа-одори · улица (street.png)', target: 'dragon/street.png',
-    kind: 'Фон / сцена', bg: 'Без указания', aspect: '21:9', grid: 420,
-    hint: 'Фон танца дракона. Приложи как референс src/img/bgs/bg_nagasaki.png — будет в том же стиле. Проверь, что края сходятся: картинка повторяется по горизонтали.',
-    prompt: 'Side-scrolling 2D game background: a festive night street in Nagasaki during the Nagasaki Kunchi festival, Shinchi Chinatown style. Strict side view like a 2D platformer, no perspective. A row of two-storey wooden and stucco shop houses with dark tiled roofs, red Chinese lanterns strung across the street, warm glowing windows, distant hills and a starry night sky at the top. The bottom tenth of the image is an empty flat stone-paved road running across the whole width, with nothing standing on it: no people, no dragon, no poles. The image must tile horizontally: the left and right edges continue each other seamlessly',
-  },
-  {
-    id: 'dragon-head', name: 'Джа-одори · голова (head.png)', target: 'dragon/head.png',
-    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '1:1', grid: 48,
-    hint: 'Сначала голова: потом нажми «Как референс» на удачном варианте и рисуй туловище и хвост — будут одного дракона.',
-    prompt: `The head of ${DRAGON}, side view facing right, open mouth with white fangs, big round eye, golden antlers, flowing red mane and long whiskers, jade-green scales with a golden yellow jaw. Only the head and a short neck; the neck is cut straight at the left edge`,
-  },
-  {
-    id: 'dragon-body', name: 'Джа-одори · кусок туловища (body.png)', target: 'dragon/body.png',
-    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '4:3', grid: 32,
-    hint: 'Кусок повторяется много раз вдоль волны, поэтому оба конца должны быть срезаны ровно. Приложи голову как референс.',
-    prompt: `One straight body segment of ${DRAGON}, side view, horizontal: a thick cylinder of jade-green scales with a golden yellow belly stripe along the bottom and a row of small red fins along the top. The segment fills the whole width edge to edge, both ends cut perfectly straight, so copies placed side by side form one continuous body. No head, no tail, no poles`,
-  },
-  {
-    id: 'dragon-tail', name: 'Джа-одори · хвост (tail.png)', target: 'dragon/tail.png',
-    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '4:3', grid: 40,
-    hint: 'Хвост тянется влево, справа ровный срез — туда пристыкуется туловище. Приложи голову или туловище как референс.',
-    prompt: `The tail end of ${DRAGON}, side view: the body comes in from the right edge, cut perfectly straight there, and tapers to the left into a flame-like red tail fin. Jade-green scales, golden yellow belly stripe, small red fins on top. No poles`,
-  },
-  {
-    id: 'dragon-pearl', name: 'Джа-одори · жемчужина (pearl.png)', target: 'dragon/pearl.png',
-    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '1:1', grid: 16,
-    hint: 'Жемчужина летит перед головой дракона.',
-    prompt: 'A glowing golden magic pearl (tama) that a Chinese festival dragon chases: a round shiny orb with a white highlight and a few small red flame wisps around it',
-  },
-  {
-    id: 'dragon-sky', name: 'Джа-одори · дальний план (sky.png, по желанию)', target: 'dragon/sky.png',
-    kind: 'Фон / сцена', bg: 'Без указания', aspect: '21:9', grid: 420,
-    hint: 'Необязательно. Если есть sky.png, он едет медленнее улицы (параллакс). Тогда у street.png небо над крышами должно быть вырезано (пурпурный фон и «Убрать фон»).',
-    prompt: 'Side-scrolling 2D game far background: the night sky over Nagasaki harbour, stars, a big moon, dark green hills with scattered house lights, the silhouette of Oura church on a hill, calm sea at the bottom. Strict side view, no foreground buildings, no people. The image must tile horizontally: the left and right edges continue each other seamlessly',
-  },
-];
+// Задания берутся из очереди art/queue.json (закладка «Очередь»). «В игру» кладёт результат в src/img/<target> (в 1×).
+let PRESETS = [];
 
 const DEFAULT_STYLE = 'Pixel art, 16-bit retro game style, limited color palette, crisp hard-edged square pixels, no anti-aliasing, no blur, no gradients, no dithering noise, clean dark outline, consistent large pixel grid.';
 
@@ -261,14 +265,21 @@ chips($('#bgs'), BGS, 'bg');
 
 // ---------- готовые задания ----------
 const presetEl = $('#preset');
-for (const p of PRESETS) presetEl.add(new Option(p.name, p.id));
+function fillPresetSelect() {
+  presetEl.length = 1;
+  for (const p of PRESETS) presetEl.add(new Option(`${p.status === 'done' ? '✔ ' : ''}${p.game} · ${p.name}`, p.id));
+  presetEl.value = state.preset ? state.preset.id : '';
+}
 function applyPreset(id, fill) {
   const p = PRESETS.find(x => x.id === id) || null;
   state.preset = p;
   presetEl.value = p ? p.id : '';
   localStorage.setItem('pa.preset', p ? p.id : '');
-  $('#presetHint').textContent = p ? p.hint + ' Готовое — кнопка «В игру» на карточке → src/img/' + p.target : '';
+  $('#presetHint').textContent = p ? p.hint + ' Готовое — кнопка «В игру» на карточке → src/img/' + p.target + (p.wired ? '' : ' (игра пока не подхватывает — подключим кодом)') : '';
   if (!p || !fill) return;
+  loadTaskRefs(p);
+  // готовое задание и задник префектуры — либо одно, либо другое
+  prefSel.value = ''; localStorage.setItem('pa.pref', '');
   state.kind = p.kind; localStorage.setItem('pa.kind', p.kind); chips($('#kinds'), KINDS, 'kind');
   setBg(p.bg);
   setField('aspect', p.aspect);
@@ -290,14 +301,31 @@ for (const id of ['model', 'aspect', 'count', 'grid', 'imageSize']) {
 const syncSizeRow = () => { $('#sizeRow').hidden = !$('#model').value.startsWith('gemini-3'); };
 $('#model').addEventListener('change', syncSizeRow);
 syncSizeRow();
+// ---------- задники префектур ----------
+const prefSel = $('#pref');
+for (const p of window.PREFECTURES || []) prefSel.add(new Option(`${p.ru} (${p.en})`, p.code));
+prefSel.value = localStorage.getItem('pa.pref') || '';
+const currentPref = () => (window.PREFECTURES || []).find(p => String(p.code) === prefSel.value);
+prefSel.onchange = () => {
+  localStorage.setItem('pa.pref', prefSel.value);
+  const p = currentPref();
+  if (!p) return;
+  applyPreset('', false);
+  $('#prompt').value = prefecturePrompt(p);
+  localStorage.setItem('pa.prompt', $('#prompt').value);
+  if (state.kind !== 'Фон / сцена') { applyKindPreset(state.kind, 'Фон / сцена'); state.kind = 'Фон / сцена'; localStorage.setItem('pa.kind', state.kind); chips($('#kinds'), KINDS, 'kind'); }
+  setField('aspect', '1:1');   // квадрат, из которого потом режем и 16:9, и 9:16
+  updateFinal();
+};
+
 $('#prompt').value = localStorage.getItem('pa.prompt') || '';
-applyPreset(localStorage.getItem('pa.preset') || '', false);
 $('#prompt').oninput = () => { localStorage.setItem('pa.prompt', $('#prompt').value); updateFinal(); };
 
+const isPrefPrompt = () => $('#prompt').value.startsWith('A highly detailed pixel art landscape panorama');
 function buildPrompt() {
   const parts = [
     $('#prompt').value.trim(),
-    KINDS[state.kind],
+    isPrefPrompt() ? '' : KINDS[state.kind],   // у задников префектур описание уже полное
     BGS[state.bg],
     styleEl.value.trim(),
   ];
@@ -306,6 +334,89 @@ function buildPrompt() {
 }
 function updateFinal() { $('#final').textContent = buildPrompt(); }
 updateFinal();
+
+// ---------- очередь ----------
+const fileUrl = rel => '/api/file?path=' + encodeURIComponent(rel) + '&t=' + Date.now();
+/** референс задания: путь в проекте или @id (готовая картинка другого задания) */
+function refPath(r) {
+  if (!r.startsWith('@')) return r;
+  const t = PRESETS.find(x => x.id === r.slice(1));
+  return t && t.exists ? 'src/img/' + t.target : null;
+}
+async function loadTaskRefs(task) {
+  state.refs = [];
+  renderRefs();
+  const missing = [];
+  for (const r of task.refs || []) {
+    const rel = refPath(r);
+    if (!rel) { missing.push(r.slice(1)); continue; }
+    try {
+      const blob = await fetch(fileUrl(rel)).then(x => { if (!x.ok) throw 0; return x.blob(); });
+      const url = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
+      addRefDataUrl(url);
+    } catch { missing.push(rel); }
+  }
+  if (missing.length) $('#presetHint').textContent += ' Нет референса: ' + missing.join(', ') + ' — сначала сделай его.';
+}
+
+async function loadQueue() {
+  let q;
+  try { q = await fetch('/api/queue').then(r => r.json()); } catch { $('#qbody').textContent = 'Не удалось прочитать art/queue.json'; return; }
+  PRESETS = q.tasks || [];
+  if (state.preset) state.preset = PRESETS.find(x => x.id === state.preset.id) || null;
+  fillPresetSelect();
+  const todo = PRESETS.filter(t => t.status !== 'done').length;
+  $('#tabQueue').textContent = `📋 Очередь${todo ? ' (' + todo + ')' : ''}`;
+  const body = $('#qbody');
+  body.innerHTML = '';
+  const games = [...new Set(PRESETS.map(t => t.game))];
+  for (const g of games) {
+    const tasks = PRESETS.filter(t => t.game === g);
+    const left = tasks.filter(t => t.status !== 'done').length;
+    const sec = document.createElement('div');
+    sec.innerHTML = `<h2>${g} <small>${left ? 'осталось ' + left + ' из ' + tasks.length : 'всё готово ✔'}</small></h2><div class="qlist"></div>`;
+    for (const t of tasks) {
+      const el = document.createElement('div');
+      el.className = 'qtask' + (t.status === 'done' ? ' done' : '');
+      el.innerHTML = `
+        <div class="thumb">${t.exists ? `<img src="${fileUrl('src/img/' + t.target)}" alt="">` : 'ещё нет'}</div>
+        <div>
+          <div class="t"></div>
+          <div class="meta"></div>
+          <div class="qh"></div>
+          <div class="btns">
+            <button class="take">Взять</button>
+            <button class="mark">${t.status === 'done' ? 'Вернуть в очередь' : 'Готово'}</button>
+          </div>
+        </div>`;
+      el.querySelector('.t').textContent = t.name + ' ';
+      el.querySelector('.t').insertAdjacentHTML('beforeend', `<span class="badge ${t.status === 'done' ? 'done' : 'todo'}">${t.status === 'done' ? 'готово' : 'нужно'}</span>`
+        + (t.wired ? '' : ' <span class="badge nowire" title="Картинка ляжет в src/img, но игра её пока не использует — подключим кодом">не подключено</span>'));
+      el.querySelector('.meta').textContent = `src/img/${t.target} · ${t.aspect} · ${t.grid}px`;
+      el.querySelector('.qh').textContent = t.hint;
+      el.querySelector('.take').onclick = () => { applyPreset(t.id, true); showTab('gen'); };
+      el.querySelector('.mark').onclick = async () => {
+        await fetch('/api/queue/status', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: t.id, status: t.status === 'done' ? 'todo' : 'done' }) });
+        loadQueue();
+      };
+      sec.querySelector('.qlist').appendChild(el);
+    }
+    body.appendChild(sec);
+  }
+  if (!games.length) body.textContent = 'Очередь пуста.';
+}
+function showTab(tab) {
+  document.body.classList.toggle('q-mode', tab === 'queue');
+  $('#tabGen').classList.toggle('on', tab !== 'queue');
+  $('#tabQueue').classList.toggle('on', tab === 'queue');
+  localStorage.setItem('pa.tab', tab);
+  if (tab === 'queue') loadQueue();
+}
+$('#tabGen').onclick = () => showTab('gen');
+$('#tabQueue').onclick = () => showTab('queue');
+loadQueue().then(() => applyPreset(localStorage.getItem('pa.preset') || '', false));
+showTab(localStorage.getItem('pa.tab') || 'gen');
 
 // ---------- статус ----------
 fetch('/api/status').then(r => r.json()).then(s => {
@@ -361,6 +472,9 @@ async function generate() {
   go.disabled = true;
   const n = +$('#count').value;
   const preset = state.preset;
+  const pref = currentPref();
+  const label = preset ? preset.target.replace(/^.*\/|\.png$/g, '')
+    : pref && isPrefPrompt() && $('#prompt').value.includes(pref.en + ' Prefecture') ? 'bg_' + pref.en.toLowerCase() : $('#prompt').value.trim();
   const body = {
     prompt,
     model: $('#model').value,
@@ -380,7 +494,7 @@ async function generate() {
         .then(res => {
           if (res.error) throw new Error(res.error);
           const img = res.images[0];
-          renderResult(card, `data:${img.mimeType};base64,${img.data}`, preset ? preset.target.replace(/^.*\/|\.png$/g, '') : $('#prompt').value.trim(), res.text, preset);
+          renderResult(card, `data:${img.mimeType};base64,${img.data}`, label, res.text, preset);
         })
         .catch(err => { card.className = 'card error'; card.textContent = 'Ошибка: ' + err.message; })
     );
@@ -454,7 +568,8 @@ function renderResult(card, srcUrl, name, text, preset) {
     if (!confirm('Заменить src/img/' + preset.target + ' этой картинкой?')) return;
     const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target: preset.target, dataUrl: scaled(canvas, 1).toDataURL('image/png') }) }).then(r => r.json());
-    flash(r.error ? 'Ошибка: ' + r.error : 'в игре: ' + r.file);
+    flash(r.error ? 'Ошибка: ' + r.error : 'в игре: ' + r.file + ' · задание готово');
+    if (!r.error) loadQueue();
   };
   card.querySelector('[data-a=save]').onclick = async () => {
     const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -490,6 +605,7 @@ function pixelize(img, canvas, { grid, colors, removeBg, tol }) {
   const s = sg.getImageData(0, 0, sw, sh).data;
 
   let w = sw, h = sh, px;
+  grid = Math.min(Math.floor(grid) || 0, sw);
   if (grid > 0) {
     w = grid; h = Math.max(1, Math.round(grid * sh / sw));
     px = new Uint8ClampedArray(w * h * 4);

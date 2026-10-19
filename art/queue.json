@@ -1,0 +1,387 @@
+{
+  "about": "Очередь картинок для Nano Banana. Задания сюда добавляет Claude, прогоняет их человек на закладке «Очередь» в генераторе (npm run pixelart → http://localhost:4180). target — куда кнопка «В игру» кладёт картинку (относительно src/img). refs — референсы: путь в проекте или @id другого задания (тогда берётся его готовая картинка). wired: false — игра эту картинку пока не подхватывает, после рисования её подключит код. status: todo / done.",
+  "tasks": [
+    {
+      "id": "iaido-bg",
+      "game": "Иайдо",
+      "name": "Ночная сакура (фон)",
+      "target": "iaido/bg.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "16:9",
+      "grid": 480,
+      "hint": "ТВ во весь экран и фон телефона. Без людей: самурай отдельным слоем. Луна правее центра (на телефоне кадр режется по ней).",
+      "prompt": "Pixel art, 16:9 wide landscape, night in feudal Japan. A huge full moon slightly right of center with a soft glow, silhouette of Mount Fuji beneath it, a blooming sakura tree on the left edge with branches reaching over the top, another sakura branch entering from the top right corner, a dark grassy field in the foreground with fallen petals. Deep indigo-to-violet sky with stars, pink blossoms, very atmospheric and calm. Empty center-bottom area for a character. No people, no text",
+      "refs": [],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "iaido-samurai",
+      "game": "Иайдо",
+      "name": "Самурай в стойке",
+      "target": "iaido/samurai.png",
+      "kind": "Персонаж",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 96,
+      "hint": "Пока ждут сигнала. Ноги у нижнего края — потом самурай с мечом должен стоять в тех же пикселях.",
+      "prompt": "A lone ronin samurai in solid dark silhouette seen from behind at three-quarters, low iaido stance, right hand resting on the katana hilt, sword sheathed at the left hip, topknot, wide hakama trousers. Full body, feet at the bottom edge",
+      "refs": [
+        "@iaido-bg"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "iaido-samurai-cut",
+      "game": "Иайдо",
+      "name": "Самурай с выхваченным мечом",
+      "target": "iaido/samurai_cut.png",
+      "kind": "Персонаж",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 96,
+      "hint": "Тот же самурай после «!». Ноги в тех же пикселях, что в стойке, иначе фигура прыгнет — приложи готовую стойку референсом (подставится сама).",
+      "prompt": "The same ronin samurai silhouette, same pose of the legs and same position, but the katana has just been drawn: arm extended forward and up, a bright white gleaming blade",
+      "refs": [
+        "@iaido-samurai"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "iaido-petal",
+      "game": "Иайдо",
+      "name": "Лепесток сакуры",
+      "target": "iaido/petal.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 7,
+      "hint": "Крошечный, ~7×5. Таких проще дорисовать руками.",
+      "prompt": "A single tiny sakura petal, 3 shades of pink",
+      "refs": [],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "iaido-katana",
+      "game": "Иайдо",
+      "name": "Катана (телефон)",
+      "target": "iaido/katana.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "9:16",
+      "grid": 16,
+      "hint": "Вертикально, 1:10. Низ цубы (гарды) — ровно на 25% высоты, ниже клинок до самого низа. Модель даст 9:16 — лишнее по бокам обрежь.",
+      "prompt": "A Japanese katana standing perfectly vertical, hilt at the top: white wrapped tsuka with black diamond pattern, gold kashira, gold tsuba (guard) at one quarter of the height, then a long polished steel blade with a subtle hamon down to the tip at the bottom. Straight, centered, no perspective",
+      "refs": [],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "iaido-saya",
+      "game": "Иайдо",
+      "name": "Ножны (телефон)",
+      "target": "iaido/saya.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "9:16",
+      "grid": 16,
+      "hint": "Та же ширина, что у катаны, высота — 75% катаны. Непрозрачные: прячут клинок.",
+      "prompt": "An empty katana scabbard (saya) standing perfectly vertical, opening at the top: glossy red lacquer, black koiguchi at the mouth, a cream sageo cord near the top, gold kojiri cap at the bottom. Straight, centered",
+      "refs": [
+        "@iaido-katana"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-head",
+      "game": "Джа-одори",
+      "name": "Голова дракона",
+      "target": "dragon/head.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 48,
+      "hint": "Начни с головы: туловище и хвост возьмут её референсом и получатся одного дракона. Смотрит вправо.",
+      "prompt": "The head of the festival dragon puppet from the Nagasaki Kunchi ja-odori dance (carried on poles by performers), side view facing right, open mouth with white fangs, big round eye, golden antlers, flowing red mane and long whiskers, jade-green scales with a golden yellow jaw. Only the head and a short neck; the neck is cut straight at the left edge",
+      "refs": [],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-body",
+      "game": "Джа-одори",
+      "name": "Кусок туловища",
+      "target": "dragon/body.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "4:3",
+      "grid": 32,
+      "hint": "Повторяется много раз вдоль волны — оба конца срезаны ровно.",
+      "prompt": "One straight body segment of the festival dragon puppet from the Nagasaki Kunchi ja-odori dance, side view, horizontal: a thick cylinder of jade-green scales with a golden yellow belly stripe along the bottom and a row of small red fins along the top. The segment fills the whole width edge to edge, both ends cut perfectly straight, so copies placed side by side form one continuous body. No head, no tail, no poles",
+      "refs": [
+        "@dragon-head"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-tail",
+      "game": "Джа-одори",
+      "name": "Хвост",
+      "target": "dragon/tail.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "4:3",
+      "grid": 40,
+      "hint": "Справа ровный срез (туда пристыкуется туловище), плавник уходит влево.",
+      "prompt": "The tail end of the festival dragon puppet from the Nagasaki Kunchi ja-odori dance, side view: the body comes in from the right edge, cut perfectly straight there, and tapers to the left into a flame-like red tail fin. Jade-green scales, golden yellow belly stripe, small red fins on top. No poles",
+      "refs": [
+        "@dragon-head",
+        "@dragon-body"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-pearl",
+      "game": "Джа-одори",
+      "name": "Жемчужина",
+      "target": "dragon/pearl.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 16,
+      "hint": "Летит перед головой дракона.",
+      "prompt": "A glowing golden magic pearl (tama) that a Chinese festival dragon chases: a round shiny orb with a white highlight and a few small red flame wisps around it",
+      "refs": [],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-street",
+      "game": "Джа-одори",
+      "name": "Улица Нагасаки ночью",
+      "target": "dragon/street.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "21:9",
+      "grid": 420,
+      "hint": "Повторяется по горизонтали — проверь стык краёв. Нижняя десятая — пустая мостовая. Если будешь делать sky.png, небо над крышами должно быть прозрачным (пурпурный фон + «Убрать фон»).",
+      "prompt": "Side-scrolling 2D game background: a festive night street in Nagasaki during the Nagasaki Kunchi festival, Shinchi Chinatown style. Strict side view like a 2D platformer, no perspective. A row of two-storey wooden and stucco shop houses with dark tiled roofs, red Chinese lanterns strung across the street, warm glowing windows, distant hills and a starry night sky at the top. The bottom tenth of the image is an empty flat stone-paved road running across the whole width, with nothing standing on it: no people, no dragon, no poles. The image must tile horizontally: the left and right edges continue each other seamlessly",
+      "refs": [
+        "src/img/bgs/bg_nagasaki.png"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "dragon-sky",
+      "game": "Джа-одори",
+      "name": "Дальний план (по желанию)",
+      "target": "dragon/sky.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "21:9",
+      "grid": 420,
+      "hint": "Необязательно. Едет медленнее улицы (параллакс).",
+      "prompt": "Side-scrolling 2D game far background: the night sky over Nagasaki harbour, stars, a big moon, dark green hills with scattered house lights, the silhouette of Oura church on a hill, calm sea at the bottom. Strict side view, no foreground buildings, no people. The image must tile horizontally: the left and right edges continue each other seamlessly",
+      "refs": [
+        "src/img/bgs/bg_nagasaki.png"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-board",
+      "game": "Сашими",
+      "name": "Разделочная доска",
+      "target": "sashimi/board.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "21:9",
+      "grid": 320,
+      "hint": "Пустая доска, на неё код кладёт рыбу и нож. Пропорции как у референса.",
+      "prompt": "An empty rectangular cutting board made of light hinoki wood seen from directly above, fine wood grain, a few knife marks, a slightly darker rim, filling the whole frame. Nothing on it",
+      "refs": [
+        "art/reference/sashimi_scene_tuna.png"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-tuna",
+      "game": "Сашими",
+      "name": "Тунец",
+      "target": "sashimi/tuna.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 160,
+      "hint": "Строго горизонтально, голова влево, без перспективы. Хвост не толще тела, ничего не торчит за края.",
+      "prompt": "A whole bluefin tuna lying flat on its side, seen from directly above, perfectly horizontal, head pointing left, crescent tail fin on the right, dark navy back, silver belly, small yellow finlets near the tail, no shadow",
+      "refs": [
+        "art/reference/sashimi_fish_tuna.png"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-salmon",
+      "game": "Сашими",
+      "name": "Лосось",
+      "target": "sashimi/salmon.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 160,
+      "hint": "Строго горизонтально, голова влево. Возьми готового тунца референсом для стиля (подставится сам).",
+      "prompt": "A whole salmon lying flat on its side, seen from directly above, perfectly horizontal, head pointing left, tail on the right, grey-green back with small black spots, pinkish silver belly, no shadow",
+      "refs": [
+        "art/reference/sashimi_fish_salmon.png",
+        "@sashimi-tuna"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-crab",
+      "game": "Сашими",
+      "name": "Нога камчатского краба",
+      "target": "sashimi/crab.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 160,
+      "hint": "Три членика, тонкие суставы, острый кончик справа.",
+      "prompt": "A single red king crab leg lying flat, seen from directly above, perfectly horizontal: three thick segments joined by thin joints, covered in small spikes, red-orange shell, the thick end on the left and a sharp pointed tip on the right, no shadow",
+      "refs": [
+        "art/reference/sashimi_fish_crab.png",
+        "@sashimi-tuna"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-squid",
+      "game": "Сашими",
+      "name": "Кальмар Ёбуко",
+      "target": "sashimi/squid.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 160,
+      "hint": "Слева острый конец мантии с плавниками, в середине голова с глазами, справа длинные тонкие щупальца.",
+      "prompt": "A whole fresh translucent Yobuko squid lying flat, seen from directly above, perfectly horizontal: the pointed mantle with two fins on the left, the head with big eyes in the middle, long thin tentacles stretching to the right, pale glassy body with tiny brown dots, no shadow",
+      "refs": [
+        "art/reference/sashimi_fish_squid.png",
+        "@sashimi-tuna"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-knife",
+      "game": "Сашими",
+      "name": "Нож янагиба",
+      "target": "sashimi/knife.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "9:16",
+      "grid": 12,
+      "hint": "Вертикально: острие вверху, рукоять внизу (у игрока). Узкий, ~1:12 — лишнее по бокам обрежь.",
+      "prompt": "A long Japanese yanagiba sashimi knife standing perfectly vertical, blade tip at the top, long polished single-edged steel blade, a small black buffalo-horn ferrule and a plain light wooden handle at the bottom. Straight, centered, no perspective",
+      "refs": [],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "sashimi-scale",
+      "game": "Сашими",
+      "name": "Кухонные весы (по желанию)",
+      "target": "sashimi/scale.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "3:2",
+      "grid": 64,
+      "hint": "На ТВ при взвешивании. Экран пустой — цифры рисует код.",
+      "prompt": "A small electronic kitchen scale seen slightly from the front: a flat steel weighing platform on top, a white plastic body, an empty green LCD display with no digits on the front",
+      "refs": [],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "chohan-table",
+      "game": "Чо-хан",
+      "name": "Игорный стол",
+      "target": "chohan/table.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "4:3",
+      "grid": 320,
+      "hint": "Середина сукна пустая — там код ставит стакан и кости. Без костей и стакана на картинке.",
+      "prompt": "Traditional Japanese Edo-period gambling table for the dice game cho-han, slight perspective from a seated player, white cloth laid over tatami mats, dim warm light from a paper lantern, the dealer's kimono sleeves at the far edge, empty space in the center of the cloth, no dice, no cup, no text",
+      "refs": [
+        "art/reference/chohan_scene_closed.png"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "chohan-cup",
+      "game": "Чо-хан",
+      "name": "Бамбуковый стакан",
+      "target": "chohan/cup.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 48,
+      "hint": "Перевёрнут открытой стороной вниз, в той же перспективе, что стол (готовый стол подставится референсом).",
+      "prompt": "A woven bamboo dice cup (tsubo) used in the Japanese cho-han dice game, turned upside down with the open side facing down, seen in slight perspective from a seated player, natural bamboo weave with a dark lacquered rim",
+      "refs": [
+        "@chohan-table"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "chohan-dice",
+      "game": "Чо-хан",
+      "name": "Кости 1–6 (лента)",
+      "target": "chohan/dice.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 96,
+      "hint": "6 костей в ряд, 1…6, видна верхняя грань и чуть боков. Единица — одна крупная красная точка.",
+      "prompt": "Six white dice in one horizontal row showing faces 1, 2, 3, 4, 5, 6 from left to right, same slight perspective from a seated player (top face and a bit of the sides visible), the face 1 has a single large red pip, all other pips are black, evenly spaced",
+      "refs": [
+        "art/reference/chohan_dice_1-6.png",
+        "@chohan-table"
+      ],
+      "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "chohan-dice-alt",
+      "game": "Чо-хан",
+      "name": "Кости повёрнутые (по желанию)",
+      "target": "chohan/dice_alt.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 96,
+      "hint": "Те же 6 граней, повёрнуты на 20–30°, чтобы кости не лежали ровно.",
+      "prompt": "The same six white dice in one horizontal row showing faces 1 to 6, each rotated about 25 degrees, slight perspective from a seated player, the face 1 has a single large red pip, all other pips are black",
+      "refs": [
+        "@chohan-dice"
+      ],
+      "wired": false,
+      "status": "todo"
+    }
+  ]
+}
