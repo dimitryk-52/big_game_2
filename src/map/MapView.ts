@@ -17,7 +17,8 @@ export interface MapUpdate {
   blocked?: number[];
   selected?: number | null;
   activePid?: string | null;
-  machines?: { pachinko: number[]; ring: number[] };
+  /** соло-игры: id иконки → префектуры */
+  machines?: Record<string, number[]>;
   /** магазины: плашка видна всегда, даже под туманом */
   shops?: number[];
   showRewards?: boolean;
@@ -232,11 +233,14 @@ export class MapView {
     const shown = (c: number) => !!u.prefs[c]?.rev && !occupied.has(c);
     const hasReward = (c: number) => u.showRewards !== false && shown(c) && !u.prefs[c].taken;
     for (const c of PREF_CODES) if (hasReward(c)) want.set('w' + c, { code: c, icon: u.prefs[c].reward, dx: 0, kind: 'reward' });
-    const machines: [string, number[]][] = [['pachinko', u.machines?.pachinko ?? []], ['ring', u.machines?.ring ?? []]];
-    for (const [icon, codes] of machines) for (const c of codes) {
-      if (shown(c)) want.set(icon + c, { code: c, icon, dx: hasReward(c) ? -24 : 0, kind: 'machine' });
-    }
-    for (const c of u.shops ?? []) if (!occupied.has(c)) want.set('shop' + c, { code: c, icon: 'shop', dx: hasReward(c) ? -24 : 0, kind: 'machine' });
+    // несколько значков в одной префектуре — в ряд; магазин виден и в тумане
+    const here = new Map<number, string[]>();
+    for (const [icon, codes] of Object.entries(u.machines ?? {})) for (const c of codes) if (shown(c)) here.set(c, [...(here.get(c) ?? []), icon]);
+    for (const c of u.shops ?? []) if (!occupied.has(c)) here.set(c, [...(here.get(c) ?? []), 'shop']);
+    for (const [c, icons] of here) icons.forEach((icon, i) => {
+      const dx = (i - (icons.length - 1) / 2) * 24 - (hasReward(c) ? 12 + icons.length * 12 : 0);
+      want.set(icon + c, { code: c, icon, dx, kind: 'machine' });
+    });
     for (const [k, t] of this.icons) if (!want.has(k) || t.kind !== want.get(k)!.kind) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);

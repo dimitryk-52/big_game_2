@@ -1,4 +1,4 @@
-// Фукуварай и сэнрю на телефоне.
+// Фукуварай, сэнрю и сашими на телефоне.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GroupPublic, Player } from '../shared/types';
@@ -7,13 +7,16 @@ import { TimerBar } from '../ui/common';
 import { senryuLines, syllables } from '../shared/settings';
 import { shuffle, vibrate } from '../shared/util';
 import { useSubmit } from './GroupGame';
+import { FISH, SW, tToX, xToT, type SashimiView } from '../games/sashimi';
+import { FishBoard, Scale } from '../games/FishBoard';
+import { sfx } from '../shared/sound';
 
 /** своя работа (для показа себе после раскрытия на ТВ) */
 const myWork = new Map<number, string>();
 
 export function MyWork({ g }: { g: GroupPublic }) {
   const w = myWork.get(g.id);
-  if (!w || g.game === 'calligraphy') return null;
+  if (!w || g.game === 'calligraphy' || g.game === 'sashimi') return null;
   if (w.startsWith('text:')) return <div class="senryu-mine">«{w.slice(5)}»</div>;
   return <img class="face-mine" src={w} alt="" />;
 }
@@ -157,6 +160,101 @@ export function SenryuPad({ client, g, me }: { client: GameClient; g: GroupPubli
         </>
       )}
       {sent && <div class="center muted">✔ Стих на ТВ!</div>}
+    </div>
+  );
+}
+
+// ───────── сашими ─────────
+
+export function SashimiPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Player }) {
+  const fish = g.fish ?? 'tuna';
+  const f = FISH[fish];
+  const view = useRef<SashimiView>({ knife: null, cut: null });
+  const knifeT = useRef(0.5);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((x) => x + 1), 250);
+    return () => clearInterval(t);
+  }, []);
+  const live = g.phase === 'draw' && client.hostNow() >= g.startAt && client.hostNow() < g.deadline;
+  const { sent, submit } = useSubmit(client, g, me, () => {
+    // не успел — режем там, где стоит нож
+    const v = view.current;
+    if (v.cut == null) v.cut = knifeT.current;
+    const data = 'cut:' + v.cut.toFixed(4);
+    myWork.set(g.id, data);
+    return data;
+  });
+  const liveRef = useRef(false);
+  liveRef.current = live && !sent;
+  // нож виден, только пока можно резать
+  view.current.knife = liveRef.current && view.current.cut == null ? knifeT.current : null;
+  const move = (dt: number) => {
+    if (!liveRef.current || view.current.cut != null) return;
+    knifeT.current = xToT(tToX(knifeT.current) + dt);
+    view.current.knife = knifeT.current;
+  };
+  // палец двигает нож относительно (точнее, чем тыкать): весь экран доски — тачпад
+  const cvEl = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const c = cvEl.current;
+    if (!c) return;
+    let last: number | null = null, pid: number | null = null;
+    const down = (e: PointerEvent) => {
+      if (pid !== null || !liveRef.current) return;
+      pid = e.pointerId;
+      last = e.clientX;
+      try { c.setPointerCapture(e.pointerId); } catch { /* уже отпущен */ }
+    };
+    const mv = (e: PointerEvent) => {
+      if (e.pointerId !== pid || last == null) return;
+      e.preventDefault();
+      const r = c.getBoundingClientRect();
+      move(((e.clientX - last) / r.width) * SW * 0.6);
+      last = e.clientX;
+    };
+    const up = (e: PointerEvent) => { if (e.pointerId === pid) { pid = null; last = null; } };
+    c.addEventListener('pointerdown', down);
+    c.addEventListener('pointermove', mv);
+    c.addEventListener('pointerup', up);
+    c.addEventListener('pointercancel', up);
+    return () => {
+      c.removeEventListener('pointerdown', down);
+      c.removeEventListener('pointermove', mv);
+      c.removeEventListener('pointerup', up);
+      c.removeEventListener('pointercancel', up);
+    };
+  }, []);
+  const cut = () => {
+    const v = view.current;
+    if (!liveRef.current || v.cut != null) return;
+    v.cut = knifeT.current;
+    v.knife = null;
+    sfx.chop();
+    vibrate(60);
+    submit();
+  };
+  return (
+    <div class="pad col sashimi-pad">
+      {g.phase === 'draw' && !sent && <TimerBar start={g.startAt} end={g.deadline} now={() => client.hostNow()} />}
+      <div class="sashimi-task">
+        <div>{g.prompt}</div>
+        <div class="sashimi-target">Отрежь <b>{g.target} г</b></div>
+      </div>
+      <FishBoard fish={fish} view={view} onRef={(c) => (cvEl.current = c)} class={live && !sent ? 'live' : ''} />
+      <Scale grams={null} label={`${f.name} целиком: ${f.total} г · кусок — справа от ножа`} />
+      {g.phase === 'intro' && <div class="muted center">Слушай задание — нож появится по сигналу</div>}
+      {!sent && g.phase !== 'intro' && (
+        <>
+          <div class="muted small-text center">Води пальцем по доске — нож двигается. Кнопки — по миллиметру.</div>
+          <div class="row sashimi-ctrl">
+            <button class="btn" disabled={!live} onClick={() => move(-0.5)}>◀</button>
+            <button class="btn primary big-btn" disabled={!live} onClick={cut}>🔪 Резать</button>
+            <button class="btn" disabled={!live} onClick={() => move(0.5)}>▶</button>
+          </div>
+        </>
+      )}
+      {sent && <div class="center muted">✔ Отрезано! Взвешиваем на ТВ…</div>}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { InkBrush, washiCanvas } from '../games/brush';
 import { TimerBar } from '../ui/common';
 import { vibrate } from '../shared/util';
 import { GROUP_GAMES } from '../shared/settings';
-import { FacePad, SenryuPad, MyWork } from './GroupPads';
+import { FacePad, SenryuPad, SashimiPad, MyWork } from './GroupPads';
 
 export const CANVAS_W = 600;
 export const CANVAS_H = 800;
@@ -35,7 +35,17 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
       {drawing && g.game === 'calligraphy' && <DrawPad key={g.id} client={client} g={g} me={me} />}
       {drawing && g.game === 'fukuwarai' && <FacePad key={g.id} client={client} g={g} me={me} />}
       {drawing && g.game === 'senryu' && <SenryuPad key={g.id} client={client} g={g} me={me} />}
-      {g.phase === 'show' && g.showIdx >= 0 && (
+      {drawing && g.game === 'sashimi' && <SashimiPad key={g.id} client={client} g={g} me={me} />}
+      {g.phase === 'show' && g.showIdx >= 0 && g.game === 'sashimi' && (
+        <div class="pad col center-screen">
+          <h2>Взвешиваем на ТВ</h2>
+          <div class="muted">Кусок {g.showIdx + 1} из {g.order.length} · цель {g.target} г</div>
+          {g.order.indexOf(me.id) >= 0 && g.order.indexOf(me.id) <= g.showIdx
+            ? <div class="q-result pop">Твой кусок: {g.grams?.[me.id]} г</div>
+            : <div class="muted">Самые точные — в конце</div>}
+        </div>
+      )}
+      {g.phase === 'show' && g.showIdx >= 0 && g.game !== 'sashimi' && (
         <div class="pad col center-screen">
           <h2>Смотрим работы на ТВ</h2>
           <div class="muted">Работа {g.showIdx + 1} из {g.order.length}</div>
@@ -293,9 +303,11 @@ function Results({ g, me }: { g: GroupPublic; me: Player }) {
   return (
     <div class="pad col center-screen">
       <h2>{place ? `${place} место!` : 'Итоги на ТВ'}</h2>
-      <div class="muted">Твои очки: <b>{g.points?.[me.id] ?? 0}</b></div>
+      {g.game === 'sashimi'
+        ? <div class="muted">{g.grams?.[me.id] != null ? <>Твой кусок: <b>{g.grams[me.id]} г</b> из {g.target} г (промах {g.points?.[me.id]} г)</> : 'Ты не успел отрезать'}</div>
+        : <div class="muted">Твои очки: <b>{g.points?.[me.id] ?? 0}</b></div>}
       {g.awards?.[me.id] && <div class="q-result pop">{g.awards[me.id]}</div>}
-      <MyNumber g={g} me={me} />
+      {g.game !== 'sashimi' && <MyNumber g={g} me={me} />}
     </div>
   );
 }

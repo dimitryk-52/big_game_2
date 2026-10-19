@@ -1,7 +1,7 @@
 // Отладочное меню 🐞: показать любой экран игры (на ТВ и телефонах сразу), эффекты карты,
 // иконки и фоны. ТВ — кнопка на пульте ведущего, телефон — play.html?debug=1.
 import { useState } from 'preact/hooks';
-import type { GameState } from '../shared/types';
+import type { GameState, SoloGameId } from '../shared/types';
 import { DEBUG_SCENES } from '../host/debugScenes';
 import { PREFS } from '../map/mapData';
 import { prefBgUrl } from '../shared/prefBg';
@@ -9,12 +9,12 @@ import { PixIcon } from './common';
 
 type Send = (cmd: string, args?: any) => void;
 
-const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring', 'shop', 'bonus_fifty1', 'bonus_fifty2', 'bonus_move2', 'bonus_turn2'];
+const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring', 'chohan', 'sudoku', 'shop', 'bonus_fifty1', 'bonus_fifty2', 'bonus_move2', 'bonus_turn2'];
 
 export function DebugMenu({ s, send, onClose, fx, onGame }: {
   s: GameState; send: Send; onClose: () => void; fx?: boolean;
   /** телефон: перенести игрока к автомату и открыть его вкладку */
-  onGame?: (game: 'pachinko' | 'ring', pid: string) => void;
+  onGame?: (game: SoloGameId, pid: string) => void;
 }) {
   const pids = s.joinOrder.filter((id) => s.players[id]);
   const [pid, setPid] = useState(pids[0] ?? '');
@@ -58,6 +58,7 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'calligraphy' })}>🖌 Каллиграфия</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'fukuwarai' })}>👺 Фукуварай</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'senryu' })}>📜 Сэнрю</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново). Рыба — по выбранной префектуре" onClick={() => send('groupTest', { pref, game: 'sashimi' })}>🔪 Сашими</button>
           <button class="btn small" title="Открыть магазин игроку сейчас (ход начнётся заново)" onClick={() => send('shopTest', { pid })}>🛒 Магазин</button>
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
           <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>
@@ -75,10 +76,12 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
       </div>
       {onGame && (
         <div class="debug-group">
-          <div class="debug-gname">Автоматы (этот телефон)</div>
+          <div class="debug-gname">Соло-игры (этот телефон)</div>
           <div class="debug-btns">
             <button class="btn small" onClick={() => onGame('pachinko', pid)}>🎰 Пачинко</button>
             <button class="btn small" onClick={() => onGame('ring', pid)}>🎡 Призовая машина</button>
+            <button class="btn small" onClick={() => onGame('chohan', pid)}>🎲 Чо-хан</button>
+            <button class="btn small" onClick={() => onGame('sudoku', pid)}>🔢 Судоку</button>
           </div>
         </div>
       )}

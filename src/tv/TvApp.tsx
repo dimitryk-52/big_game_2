@@ -5,7 +5,7 @@ import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
 import { Avatar, BonusIcon, BONUS_IDS, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
-import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
@@ -58,6 +58,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'pnp': pnpBus.emit(d.pid, d.ev); break;
         case 'ring': pnpBus.emit(d.pid, { k: 'ring', ...d }); break;
         case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;
+        case 'chohan': pnpBus.emit(d.pid, { k: 'chohan', ...d }); break;
+        case 'chop': sfx.chop(); break;
+        case 'sudoku': pnpBus.emit(d.pid, { k: 'sudokuWin', ...d }); break;
       }
     });
     return () => { off(); clearTimeout(raf); };
@@ -102,7 +105,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       blocked: st.t === 'landing' ? st.blocked : undefined,
       arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
-      machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+      machines: machinesOf(s.settings),
       shops: s.settings.shopPrefs,
     });
     const key = st.t + ':' + ('pid' in st ? (st as any).pid : '') + ':' + (st.t === 'moving' ? st.to : '');
@@ -294,7 +297,7 @@ function PlayerList({ s }: { s: GameState }) {
                 <div class="pc-name">
                   <span class="pname">{p.name}</span>
                   {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
-                  {p.busy && <span title={p.busy}>{p.busy === 'pachinko' ? '🎰' : '🎡'}</span>}
+                  {p.busy && <span title={SOLO_GAMES[p.busy]?.name}>{SOLO_GAMES[p.busy]?.icon}</span>}
                   <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
                 </div>
                 <HpBar hp={p.hp} max={p.maxHp} />

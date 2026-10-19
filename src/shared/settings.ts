@@ -1,4 +1,4 @@
-import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
+import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -42,12 +42,13 @@ export const DEFAULT_SETTINGS: Settings = {
     fifty2: { yen: 600, stars: 0 },
     move2: { yen: 400, stars: 0 },
   },
-  pachinkoPrefs: [13, 27, 23],
+  // соло-игры и групповые по префектурам: см. RECOMMENDED_LAYOUT
+  pachinkoPrefs: [23, 27, 13],
   // сеть магазинов: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин;
   // 4 внутри страны, остальные на побережье там, где без этого не обойтись
   shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
   shopTime: 45,
-  groupPrefs: { 26: 'calligraphy' },
+  groupPrefs: { 26: 'calligraphy', 34: 'calligraphy', 33: 'fukuwarai', 3: 'fukuwarai', 13: 'senryu', 38: 'senryu', 1: 'sashimi', 30: 'sashimi', 41: 'sashimi' },
   groupTasks: [
     { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人' },
     { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山' },
@@ -63,15 +64,23 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок' },
     { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт' },
     { id: 'sen6', game: 'senryu', text: 'Синкансэн летит / Фудзи мелькнула в окне' },
+    { id: 'sash1', game: 'sashimi', text: 'Тунец из Кацууры', fish: 'tuna' },
+    { id: 'sash2', game: 'sashimi', text: 'Лосось с Хоккайдо', fish: 'salmon' },
+    { id: 'sash3', game: 'sashimi', text: 'Нога камчатского краба', fish: 'crab' },
+    { id: 'sash4', game: 'sashimi', text: 'Живой кальмар из Ёбуко', fish: 'squid' },
   ],
   group: {
     drawTime: 30,
-    times: { fukuwarai: 40, senryu: 60 },
+    times: { fukuwarai: 40, senryu: 60, sashimi: 25 },
     voteTime: 20,
     showMs: 4000,
     prizes: [{ yen: 1000, stars: 3 }, { yen: 600, stars: 2 }, { yen: 300, stars: 1 }],
   },
   ringPrefs: [14, 40, 4],
+  chohanPrefs: [22, 10, 46],
+  chohan: { bets: [100, 300, 500, 1000] },
+  sudokuPrefs: [13, 20, 43],
+  sudoku: { rewards: [{ yen: 200, stars: 0 }, { yen: 500, stars: 1 }, { yen: 1000, stars: 3 }], givens9: 40 },
   pachinko: { yenPerBall: 4, pack: 25 },
   ring: { cost: 200, prizeYen: 1500, physicalPrize: true, cellMs: 70 },
   audioLatencyMs: 0,
@@ -79,11 +88,28 @@ export const DEFAULT_SETTINGS: Settings = {
   prizeNames: ['Приз от ведущего'],
 };
 
+/**
+ * Рекомендуемая раскладка игр по префектурам (кнопка в админке, вкладка «Префектуры»).
+ * Соло: пачинко — Нагоя (родина пачинко), Осака, Токио; чо-хан — Сидзуока (Симидзу-но Дзиротё),
+ * Гумма (Кунисада Тюдзи), Кагосима; судоку — Токио (издательство Nikoli), Нагано, Кумамото.
+ * Групповые: каллиграфия — Киото, Хиросима (кисти Кумано); фукуварай — Окаяма (Момотаро и óни),
+ * Иватэ (легенда об óни и отпечатке руки); сэнрю — Токио (Эдо, Карай Сэнрю), Эхимэ (Мацуяма, город хайку);
+ * сашими — Хоккайдо (краб, лосось), Вакаяма (тунец), Сага (кальмар Ёбуко).
+ * Магазины не трогаем: они уживаются с любыми играми.
+ */
+export const RECOMMENDED_LAYOUT: Pick<Settings, 'pachinkoPrefs' | 'ringPrefs' | 'chohanPrefs' | 'sudokuPrefs' | 'groupPrefs'> = {
+  pachinkoPrefs: DEFAULT_SETTINGS.pachinkoPrefs,
+  ringPrefs: DEFAULT_SETTINGS.ringPrefs,
+  chohanPrefs: DEFAULT_SETTINGS.chohanPrefs,
+  sudokuPrefs: DEFAULT_SETTINGS.sudokuPrefs,
+  groupPrefs: DEFAULT_SETTINGS.groupPrefs,
+};
+
 export function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   const d = structuredClone(DEFAULT_SETTINGS);
   if (!saved) return d;
   const out: any = { ...d, ...saved };
-  for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
+  for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group', 'chohan', 'sudoku'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
   return out;
 }
 
@@ -109,11 +135,26 @@ export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   prize: { name: 'ПРИЗ', icon: '🏆' },
 };
 
-export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji: string; how: string; doing: string }> = {
+/** scored — места по результату, без голосования */
+export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji: string; how: string; doing: string; scored?: boolean }> = {
   calligraphy: { name: 'Каллиграфия', ja: '書道', kanji: '書', how: 'У всех на телефонах — холст и кисть', doing: 'Рисуют…' },
   fukuwarai: { name: 'Фукуварай', ja: '福笑い', kanji: '福', how: 'Собираем лицо вслепую: положенные детали сразу исчезают', doing: 'Собирают лица вслепую…' },
   senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допишите последнюю строку стиха (5 слогов)', doing: 'Сочиняют…' },
+  sashimi: { name: 'Сашими', ja: '刺身', kanji: '刺', how: 'Отрежьте кусок нужного веса. Побеждает самый точный', doing: 'Примеряются ножом…', scored: true },
 };
+
+export const SOLO_GAMES: Record<SoloGameId, { name: string; icon: string; key: 'pachinkoPrefs' | 'ringPrefs' | 'chohanPrefs' | 'sudokuPrefs' }> = {
+  pachinko: { name: 'Пачинко', icon: '🎰', key: 'pachinkoPrefs' },
+  ring: { name: 'Призовая машина', icon: '🎡', key: 'ringPrefs' },
+  chohan: { name: 'Чо-хан', icon: '🎲', key: 'chohanPrefs' },
+  sudoku: { name: 'Судоку', icon: '🔢', key: 'sudokuPrefs' },
+};
+
+/** соло-игры в префектуре */
+export function soloAt(st: Settings, code: number | null | undefined): SoloGameId[] {
+  if (code == null) return [];
+  return (Object.keys(SOLO_GAMES) as SoloGameId[]).filter((g) => (st[SOLO_GAMES[g].key] ?? DEFAULT_SETTINGS[SOLO_GAMES[g].key]).includes(code));
+}
 
 /** время на работу в групповой игре, сек */
 export function groupTime(st: Settings, game: GroupGameId) {
@@ -138,3 +179,8 @@ export function syllables(text: string) {
 
 export const PLAYER_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff', '#ff9f43', '#2ee6d6', '#ff7ad9', '#a3a3ff', '#f5f5f5'];
 export const HATS = ['Кепка', 'Хатимаки', 'Корона', 'Ушки', 'Без шляпы'];
+
+/** значки соло-игр на карте: id иконки → префектуры */
+export function machinesOf(st: Settings): Record<string, number[]> {
+  return Object.fromEntries((Object.keys(SOLO_GAMES) as SoloGameId[]).map((g) => [g, st[SOLO_GAMES[g].key] ?? []]));
+}

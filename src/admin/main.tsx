@@ -9,7 +9,7 @@ import type { GameMsg, GameState, GroupGameId, Question, RewardType, Settings } 
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
-import { DEFAULT_SETTINGS, GROUP_GAMES, REWARD_INFO, isSpecialQ } from '../shared/settings';
+import { DEFAULT_SETTINGS, GROUP_GAMES, RECOMMENDED_LAYOUT, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
@@ -252,13 +252,18 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
   const [s, setS] = useState(settings);
   const [saved, setSaved] = useState(false);
   const qCount = (code: number) => questions.filter((q) => q.pref === code).length;
-  const toggle = (list: number[], code: number) => (list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
+  const toggle = (list: number[] | undefined, code: number) => ((list ?? []).includes(code) ? list!.filter((x) => x !== code) : [...(list ?? []), code]);
   return (
     <div class="pad col">
-      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра запускается при первом приходе в префектуру вместо вопроса. На магазин и групповую игру нельзя высадиться.</div>
-      <div class="row"><button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button></div>
+      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра — один раз за игру, при первом приходе в префектуру: после вопроса и магазина. Соло-игры (пачинко, призовая машина, чо-хан, судоку) доступны на телефоне, пока игрок стоит в префектуре. На магазин и групповую игру нельзя высадиться.</div>
+      <div class="row">
+        <button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button>
+        <button class="btn small" title="Пачинко, призовая машина, чо-хан, судоку и групповые игры — по тематике префектур. Магазины и награды не меняются." onClick={() => {
+          if (confirm('Расставить соло- и групповые игры по рекомендуемой раскладке? Магазины и награды останутся как есть. Потом нажми «Сохранить».')) setS({ ...s, ...structuredClone(RECOMMENDED_LAYOUT) });
+        }}>🗾 Рекомендуемая раскладка игр</button>
+      </div>
       <table class="qtable">
-        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>🛒 Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
+        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>🎲 Чо-хан</th><th>🔢 Судоку</th><th>🛒 Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
         <tbody>
           {PREFS.map((p) => (
             <tr>
@@ -277,6 +282,8 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
               </td>
               <td><input type="checkbox" checked={s.pachinkoPrefs.includes(p.code)} onChange={() => setS({ ...s, pachinkoPrefs: toggle(s.pachinkoPrefs, p.code) })} /></td>
               <td><input type="checkbox" checked={s.ringPrefs.includes(p.code)} onChange={() => setS({ ...s, ringPrefs: toggle(s.ringPrefs, p.code) })} /></td>
+              <td><input type="checkbox" checked={(s.chohanPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, chohanPrefs: toggle(s.chohanPrefs, p.code) })} /></td>
+              <td><input type="checkbox" checked={(s.sudokuPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, sudokuPrefs: toggle(s.sudokuPrefs, p.code) })} /></td>
               <td><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></td>
               <td>
                 <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {
@@ -338,6 +345,13 @@ const NUM_FIELDS: [string, string][] = [
   ['ring.cost', 'Призовая машина: цена, ¥'],
   ['ring.prizeYen', 'Призовая машина: выигрыш, ¥'],
   ['ring.cellMs', 'Призовая машина: мс на ячейку (меньше — быстрее)'],
+  ['sudoku.rewards.0.yen', 'Судоку 4×4: награда, ¥'],
+  ['sudoku.rewards.0.stars', 'Судоку 4×4: награда, ★'],
+  ['sudoku.rewards.1.yen', 'Судоку 6×6: награда, ¥'],
+  ['sudoku.rewards.1.stars', 'Судоку 6×6: награда, ★'],
+  ['sudoku.rewards.2.yen', 'Судоку 9×9: награда, ¥'],
+  ['sudoku.rewards.2.stars', 'Судоку 9×9: награда, ★'],
+  ['sudoku.givens9', 'Судоку 9×9: открытых цифр (обычно 25–30, у нас проще)'],
 ];
 const getPath = (o: any, p: string) => p.split('.').reduce((a, k) => a?.[k], o);
 const setPath = (o: any, p: string, v: any) => {
@@ -367,6 +381,7 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
         <label class="set-row"><span>Вопрос ведёт ведущий кнопкой «Далее» (интро → текст → ответы и таймер → закрыть)</span><input type="checkbox" checked={s.hostPaced !== false} onChange={(e) => upd((c) => (c.hostPaced = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Авто-переход после показа ответа</span><input type="checkbox" checked={s.autoAdvance} onChange={(e) => upd((c) => (c.autoAdvance = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Ритм-баттл в дуэлях</span><input type="checkbox" checked={s.rhythmInDuel} onChange={(e) => upd((c) => (c.rhythmInDuel = (e.target as HTMLInputElement).checked))} /></label>
+        <label class="set-row"><span>Чо-хан: ставки, ¥ (через запятую)</span><input class="inp-s" value={(s.chohan?.bets ?? []).join(', ')} onChange={(e) => upd((c) => (c.chohan = { ...c.chohan, bets: (e.target as HTMLInputElement).value.split(/[,\s]+/).map(Number).filter((x) => x > 0) }))} /></label>
         <label class="set-row"><span>Золотая ячейка (настоящий приз) в призовой машине</span><input type="checkbox" checked={s.ring.physicalPrize} onChange={(e) => upd((c) => (c.ring.physicalPrize = (e.target as HTMLInputElement).checked))} /></label>
       </div>
       <div class="note">Темы и спецтемы игроков — на вкладке «Темы».</div>

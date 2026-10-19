@@ -5,6 +5,9 @@ import { Avatar, TimerBar } from '../ui/common';
 import { GROUP_GAMES, groupTime, senryuLines } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { now } from '../shared/util';
+import { useEffect, useState } from 'preact/hooks';
+import { FishBoard, Scale } from '../games/FishBoard';
+import { FISH } from '../games/sashimi';
 
 let paperUrl: string | undefined;
 const paper = () => (paperUrl ??= washiCanvas(450, 600, 7).toDataURL());
@@ -32,7 +35,7 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
   const head = (
     <div class="group-head">
       <span class="group-game">{info.name} <span class="jp">{info.ja}</span></span>
-      <span class="group-task">{g.prompt}</span>
+      <span class="group-task">{g.prompt}{g.game === 'sashimi' && <> · цель <b>{g.target} г</b> из {g.total} г</>}</span>
     </div>
   );
   return (
@@ -42,20 +45,23 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
           <div class="group-kanji">{info.kanji}</div>
           <div class="group-sub">Групповая игра · {PREF[g.pref]?.ru}</div>
           <div class="group-title">{info.name}</div>
-          <div class="group-prompt">{g.prompt}</div>
+          <div class="group-prompt">{g.prompt}{g.game === 'sashimi' && <> — отрежьте <b>{g.target} г</b></>}</div>
           <div class="muted">{info.how}. Время: {groupTime(s.settings, g.game)} c</div>
         </div>
       )}
       {(g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
-          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️' }[g.game]}</div>
+          {g.game === 'sashimi'
+            ? <FishBoard fish={g.fish ?? 'tuna'} view={{}} scale={5} class="big" />
+            : <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', sashimi: '🔪' }[g.game]}</div>}
           <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />
         </div>
       )}
-      {g.phase === 'show' && g.showIdx >= 0 && (
+      {g.phase === 'show' && g.showIdx >= 0 && g.game === 'sashimi' && <SashimiShow s={s} g={g} head={head} />}
+      {g.phase === 'show' && g.showIdx >= 0 && g.game !== 'sashimi' && (
         <div class="group-show">
           {head}
           <div class="group-sub">Работа {g.showIdx + 1} из {g.order.length}</div>
@@ -73,7 +79,7 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
           <Who s={s} g={g} done={g.voted} />
         </div>
       )}
-      {g.phase === 'results' && <Results s={s} g={g} imgs={imgs} />}
+      {g.phase === 'results' && (g.game === 'sashimi' ? <SashimiResults s={s} g={g} /> : <Results s={s} g={g} imgs={imgs} />)}
     </div>
   );
 }
@@ -128,6 +134,71 @@ function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<st
         {ranked.filter((id) => !g.places?.[id]).map((id) => (
           <div class="qpart done"><Avatar p={s.players[id]} size={30} /> <span>{s.players[id].name}</span> <span class="muted">№{g.order.indexOf(id) + 1} · {g.points?.[id] ?? 0}</span></div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** вес на весах набегает от нуля */
+function CountUp({ to, target, ms = 1200 }: { to: number; target: number; ms?: number }) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const t0 = performance.now();
+    let raf = 0;
+    const loop = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms);
+      setV(Math.round(to * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [to]);
+  return <Scale grams={v} label={v === to ? `промах ${Math.abs(to - target)} г` : 'взвешиваем…'} />;
+}
+
+function SashimiShow({ s, g, head }: { s: GameState; g: GroupPublic; head: any }) {
+  const id = g.order[g.showIdx];
+  const p = s.players[id];
+  const grams = g.grams?.[id] ?? 0;
+  const diff = grams - (g.target ?? 0);
+  const [done, setDone] = useState(false);
+  useEffect(() => { setDone(false); const t = setTimeout(() => setDone(true), 1300); return () => clearTimeout(t); }, [id]);
+  return (
+    <div class="group-show sashimi-show">
+      {head}
+      <div class="group-sub">Кусок {g.showIdx + 1} из {g.order.length}{g.showIdx === g.order.length - 1 ? ' · самый точный' : ''}</div>
+      {p && <div class="sashimi-who pop" key={id}><Avatar p={p} size={48} /> {p.name}</div>}
+      <FishBoard key={id} fish={g.fish ?? 'tuna'} view={{ cut: g.cuts?.[id] ?? null }} scale={5} class="big" />
+      <div class="sashimi-scale-row">
+        <CountUp key={id} to={grams} target={g.target ?? 0} />
+        <div class={'sashimi-diff' + (done ? ' pop' : '')} style={{ visibility: done ? 'visible' : 'hidden' }}>
+          цель {g.target} г<br /><b class={Math.abs(diff) <= (g.target ?? 0) * 0.05 ? 'good' : ''}>{diff > 0 ? '+' : ''}{diff} г</b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SashimiResults({ s, g }: { s: GameState; g: GroupPublic }) {
+  const ranked = Object.keys(g.grams ?? {}).filter((id) => s.players[id]).sort((a, b) => (g.points?.[a] ?? 0) - (g.points?.[b] ?? 0));
+  const marks = ranked.map((id) => ({ t: g.cuts![id], color: s.players[id].color }));
+  const medal = ['', '🥇', '🥈', '🥉'];
+  return (
+    <div class="group-results sashimi-results">
+      <div class="group-head"><span class="group-game">Итоги · Сашими · {FISH[g.fish ?? 'tuna'].name}</span><span class="group-task">цель {g.target} г</span></div>
+      <FishBoard fish={g.fish ?? 'tuna'} view={{ marks }} scale={5} class="big" />
+      <div class="sashimi-rank">
+        {ranked.map((id) => {
+          const p = s.players[id];
+          const pl = g.places?.[id];
+          return (
+            <div class={'qpart done' + (pl ? ' place' + pl : '')}>
+              <span class="medal">{pl ? medal[pl] : ''}</span> <Avatar p={p} size={32} /> <span style={{ color: p.color }}>{p.name}</span>
+              <span>{g.grams![id]} г</span> <span class="muted">±{g.points?.[id]}</span> {g.awards?.[id] && <b>{g.awards[id]}</b>}
+            </div>
+          );
+        })}
+        {!ranked.length && <div class="group-sub">Никто не отрезал</div>}
       </div>
     </div>
   );

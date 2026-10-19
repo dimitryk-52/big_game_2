@@ -1,8 +1,9 @@
 // Админка: групповые игры — задания, время, награды за места.
 import { useEffect, useState } from 'preact/hooks';
-import type { FaceId, GroupGameId, Settings } from '../shared/types';
+import type { FaceId, FishId, GroupGameId, Settings } from '../shared/types';
 import { DEFAULT_SETTINGS, GROUP_GAMES, groupTime } from '../shared/settings';
 import { FACES } from '../games/faces';
+import { FISH } from '../games/sashimi';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
 
@@ -36,6 +37,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
       <div class="note">
         {game === 'calligraphy' && <>Каллиграфия:</>}
         {game === 'fukuwarai' && <>Фукуварай: на телефоне пустое лицо и детали. Детали перетаскивают на лицо, и они сразу исчезают — собираем вслепую. Не успел — оставшиеся детали падают куда попало. Потом лица раскрываются на ТВ и все голосуют.<br /></>}
+        {game === 'sashimi' && <>Сашими: на телефоне рыба на доске и нож. Нужно отрезать кусок заданного веса (цель случайная, 15–55% от веса целиком). Вес зависит от толщины: у спины сантиметр весит больше, чем у хвоста. Потом куски взвешиваются на ТВ по одному, места — по точности, без голосования. В префектуре рыбы ({(Object.keys(FISH) as FishId[]).map((f) => `${FISH[f].name} — ${FISH[f].prefs.map((c) => PREF[c]?.ru).join(', ')}`).join('; ')}) берутся её задания, в остальных — любые.<br /></>}
         {game === 'senryu' && <>Сэнрю: в задании две первые строки через « / » (5 и 7 слогов), игроки дописывают последнюю (5 слогов), телефон считает слоги. Потом стихи по одному на ТВ и голосование.<br /></>}
         {game === 'calligraphy' && <> у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
         и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
@@ -49,16 +51,22 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
               {(Object.keys(FACES) as FaceId[]).map((f) => <option value={f}>{FACES[f].name}</option>)}
             </select>
           )}
+          {game === 'sashimi' && (
+            <select value={t.fish ?? 'tuna'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.fish = (e.target as HTMLSelectElement).value as FishId; })}>
+              {(Object.keys(FISH) as FishId[]).map((f) => <option value={f}>{FISH[f].name} ({FISH[f].total} г)</option>)}
+            </select>
+          )}
           <input class="inp-s grow" placeholder={game === 'senryu' ? 'Первая строка / Вторая строка' : 'Текст задания'} value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />
           <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
         </div>
       ))}
-      <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}) }); })}>+ Задание</button></div>
+      <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}), ...(game === 'sashimi' ? { fish: 'tuna' as FishId } : {}) }); })}>+ Задание</button></div>
       <h3 style={{ margin: '8px 0 0' }}>Время и награды</h3>
       <div class="settings-grid">
         {num('Каллиграфия: время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
         {num('Фукуварай: время, сек', () => groupTime(s, 'fukuwarai'), (c, v) => { (c.group.times ??= {}).fukuwarai = v; })}
         {num('Сэнрю: время, сек', () => groupTime(s, 'senryu'), (c, v) => { (c.group.times ??= {}).senryu = v; })}
+        {num('Сашими: время, сек', () => groupTime(s, 'sashimi'), (c, v) => { (c.group.times ??= {}).sashimi = v; })}
         {num('Время на голос, сек', () => s.group.voteTime, (c, v) => (c.group.voteTime = v))}
         {num('Показ каждой работы, мс', () => s.group.showMs, (c, v) => (c.group.showMs = v))}
         {[0, 1, 2].flatMap((i) => [

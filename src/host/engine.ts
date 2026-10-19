@@ -5,11 +5,13 @@
 import type {
   BonusId, GameMsg, GameState, GroupGameId, GroupPublic, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO, groupTasksFor, groupTime, isSpecialQ } from '../shared/settings';
+import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, groupTasksFor, groupTime, isSpecialQ } from '../shared/settings';
+import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { RHYTHM_LEAD_BEATS, ringCellAt, ringLayout, ringResult } from '../games/logic';
+import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 
 export interface HostIO {
@@ -36,6 +38,8 @@ interface Secrets {
   ring: Record<string, { seed: number; t0: number }>;
   groupN?: number;
   usedTasks?: string[];
+  /** судоку: пройденных уровней и текущая головоломка игрока */
+  sudoku?: Record<string, { level: number; puzzle: number[] }>;
 }
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
@@ -529,15 +533,15 @@ export class GameEngine {
     }
     await this.gate(epoch);
 
-    // групповая игра — при первом приходе вместо вопроса префектуры
+    // порядок в префектуре: вопрос → магазин → групповая игра (одна на игру) → дуэль
+    await this.prefQuestion(epoch, p, to);
+    if (st.shopPrefs?.includes(to) && p.hp > 0) await this.shopVisit(epoch, p);
     const game = st.groupPrefs?.[to];
     if (game && !ps.groupDone && this.s.joinOrder.length >= 2) {
       ps.groupDone = true;
+      await this.gate(epoch);
       await this.groupGame(epoch, to, game);
-    } else await this.prefQuestion(epoch, p, to);
-
-    // магазин — после вопроса, до дуэли
-    if (st.shopPrefs?.includes(to) && p.hp > 0) await this.shopVisit(epoch, p);
+    }
 
     // ── дуэль ──
     const other = this.occupants(to, pid)[0];
@@ -818,7 +822,12 @@ export class GameEngine {
 
   private async groupGame(epoch: number, code: number, game: GroupGameId) {
     const st = this.s.settings;
-    const tasks = groupTasksFor(st, game);
+    let tasks = groupTasksFor(st, game);
+    // сашими: в родной префектуре рыбы — её задания
+    if (game === 'sashimi') {
+      const local = tasks.filter((t) => t.fish && FISH[t.fish]?.prefs.includes(code));
+      if (local.length) tasks = local;
+    }
     const used = (this.sec.usedTasks ??= []);
     const fresh = tasks.filter((t) => !used.includes(t.id));
     const task = fresh.length ? pick(fresh) : tasks.length ? pick(tasks) : null;
@@ -827,6 +836,7 @@ export class GameEngine {
     const g: GroupPublic = {
       id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game, prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
       ...(game === 'fukuwarai' ? { face: task?.face ?? 'okame' } : {}),
+      ...(game === 'sashimi' ? (() => { const fish = task?.fish && FISH[task.fish] ? task.fish : 'tuna'; return { fish, total: FISH[fish].total, target: randomTarget(fish) }; })() : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
       voteRounds: Math.min(3, players.length - 1), voted: [],
     };
@@ -868,6 +878,8 @@ export class GameEngine {
     // кто не успел прислать — пустой лист
     for (const id of g.players) if (!(id in this.groupImgs)) this.groupImgs[id] = null;
 
+    if (GROUP_GAMES[game].scored) return this.sashimiResults(epoch, g);
+
     // ── показ работ по одной ──
     g.phase = 'show';
     for (let i = 0; i < g.order.length; i++) {
@@ -908,9 +920,16 @@ export class GameEngine {
     for (const vs of Object.values(this.votes)) vs.forEach((n, i) => { if (n) points[g.order[n - 1]] += 3 - i; });
     // одинаковые очки — одно место на всех (1, 1, 2, 3…)
     const levels = [...new Set(Object.values(points).filter((x) => x > 0))].sort((a, b) => b - a);
+    await this.groupAwards(epoch, g, points, levels);
+  }
+
+  /** места по уровням (levels[0] — лучший результат), награды, экран итогов */
+  private async groupAwards(epoch: number, g: GroupPublic, points: Record<string, number>, levels: number[]) {
+    const st = this.s.settings;
     const places: Record<string, number> = {};
     const awards: Record<string, string> = {};
     for (const id of g.players) {
+      if (!(id in points)) continue;
       const lv = levels.indexOf(points[id]);
       const p = this.s.players[id];
       if (lv < 0 || lv > 2 || !p) continue;
@@ -927,11 +946,39 @@ export class GameEngine {
     this.emit();
     this.io.fx?.('prize', {});
     const win = g.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
-    if (win.length) this.log(`🖌 Каллиграфия: побеждает ${win.join(', ')}`);
+    if (win.length) this.log(`${GROUP_GAMES[g.game].name}: побеждает ${win.join(', ')}`);
     await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
     this.s.g = null;
     this.groupImgs = {};
     this.emit();
+  }
+
+  /** сашими: взвешиваем куски по одному (от худшего к лучшему), места — по точности */
+  private async sashimiResults(epoch: number, g: GroupPublic) {
+    const fish = g.fish!;
+    const cuts: Record<string, number> = {};
+    const grams: Record<string, number> = {};
+    for (const id of g.players) {
+      const v = this.groupImgs[id];
+      const t = v?.startsWith('cut:') ? Number(v.slice(4)) : NaN;
+      if (!isFinite(t)) continue;
+      cuts[id] = Math.max(0, Math.min(1, t));
+      grams[id] = pieceGrams(fish, cuts[id]);
+    }
+    const err: Record<string, number> = Object.fromEntries(Object.keys(grams).map((id) => [id, Math.abs(grams[id] - g.target!)]));
+    g.cuts = cuts;
+    g.grams = grams;
+    g.order = Object.keys(grams).sort((a, b) => err[b] - err[a]);
+    g.phase = 'show';
+    for (let i = 0; i < g.order.length; i++) {
+      g.showIdx = i;
+      this.emit();
+      this.io.fx?.('chop', {});
+      await this.sleep(epoch, Math.max(2500, this.s.settings.group.showMs));
+    }
+    // меньше промах — выше место; одинаковый промах — одно место
+    const levels = [...new Set(Object.values(err))].sort((a, b) => a - b);
+    await this.groupAwards(epoch, g, err, levels);
   }
 
   private onDraw(m: Extract<InputMsg, { t: 'draw' }>) {
@@ -945,7 +992,7 @@ export class GameEngine {
     if (parts.some((x) => !x)) return;
     const url = parts.join('');
     delete this.drawParts[m.pid];
-    this.groupImgs[m.pid] = url.startsWith('data:image/') || (url.startsWith('text:') && url.length < 300) ? url : null;
+    this.groupImgs[m.pid] = url.startsWith('data:image/') || ((url.startsWith('text:') || url.startsWith('cut:')) && url.length < 300) ? url : null;
     g.submitted.push(m.pid);
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
@@ -958,7 +1005,8 @@ export class GameEngine {
     for (const id of g.players) if (this.s.players[id]?.bot) {
       setT(() => {
         if (this.s.g !== g || g.submitted.includes(id)) return;
-        this.groupImgs[id] = g.game === 'senryu' ? 'text:' + pick(lines) : null;
+        this.groupImgs[id] = g.game === 'senryu' ? 'text:' + pick(lines)
+          : g.game === 'sashimi' ? 'cut:' + cutForGrams(g.fish!, g.target! * (0.7 + Math.random() * 0.6)).toFixed(4) : null;
         g.submitted.push(id);
         this.emit();
         this.groupDone?.();
@@ -1247,8 +1295,59 @@ export class GameEngine {
         this.io.fx?.('ringStop', { pid: p.id, cell, res, at });
         return reply(true, { cell, res, at });
       }
+      case 'chohanRoll': {
+        if (!(st.chohanPrefs ?? []).includes(p.pref!)) return reply(false, null, 'Здесь не играют в чо-хан');
+        const bet = Math.floor(Number(a.bet));
+        if (!(st.chohan?.bets ?? []).includes(bet)) return reply(false, null, 'Нет такой ставки');
+        if (a.guess !== 'cho' && a.guess !== 'han') return reply(false, null, 'Чёт или нечет?');
+        if (p.yen < bet) return reply(false, null, 'Не хватает йен');
+        const d1 = 1 + randInt(6), d2 = 1 + randInt(6);
+        const win = (a.guess === 'cho') === ((d1 + d2) % 2 === 0);
+        p.yen += win ? bet : -bet;
+        if (bet >= 500) this.log(`🎲 ${p.name} ${win ? 'выиграл' : 'проиграл'} в чо-хан ¥${bet}`);
+        this.emit();
+        this.io.fx?.('chohan', { pid: p.id, d1, d2, guess: a.guess, bet, win });
+        return reply(true, { d1, d2, win });
+      }
+      case 'sudokuGet': {
+        if (!(st.sudokuPrefs ?? []).includes(p.pref!)) return reply(false, null, 'Здесь нет судоку');
+        return reply(true, this.sudokuFor(p.id));
+      }
+      case 'sudokuSolve': {
+        if (!(st.sudokuPrefs ?? []).includes(p.pref!)) return reply(false, null, 'Здесь нет судоку');
+        const cur = this.sudokuFor(p.id);
+        if (cur.done) return reply(false, null, 'Все судоку уже решены');
+        const grid = Array.isArray(a.grid) ? a.grid.map(Number) : [];
+        if (!isSolved(cur.puzzle!, grid, cur.size!)) return reply(false, null, 'Пока не решено');
+        const pr = st.sudoku?.rewards?.[cur.level] ?? { yen: 0, stars: 0 };
+        p.yen += pr.yen;
+        p.stars += pr.stars;
+        const text = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
+        this.log(`🔢 ${p.name} решил судоку ${cur.size}×${cur.size}${text ? ': ' + text : ''}`);
+        const sd = this.sec.sudoku![p.id];
+        sd.level++;
+        sd.puzzle = [];
+        this.emit();
+        this.snapshot();
+        this.io.fx?.('sudoku', { pid: p.id, size: cur.size, solved: true });
+        return reply(true, { reward: text, next: this.sudokuFor(p.id) });
+      }
     }
     reply(false, null, 'Неизвестная операция');
+  }
+
+  /** текущее судоку игрока; новая головоломка создаётся, когда прошлая решена */
+  private sudokuFor(pid: string): { level: number; done: boolean; size?: number; puzzle?: number[] } {
+    const all = (this.sec.sudoku ??= {});
+    const sd = (all[pid] ??= { level: 0, puzzle: [] });
+    const lv = SUDOKU_LEVELS[sd.level];
+    if (!lv) return { level: sd.level, done: true };
+    if (!sd.puzzle.length) {
+      const givens = lv.size === 9 ? Math.max(24, Math.min(70, this.s.settings.sudoku?.givens9 ?? lv.givens)) : lv.givens;
+      sd.puzzle = makeSudoku(lv.size, givens);
+      this.snapshot();
+    }
+    return { level: sd.level, done: false, size: lv.size, puzzle: sd.puzzle };
   }
 
   // ───────── боты (для тестов без телефонов) ─────────

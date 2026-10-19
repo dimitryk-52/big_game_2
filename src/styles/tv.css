@@ -206,3 +206,22 @@
 .poem-lines { position: absolute; inset: 9% 8% 18%; display: flex; flex-direction: column; justify-content: center; gap: 0.5em; color: #2a1d14; font-size: 8.5cqw; line-height: 1.15; text-align: left; }
 .poem-lines .poem-mine { color: #b3141c; font-size: 1.15em; margin-left: 1.2em; }
 .sheet.poem .hanko { font-size: 10cqw; }
+.pnp-sudoku { display: grid; width: 150px; aspect-ratio: 1; gap: 1px; background: #1a1410; border: 2px solid #1a1410; }
+.pnp-sudoku span { background: #f4eddc; }
+.pnp-sudoku span.on { background: #4dabff; }
+/* сашими */
+.fish-board { display: block; image-rendering: pixelated; border: 4px solid #3a2a16; box-shadow: 6px 6px 0 var(--shadow); max-width: 100%; }
+.fish-board.big { width: min(1100px, 100%); height: auto; }
+.scale { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.scale-lcd { background: #9fb87a; color: #1d2a12; font-family: 'DotGothic16', monospace; font-size: 2.6em; padding: 2px 18px; border: 4px solid #2b2f36; box-shadow: inset 3px 3px 0 #7d955c, 4px 4px 0 var(--shadow); min-width: 5em; text-align: right; letter-spacing: 2px; }
+.scale-lcd small { font-size: 0.5em; }
+.scale-label { color: var(--muted); font-size: 0.9em; }
+.sashimi-show { width: 100%; }
+.sashimi-who { display: flex; align-items: center; gap: 10px; font-size: 1.6em; }
+.sashimi-scale-row { display: flex; gap: 2em; align-items: center; }
+.sashimi-diff { font-size: 1.4em; text-align: center; }
+.sashimi-diff b { font-size: 1.6em; color: var(--pink); }
+.sashimi-diff b.good { color: var(--green); }
+.sashimi-rank { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.sashimi-rank .qpart { font-size: 1em; gap: 8px; }
+.sashimi-rank .place1 { border-color: var(--yellow); }
