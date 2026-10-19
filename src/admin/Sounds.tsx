@@ -132,6 +132,7 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
   const [q, setQ] = useState('');
   const [now, setNow] = useState<string | null>(null);
   useEffect(() => {
+    void snd.refreshFiles(); // файлы могли положить в папку руками — перечитываем при каждом открытии
     const on = (e: KeyboardEvent) => { if (e.code === 'Escape') onClose(); };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
