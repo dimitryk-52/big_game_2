@@ -1,7 +1,7 @@
 // Админка: групповые игры — задания, время, награды за места.
 import { useEffect, useState } from 'preact/hooks';
 import type { FaceId, GroupGameId, Settings } from '../shared/types';
-import { DEFAULT_SETTINGS, GROUP_GAMES, groupTime } from '../shared/settings';
+import { DEFAULT_SETTINGS, GROUP_GAMES, groupTime, iaidoRounds } from '../shared/settings';
 import { FACES } from '../games/faces';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
@@ -34,6 +34,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         </select>
       </div>
       <div class="note">
+        {game === 'iaido' && <>Иайдо: дуэль самураев на реакцию. Все держат палец над телефоном, в случайный момент на ТВ вспыхивает «!» (со звуком «кин»). Нажал раньше — выбыл из раунда; со второго раунда бывает ложная тревога — серый «?» и стук бамбука. Время нажатия сравнивается по синхронизированным часам, сеть на победителя не влияет. За раунд: самому быстрому 3 очка, второму 2, третьему 1; при равных очках выше лучшее время. Задание — просто подпись сцены.<br /></>}
         {game === 'calligraphy' && <>Каллиграфия:</>}
         {game === 'fukuwarai' && <>Фукуварай: на телефоне пустое лицо и детали. Детали перетаскивают на лицо, и они сразу исчезают — собираем вслепую. Не успел — оставшиеся детали падают куда попало. Потом лица раскрываются на ТВ и все голосуют.<br /></>}
         {game === 'senryu' && <>Сэнрю: в задании две первые строки через « / » (5 и 7 слогов), игроки дописывают последнюю (5 слогов), телефон считает слоги. Потом стихи по одному на ТВ и голосование.<br /></>}
@@ -59,9 +60,10 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {num('Каллиграфия: время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
         {num('Фукуварай: время, сек', () => groupTime(s, 'fukuwarai'), (c, v) => { (c.group.times ??= {}).fukuwarai = v; })}
         {num('Сэнрю: время, сек', () => groupTime(s, 'senryu'), (c, v) => { (c.group.times ??= {}).senryu = v; })}
+        {num('Иайдо: раундов', () => iaidoRounds(s), (c, v) => (c.group.iaidoRounds = v))}
         {num('Время на голос, сек', () => s.group.voteTime, (c, v) => (c.group.voteTime = v))}
         {num('Показ каждой работы, мс', () => s.group.showMs, (c, v) => (c.group.showMs = v))}
-        {[0, 1, 2].flatMap((i) => [
+        {s.group.prizes.map((_, i) => i).flatMap((i) => [
           num(`${i + 1} место, ¥`, () => s.group.prizes[i]?.yen ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).yen = v; }),
           num(`${i + 1} место, ★`, () => s.group.prizes[i]?.stars ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).stars = v; }),
         ])}

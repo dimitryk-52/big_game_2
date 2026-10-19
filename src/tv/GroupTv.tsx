@@ -2,7 +2,8 @@
 import type { GameState, GroupPublic } from '../shared/types';
 import { washiCanvas } from '../games/brush';
 import { Avatar, TimerBar } from '../ui/common';
-import { GROUP_GAMES, groupTime, senryuLines } from '../shared/settings';
+import { GROUP_GAMES, senryuLines } from '../shared/settings';
+import { IaidoResults, IaidoTv } from './IaidoTv';
 import { PREF } from '../map/mapData';
 import { now } from '../shared/util';
 
@@ -25,7 +26,33 @@ export function Sheet({ g, img, n, big }: { g: GroupPublic; img: string | null |
   );
 }
 
-export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string | null> }) {
+/** фукуварай: «Собери лицо …» с именем в нужном падеже */
+const FACE_CALL: Record<string, string> = { okame: 'Собери лицо Окамэ!', daruma: 'Собери лицо Дарумы!', oni: 'Собери лицо демона Óни!' };
+
+/**
+ * Баннер начала групповой игры — свиток-какэдзику поверх фона префектуры
+ * (интро префектуры — горизонтальная полоса, обычные баннеры — тёмная плашка).
+ */
+function GroupScroll({ g }: { g: GroupPublic }) {
+  const info = GROUP_GAMES[g.game];
+  const call = g.game === 'calligraphy' ? g.prompt : g.game === 'fukuwarai' ? FACE_CALL[g.face ?? ''] ?? info.call : info.call;
+  return (
+    <div class="gscroll">
+      <div class="gscroll-rod" />
+      <div class="gscroll-paper" style={{ backgroundImage: `url(${paper()})` }}>
+        <div class="gscroll-sub">Играют все · {PREF[g.pref]?.ru}</div>
+        <div class="gscroll-kanji">{info.kanji}</div>
+        <div class="gscroll-name">{info.name} <span>{info.ja}</span></div>
+        <div class="gscroll-call">{call}</div>
+        <div class="gscroll-how">{info.how}</div>
+        <div class="gscroll-seal">{info.ja.slice(0, 2)}</div>
+      </div>
+      <div class="gscroll-rod" />
+    </div>
+  );
+}
+
+export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<string, string | null>; iaiSignal?: { round: number; at: number; decoyAt?: number } | null }) {
   const g = s.g;
   if (!g) return null;
   const info = GROUP_GAMES[g.game];
@@ -37,19 +64,12 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
   );
   return (
     <div class="group-tv">
-      {g.phase === 'intro' && (
-        <div class="group-intro pop">
-          <div class="group-kanji">{info.kanji}</div>
-          <div class="group-sub">Групповая игра · {PREF[g.pref]?.ru}</div>
-          <div class="group-title">{info.name}</div>
-          <div class="group-prompt">{g.prompt}</div>
-          <div class="muted">{info.how}. Время: {groupTime(s.settings, g.game)} c</div>
-        </div>
-      )}
-      {(g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
+      {g.phase === 'intro' && <GroupScroll g={g} />}
+      {g.game === 'iaido' && g.phase === 'draw' && <IaidoTv s={s} g={g} sig={iaiSignal ?? null} />}
+      {g.game !== 'iaido' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
-          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️' }[g.game]}</div>
+          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', iaido: '⚔️' }[g.game]}</div>
           <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />
@@ -73,7 +93,9 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
           <Who s={s} g={g} done={g.voted} />
         </div>
       )}
-      {g.phase === 'results' && <Results s={s} g={g} imgs={imgs} />}
+      {g.phase === 'results' && (g.game === 'iaido'
+        ? <div class="group-results iai-final"><div class="group-head"><span class="group-game">Итоги · {info.name} <span class="jp">{info.ja}</span></span><span class="group-task">{g.prompt}</span></div><IaidoResults s={s} g={g} /></div>
+        : <Results s={s} g={g} imgs={imgs} />)}
     </div>
   );
 }
@@ -105,7 +127,7 @@ function Who({ s, g, done }: { s: GameState; g: GroupPublic; done: string[] }) {
 
 function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<string, string | null> }) {
   const ranked = [...g.players].filter((id) => s.players[id]).sort((a, b) => (g.points?.[b] ?? 0) - (g.points?.[a] ?? 0));
-  const podium = ranked.filter((id) => g.places?.[id]);
+  const podium = ranked.filter((id) => (g.places?.[id] ?? 9) <= 3);
   const medal = ['', '🥇', '🥈', '🥉'];
   return (
     <div class="group-results">
@@ -125,8 +147,8 @@ function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<st
         {!podium.length && <div class="group-sub">Никто не получил голосов</div>}
       </div>
       <div class="qparts">
-        {ranked.filter((id) => !g.places?.[id]).map((id) => (
-          <div class="qpart done"><Avatar p={s.players[id]} size={30} /> <span>{s.players[id].name}</span> <span class="muted">№{g.order.indexOf(id) + 1} · {g.points?.[id] ?? 0}</span></div>
+        {ranked.filter((id) => (g.places?.[id] ?? 9) > 3).map((id) => (
+          <div class="qpart done">{g.places?.[id] && <b>{g.places[id]}.</b>} <Avatar p={s.players[id]} size={30} /> <span>{s.players[id].name}</span> <span class="muted">№{g.order.indexOf(id) + 1} · {g.points?.[id] ?? 0}</span> {g.awards?.[id] && <span class="iai-res-award">{g.awards[id]}</span>}</div>
         ))}
       </div>
     </div>

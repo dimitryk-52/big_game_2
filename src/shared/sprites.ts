@@ -148,12 +148,13 @@ const DIAMOND = [
 const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch) => (ch === '.' ? null : ch === 'W' ? '#ffffff' : color)));
 const MISSING: Grid = diamond('#ff00ff');
 
-// групповые игры (выноски только в админке): кисть, лицо окамэ, полоска танзаку
-const GROUP_PAL: Record<string, string> = { b: '#b5793a', g: '#c9ccd6', k: '#222233', s: '#ffe2c4', p: '#ff8fb0', r: '#d0304a', t: '#9fd3ff' };
+// групповые игры (выноски только в админке): кисть, лицо окамэ, полоска танзаку, катана
+const GROUP_PAL: Record<string, string> = { b: '#b5793a', g: '#c9ccd6', k: '#222233', s: '#ffe2c4', p: '#ff8fb0', r: '#d0304a', t: '#9fd3ff', y: '#e8b84a', w: '#ffffff' };
 const GROUP_ART: Record<string, string[]> = {
   group_calligraphy: ['........bb', '.......bbb', '......bbb.', '.....bbb..', '....ggg...', '...ggg....', '..kkk.....', '.kkk......', 'kkk.......', 'kk........'],
   group_fukuwarai: ['..ssssss..', '.ssssssss.', 'ssssssssss', 'skksssskks', 'ssssssssss', 'spssssssps', 'sssrrrrsss', '.ssssssss.', '..ssssss..'],
   group_senryu: ['.kk.', 'tttt', 'tktt', 'tktt', 'tttt', 'tktt', 'tktt', 'tktt', 'tttt'],
+  group_iaido: ['.........w', '........wg', '.......wg.', '......wg..', '.....wg...', '...ywg....', '...yy.....', '..rk.y....', '.rk.......', 'kr........'],
 };
 for (const [id, rows] of Object.entries(GROUP_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => GROUP_PAL[ch] ?? null)));
 

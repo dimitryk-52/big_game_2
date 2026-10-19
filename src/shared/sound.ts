@@ -75,6 +75,8 @@ export const sfx = {
   duel: () => { [196, 196, 262, 196, 311, 294].forEach((f, i) => tone(f, 0.14, 'sawtooth', 0.18, i * 0.13)); },
   fanfare: () => { [523, 523, 523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, i === 7 ? 0.6 : 0.12, 'square', 0.22, i * 0.12)); },
   pachi: () => tone(1500 + Math.random() * 600, 0.02, 'square', 0.05),
+  slash: () => { noise(0.25, 0.45, 0, 2500); tone(900, 0.2, 'sawtooth', 0.15, 0, -700); },
+  early: () => { tone(160, 0.3, 'square', 0.2); },
   jackpot: () => { for (let i = 0; i < 12; i++) tone(600 + i * 80, 0.08, 'square', 0.18, i * 0.06); },
 };
 
@@ -103,4 +105,23 @@ export function playRhythmMusic(seed: number, bpm: number, beats: number, startA
     tone(root * Math.pow(2, deg / 12), spb * 0.9, 'triangle', 0.25, at(b)); // бас
   }
   for (const n of notes) tone(523 * Math.pow(2, [0, 4, 7, 12][n.lane] / 12), 0.1, 'square', 0.12, at(n.beat));
+}
+
+/**
+ * Иайдо: «кин!» точно в момент сигнала (время хоста) и «ток» бамбука на ложной тревоге.
+ * Ставим в очередь AudioContext заранее, чтобы звук не зависел от кадров.
+ */
+export function iaiSounds(at: number, decoyAt?: number) {
+  const a = audio();
+  const outLat = ((a as any).outputLatency ?? 0) + (a.baseLatency ?? 0);
+  const when = (t: number) => Math.max(0, (t - now()) / 1000 - outLat);
+  const w = when(at);
+  tone(2093, 0.25, 'square', 0.3, w);
+  tone(3136, 0.35, 'triangle', 0.25, w);
+  noise(0.08, 0.3, w, 4000);
+  if (decoyAt != null && decoyAt < at) {
+    const d = when(decoyAt);
+    tone(330, 0.07, 'triangle', 0.5, d, -120);
+    tone(250, 0.09, 'triangle', 0.4, d + 0.09, -100);
+  }
 }

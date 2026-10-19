@@ -72,7 +72,7 @@ export interface PrefState {
 }
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido';
 /** лицо для фукуварай */
 export type FaceId = 'okame' | 'daruma' | 'oni';
 
@@ -107,6 +107,23 @@ export interface GroupPublic {
   points?: Record<string, number>;
   places?: Record<string, number>;
   awards?: Record<string, string>;
+  /** иайдо: текущий раунд; момент сигнала знает только ТВ (engine.iaiSignal) */
+  iai?: IaiRound;
+  /** иайдо: лучшее время каждого игрока, мс */
+  best?: Record<string, number>;
+}
+
+/** раунд иайдо: ready — ждём сигнала, done — итог раунда */
+export interface IaiRound {
+  round: number;
+  rounds: number;
+  step: 'ready' | 'done';
+  /** нажали раньше сигнала — выбыли из раунда */
+  early: string[];
+  /** нажали после сигнала (время раскрывается в done) */
+  cut: string[];
+  /** реакция, мс */
+  times?: Record<string, number>;
 }
 
 export type QContext = 'calib' | 'pref' | 'duel' | 'revive';
@@ -243,10 +260,12 @@ export interface Settings {
     drawTime: number;
     /** время на работу в остальных играх, сек (каллиграфия — drawTime) */
     times?: Partial<Record<GroupGameId, number>>;
+    /** иайдо: сколько раундов */
+    iaidoRounds?: number;
     voteTime: number;
     /** сколько показывать каждую работу на ТВ, мс */
     showMs: number;
-    /** награды за 1, 2 и 3 место */
+    /** награды за места: [0] — 1 место и т. д. */
     prizes: { yen: number; stars: number }[];
   };
   ringPrefs: number[];
@@ -291,7 +310,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

@@ -169,11 +169,55 @@
 .group-game { font-size: 1.3em; color: var(--yellow); }
 .group-game .jp { color: var(--pink); }
 .group-task { font-size: 1.1em; }
-.group-intro { text-align: center; }
-.group-kanji { font-size: 5em; line-height: 1; color: #f4eddc; text-shadow: 6px 6px 0 #000; }
-.group-title { font-size: 2.6em; color: var(--yellow); text-shadow: 4px 4px 0 #000; }
 .group-sub { font-size: 1.1em; color: #ccd; }
-.group-prompt { font-size: 1.8em; max-width: 1000px; }
+
+/* баннер начала групповой игры: свиток-какэдзику разворачивается сверху вниз */
+.group-tv > .gscroll { background: none; border: 0; box-shadow: none; padding: 0; min-width: 0; gap: 0; filter: drop-shadow(10px 10px 0 rgba(11, 13, 31, 0.85)); }
+.gscroll-rod { width: min(560px, 80vw); height: 18px; background: linear-gradient(#6b3d1f, #3b1f0e); border: 3px solid #1e0f06; position: relative; z-index: 1; }
+.gscroll-rod::before, .gscroll-rod::after { content: ''; position: absolute; top: -6px; width: 22px; height: 24px; background: #c9a24a; border: 3px solid #1e0f06; }
+.gscroll-rod::before { left: -26px; }
+.gscroll-rod::after { right: -26px; }
+.gscroll-paper { position: relative; width: min(500px, 72vw); background-size: cover; border-left: 10px solid #7a1f24; border-right: 10px solid #7a1f24; padding: 0.9em 1.4em 1.2em; display: flex; flex-direction: column; align-items: center; gap: 0.25em; text-align: center; color: #241812; overflow: hidden; transform-origin: top; animation: scrollOpen 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes scrollOpen { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.gscroll-sub { font-size: 0.95em; color: #7a5a40; letter-spacing: 0.05em; }
+.gscroll-kanji { font-size: 6.5em; line-height: 1.05; color: #1a1210; text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.15); animation: pop 0.5s 0.5s both; }
+.gscroll-name { font-size: 1.6em; color: #7a1f24; }
+.gscroll-name span { font-size: 0.8em; color: #a0503a; }
+.gscroll-call { font-size: 2.3em; line-height: 1.1; margin-top: 0.15em; color: #b3141c; animation: pop 0.5s 0.9s both; }
+.gscroll-how { font-size: 1em; color: #5a4636; max-width: 24em; margin: 0.3em 0 1.6em; }
+.gscroll-seal { position: absolute; right: 0.6em; bottom: 0.6em; width: 1.5em; height: 2.6em; display: grid; place-items: center; background: #c8262a; color: #fff3e6; font-size: 0.95em; line-height: 1; writing-mode: vertical-rl; border: 3px solid #8e1418; transform: rotate(-6deg); opacity: 0.9; }
+
+/* иайдо */
+.group-tv > .iai-stage { position: relative; width: 100%; height: 100%; justify-content: space-between; overflow: hidden; background: linear-gradient(#1c0f2e 0%, #4a1636 45%, #c2453a 78%, #f2a65a 100%); }
+.iai-top { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.iai-round { font-size: 1.4em; color: var(--yellow); text-shadow: 3px 3px 0 #000; }
+.iai-sign { flex: 1; min-height: 0; display: grid; place-items: center; font-size: min(30vh, 16em); line-height: 1; color: #fff; text-shadow: 8px 8px 0 #000; }
+.iai-sign.go { color: #ff2b2b; animation: iaiGo 0.25s ease-out both; }
+.iai-sign.decoy { color: #b9b4c9; font-size: min(22vh, 12em); }
+@keyframes iaiGo { from { transform: scale(2.2); } to { transform: scale(1); } }
+.iai-ready { font-size: 0.22em; color: #ffd9c2; animation: pulse 1s ease-in-out infinite; }
+.iai-hush { font-size: 0.25em; color: rgba(255, 255, 255, 0.35); }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.iai-flash { position: absolute; inset: 0; background: #fff; z-index: 2; pointer-events: none; }
+.iai-verdict { font-size: 1.6em; display: flex; align-items: center; gap: 0.4em; background: rgba(10, 8, 20, 0.7); padding: 0.2em 0.8em; border: 3px solid var(--yellow); }
+.iai-verdict b { color: var(--yellow); }
+.iai-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.8em 1.4em; padding-top: 0.4em; border-top: 4px solid #1a0d14; width: 100%; }
+.iai-samurai { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 5.5em; }
+.iai-samurai.out { opacity: 0.45; filter: grayscale(1); }
+.iai-samurai.win .avatar { animation: pop 0.4s both; }
+.iai-badge { height: 1.3em; font-size: 1.3em; color: #fff; text-shadow: 2px 2px 0 #000; }
+.iai-samurai.out .iai-badge { color: #ff4d4d; }
+.iai-samurai.win .iai-badge { color: var(--yellow); font-size: 1.6em; }
+.iai-name { font-size: 1em; text-shadow: 2px 2px 0 #000; }
+.iai-time { height: 1.2em; font-size: 0.95em; color: #ffe9a8; text-shadow: 2px 2px 0 #000; }
+.iai-results { display: flex; flex-direction: column; gap: 0.45em; width: min(900px, 100%); }
+.iai-res-row { display: grid; grid-template-columns: 2em 44px minmax(4em, 1fr) auto auto auto; align-items: center; white-space: nowrap; gap: 0.7em; padding: 0.3em 0.6em; background: rgba(255, 255, 255, 0.05); font-size: 1.15em; }
+.iai-res-row.place1 { background: rgba(255, 210, 63, 0.18); }
+.iai-res-place { font-size: 1.3em; color: var(--yellow); text-align: right; }
+.iai-res-row.out { opacity: 0.55; }
+.iai-res-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iai-res-pts { color: var(--yellow); }
+.iai-res-award { color: #9ff0a8; text-align: right; }
 .group-brush { font-size: 4em; animation: brushWave 1.4s ease-in-out infinite; }
 @keyframes brushWave { 0%, 100% { transform: rotate(-20deg) translateX(-20px); } 50% { transform: rotate(15deg) translateX(20px); } }
 .group-draw .timer, .group-vote .timer { width: 100%; }
@@ -206,3 +250,4 @@
 .poem-lines { position: absolute; inset: 9% 8% 18%; display: flex; flex-direction: column; justify-content: center; gap: 0.5em; color: #2a1d14; font-size: 8.5cqw; line-height: 1.15; text-align: left; }
 .poem-lines .poem-mine { color: #b3141c; font-size: 1.15em; margin-left: 1.2em; }
 .sheet.poem .hanko { font-size: 10cqw; }
+.group-tv > .iai-final { height: auto; }

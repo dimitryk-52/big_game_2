@@ -48,6 +48,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'hit': sfx.hit(); m?.hit(d.pid); break;
         case 'reward': sfx.coin(); break;
         case 'duel': sfx.duel(); break;
+        case 'iaiCut': sfx.slash(); break;
+        case 'iaiEarly': sfx.early(); break;
         case 'prize': {
           sfx.fanfare();
           const p = host.state.players[d.pid];
@@ -158,7 +160,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
   // и в вопросах с аудио/видео; в обычных вопросах тише
   const qMedia = st.t === 'question' && (s.q?.media?.type === 'audio' || s.q?.media?.type === 'video');
-  const track = st.t === 'lobby' || st.t === 'rhythm' || qMedia ? null : s.duel ? 'duel' : 'map';
+  // иайдо — в тишине, чтобы был слышен «кин!»
+  const iaiQuiet = st.t === 'group' && s.g?.game === 'iaido' && s.g.phase === 'draw';
+  const track = st.t === 'lobby' || st.t === 'rhythm' || qMedia || iaiQuiet ? null : s.duel ? 'duel' : 'map';
   useEffect(() => { setMusic(track, st.t === 'question'); }, [track, st.t]);
 
   return (
@@ -218,7 +222,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           <div class="prompt-timer"><TimerBar start={st.deadline - 15000} end={st.deadline} now={now} /></div>
         </Prompt>
       )}
-      {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} />}
+      {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} iaiSignal={host.engine.iaiSignal} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
       {st.t === 'end' && <EndScreen s={s} />}

@@ -257,7 +257,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
   const toggle = (list: number[], code: number) => (list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
   return (
     <div class="pad col">
-      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра запускается при первом приходе в префектуру вместо вопроса. На магазин и групповую игру нельзя высадиться.</div>
+      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра — при первом приходе в префектуру: ходящий отвечает на вопрос, ход заканчивается, и играют все. На магазин и групповую игру нельзя высадиться.</div>
       <div class="row"><button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button></div>
       <table class="qtable">
         <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>🛒 Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
@@ -469,6 +469,8 @@ function nextLabel(s: GameState | null) {
   if (!s || s.settings.hostPaced === false) return 'Далее';
   const st = s.stage;
   if (st.t === 'prefIntro') return 'Далее: показать вопрос';
+  if (st.t === 'group' && s.g?.phase === 'intro') return 'Далее: начать игру';
+  if (st.t === 'group' && s.g?.phase === 'results') return 'Далее: закрыть итоги';
   if (st.t === 'question' && s.q?.reading) return 'Далее: ответы и таймер';
   if (st.t === 'question' && s.q?.revealed) return 'Далее: закрыть вопрос';
   return 'Далее';

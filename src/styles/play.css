@@ -141,3 +141,14 @@
 .syl { text-align: center; color: #aab; }
 .syl.ok { color: var(--green); }
 .senryu-mine { font-size: 22px; color: var(--yellow); text-align: center; }
+
+/* иайдо: весь экран — кнопка удара */
+.iai-pad { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; background: radial-gradient(circle at 50% 45%, #a3202a 0 34%, #3a1022 35% 100%); }
+.iai-pad.wait { background: radial-gradient(circle at 50% 45%, #4a3a5a 0 34%, #1c1430 35% 100%); }
+.iai-pad.hit { background: radial-gradient(circle at 50% 45%, #2f8f4a 0 34%, #10301c 35% 100%); }
+.iai-pad.out { background: radial-gradient(circle at 50% 45%, #555 0 34%, #222 35% 100%); }
+.iai-pad.done { background: #1c1430; }
+.iai-pad:active:not(.wait):not(.done) { filter: brightness(1.3); }
+.iai-pad-round { font-size: 18px; color: var(--yellow); }
+.iai-pad-big { font-size: 34vw; line-height: 1; text-shadow: 6px 6px 0 #000; }
+.iai-pad-text { font-size: 22px; }

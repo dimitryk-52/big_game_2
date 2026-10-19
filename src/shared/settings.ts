@@ -63,13 +63,18 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок' },
     { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт' },
     { id: 'sen6', game: 'senryu', text: 'Синкансэн летит / Фудзи мелькнула в окне' },
+    { id: 'iai1', game: 'iaido', text: 'Дуэль на рассвете у стен замка' },
+    { id: 'iai2', game: 'iaido', text: 'Поединок в бамбуковой роще' },
+    { id: 'iai3', game: 'iaido', text: 'Ронины встретились на мосту' },
   ],
   group: {
     drawTime: 30,
     times: { fukuwarai: 40, senryu: 60 },
+    iaidoRounds: 3,
     voteTime: 20,
     showMs: 4000,
-    prizes: [{ yen: 1000, stars: 3 }, { yen: 600, stars: 2 }, { yen: 300, stars: 1 }],
+    // звёзды — только тройке лидеров, йены — всем местам до 7-го
+    prizes: [{ yen: 1000, stars: 3 }, { yen: 700, stars: 2 }, { yen: 500, stars: 1 }, { yen: 350, stars: 0 }, { yen: 250, stars: 0 }, { yen: 150, stars: 0 }, { yen: 100, stars: 0 }],
   },
   ringPrefs: [14, 40, 4],
   pachinko: { yenPerBall: 4, pack: 25 },
@@ -84,6 +89,8 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   if (!saved) return d;
   const out: any = { ...d, ...saved };
   for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
+  // в старых настройках награды только за 3 места — остальные места берём стандартные
+  out.group.prizes = d.group.prizes.map((x, i) => out.group.prizes[i] ?? x);
   return out;
 }
 
@@ -109,14 +116,17 @@ export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   prize: { name: 'ПРИЗ', icon: '🏆' },
 };
 
-export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji: string; how: string; doing: string }> = {
-  calligraphy: { name: 'Каллиграфия', ja: '書道', kanji: '書', how: 'У всех на телефонах — холст и кисть', doing: 'Рисуют…' },
-  fukuwarai: { name: 'Фукуварай', ja: '福笑い', kanji: '福', how: 'Собираем лицо вслепую: положенные детали сразу исчезают', doing: 'Собирают лица вслепую…' },
-  senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допишите последнюю строку стиха (5 слогов)', doing: 'Сочиняют…' },
+/** call — короткая фраза для баннера-свитка в начале игры (у каллиграфии — само задание) */
+export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji: string; how: string; doing: string; call: string }> = {
+  calligraphy: { name: 'Каллиграфия', ja: '書道', kanji: '書', how: 'У всех на телефонах — холст и кисть', doing: 'Рисуют…', call: 'Нарисуй кандзи!' },
+  fukuwarai: { name: 'Фукуварай', ja: '福笑い', kanji: '福', how: 'Детали лица исчезают, как только их положишь', doing: 'Собирают лица вслепую…', call: 'Собери лицо вслепую!' },
+  senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допиши последнюю строку — 5 слогов', doing: 'Сочиняют…', call: 'Заверши хокку!' },
+  iaido: { name: 'Иайдо', ja: '居合道', kanji: '斬', how: 'Жми, когда на ТВ вспыхнет «!». Раньше — выбываешь из раунда', doing: 'Ждём сигнала…', call: 'Руби первым!' },
 };
 
 /** время на работу в групповой игре, сек */
 export function groupTime(st: Settings, game: GroupGameId) {
+  if (game === 'iaido') return 0;
   return game === 'calligraphy' ? st.group.drawTime : st.group.times?.[game] ?? DEFAULT_SETTINGS.group.times![game]!;
 }
 
@@ -124,6 +134,10 @@ export function groupTime(st: Settings, game: GroupGameId) {
 export function groupTasksFor(st: Settings, game: GroupGameId): GroupTask[] {
   const own = (st.groupTasks ?? []).filter((t) => t.game === game && t.text.trim());
   return own.length ? own : DEFAULT_SETTINGS.groupTasks.filter((t) => t.game === game);
+}
+
+export function iaidoRounds(st: Settings) {
+  return Math.max(1, Math.min(9, st.group.iaidoRounds ?? DEFAULT_SETTINGS.group.iaidoRounds!));
 }
 
 /** сэнрю: строки задания (через « / » или перевод строки) */

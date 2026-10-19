@@ -7,6 +7,7 @@ import { TimerBar } from '../ui/common';
 import { vibrate } from '../shared/util';
 import { GROUP_GAMES } from '../shared/settings';
 import { FacePad, SenryuPad, MyWork } from './GroupPads';
+import { IaidoPad } from './IaidoPad';
 
 export const CANVAS_W = 600;
 export const CANVAS_H = 800;
@@ -35,6 +36,7 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
       {drawing && g.game === 'calligraphy' && <DrawPad key={g.id} client={client} g={g} me={me} />}
       {drawing && g.game === 'fukuwarai' && <FacePad key={g.id} client={client} g={g} me={me} />}
       {drawing && g.game === 'senryu' && <SenryuPad key={g.id} client={client} g={g} me={me} />}
+      {drawing && g.game === 'iaido' && <IaidoPad client={client} g={g} me={me} />}
       {g.phase === 'show' && g.showIdx >= 0 && (
         <div class="pad col center-screen">
           <h2>Смотрим работы на ТВ</h2>

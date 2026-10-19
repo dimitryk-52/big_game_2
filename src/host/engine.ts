@@ -3,9 +3,9 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, GameMsg, GameState, GroupGameId, GroupPublic, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO, groupTasksFor, groupTime, isSpecialQ } from '../shared/settings';
+import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, groupTasksFor, groupTime, iaidoRounds, isSpecialQ } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -529,12 +529,7 @@ export class GameEngine {
     }
     await this.gate(epoch);
 
-    // групповая игра — при первом приходе вместо вопроса префектуры
-    const game = st.groupPrefs?.[to];
-    if (game && !ps.groupDone && this.s.joinOrder.length >= 2) {
-      ps.groupDone = true;
-      await this.groupGame(epoch, to, game);
-    } else await this.prefQuestion(epoch, p, to);
+    await this.prefQuestion(epoch, p, to);
 
     // магазин — после вопроса, до дуэли
     if (st.shopPrefs?.includes(to) && p.hp > 0) await this.shopVisit(epoch, p);
@@ -542,6 +537,14 @@ export class GameEngine {
     // ── дуэль ──
     const other = this.occupants(to, pid)[0];
     if (other && other.hp > 0 && p.hp > 0) await this.duel(epoch, p, other);
+
+    // групповая игра — как в Марио Пати: ход закончен, играют все (один раз на префектуру)
+    const game = st.groupPrefs?.[to];
+    if (game && !ps.groupDone && this.s.joinOrder.filter((id) => this.s.players[id]).length >= 2) {
+      ps.groupDone = true;
+      await this.gate(epoch);
+      await this.groupGame(epoch, to, game);
+    }
   }
 
   /** вопрос префектуры, куда пришёл (или высадился) игрок p: отвечают все, у p награда больше */
@@ -815,6 +818,8 @@ export class GameEngine {
   private drawParts: Record<string, string[]> = {};
   private votes: Record<string, number[]> = {};
   private groupDone: (() => void) | null = null;
+  /** иайдо: момент сигнала и ложной тревоги текущего раунда — только для ТВ, в состояние не попадает */
+  iaiSignal: { round: number; at: number; decoyAt?: number } | null = null;
 
   private async groupGame(epoch: number, code: number, game: GroupGameId) {
     const st = this.s.settings;
@@ -828,7 +833,7 @@ export class GameEngine {
       id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game, prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
       ...(game === 'fukuwarai' ? { face: task?.face ?? 'okame' } : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
-      voteRounds: Math.min(3, players.length - 1), voted: [],
+      voteRounds: game === 'iaido' ? 0 : Math.min(3, players.length - 1), voted: [],
     };
     this.groupImgs = {};
     this.drawParts = {};
@@ -838,6 +843,15 @@ export class GameEngine {
     this.io.fx?.('group', g);
     // ведущий зачитывает задание
     await this.sleep(epoch, this.hostPaced ? 36e5 : 6000);
+
+    if (game === 'iaido') {
+      const { points, best } = await this.iaido(epoch, g);
+      g.best = best;
+      // при равных очках выше тот, у кого лучшее время
+      // места — всем, кто хоть раз ударил вовремя; при равных очках выше лучшее время
+      await this.groupResults(epoch, g, points, (id) => points[id] * 1e5 - Math.min(99999, best[id] ?? 99999), (id) => id in best);
+      return;
+    }
 
     // ── рисуем ──
     g.phase = 'draw';
@@ -906,14 +920,20 @@ export class GameEngine {
     // ── итоги: 3 очка за голос «1 место», 2 — за второе, 1 — за третье ──
     const points: Record<string, number> = Object.fromEntries(g.players.map((id) => [id, 0]));
     for (const vs of Object.values(this.votes)) vs.forEach((n, i) => { if (n) points[g.order[n - 1]] += 3 - i; });
-    // одинаковые очки — одно место на всех (1, 1, 2, 3…)
-    const levels = [...new Set(Object.values(points).filter((x) => x > 0))].sort((a, b) => b - a);
+    await this.groupResults(epoch, g, points);
+  }
+
+  /** места и награды; одинаковый ключ (по умолчанию — очки) — одно место на всех (1, 1, 2, 3…) */
+  private async groupResults(epoch: number, g: GroupPublic, points: Record<string, number>, key: (id: string) => number = (id) => points[id], ranked: (id: string) => boolean = (id) => points[id] > 0) {
+    const st = this.s.settings;
+    const scored = g.players.filter(ranked);
+    const levels = [...new Set(scored.map(key))].sort((a, b) => b - a);
     const places: Record<string, number> = {};
     const awards: Record<string, string> = {};
-    for (const id of g.players) {
-      const lv = levels.indexOf(points[id]);
+    for (const id of scored) {
+      const lv = levels.indexOf(key(id));
       const p = this.s.players[id];
-      if (lv < 0 || lv > 2 || !p) continue;
+      if (lv < 0 || lv >= st.group.prizes.length || !p) continue;
       places[id] = lv + 1;
       const pr = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
       p.yen += pr.yen;
@@ -927,11 +947,81 @@ export class GameEngine {
     this.emit();
     this.io.fx?.('prize', {});
     const win = g.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
-    if (win.length) this.log(`🖌 Каллиграфия: побеждает ${win.join(', ')}`);
+    if (win.length) this.log(`${GROUP_GAMES[g.game].name}: побеждает ${win.join(', ')}`);
     await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
     this.s.g = null;
     this.groupImgs = {};
+    this.iaiSignal = null;
     this.emit();
+  }
+
+  /**
+   * Иайдо: несколько раундов. В случайный момент на ТВ вспыхивает «!»; телефон шлёт время нажатия
+   * по часам хоста — сравниваем время, а не порядок прихода сообщений. Нажал раньше — выбыл из раунда.
+   * За раунд: 3 очка самому быстрому, 2 второму, 1 третьему.
+   */
+  private async iaido(epoch: number, g: GroupPublic) {
+    const rounds = iaidoRounds(this.s.settings);
+    const points: Record<string, number> = Object.fromEntries(g.players.map((id) => [id, 0]));
+    const best: Record<string, number> = {};
+    g.phase = 'draw';
+    for (let r = 1; r <= rounds; r++) {
+      await this.gate(epoch);
+      const iai: IaiRound = { round: r, rounds, step: 'ready', early: [], cut: [] };
+      g.iai = iai;
+      g.startAt = this.now + LEAD + 1500; // «приготовились»
+      g.deadline = 0; // момент сигнала телефонам не сообщаем
+      const at = g.startAt + 2000 + randInt(5000);
+      // со второго раунда — иногда ложная тревога (серый «?»): кто дёрнулся — выбыл
+      const decoyAt = r > 1 && Math.random() < 0.6 ? g.startAt + 900 + Math.random() * (at - g.startAt - 1700) : undefined;
+      this.iaiSignal = { round: r, at, decoyAt };
+      this.emit();
+      this.botIaido(g, iai, at);
+      const presses: Record<string, number> = {};
+      const end = at + 2500;
+      const waiting = () => g.players.some((id) => !(id in presses) && (this.s.players[id]?.online || this.s.players[id]?.bot));
+      while (waiting() && this.now < end) {
+        const m = await this.waitInput(epoch, (x) => (x.t === 'pick' && x.kind === 'iaido' && g.players.includes(x.pid) && x.value?.r === r && !(x.pid in presses) ? x : undefined), end - this.now);
+        if (!m) break;
+        let t = Number(m.value.at);
+        // из будущего не бывает; без времени — считаем по приходу
+        if (!Number.isFinite(t) || t > this.now + 50) t = this.now;
+        presses[m.pid] = t;
+        if (t < at) {
+          iai.early.push(m.pid);
+          this.io.fx?.('iaiEarly', { pid: m.pid });
+        } else {
+          iai.cut.push(m.pid);
+          this.io.fx?.('answered', { pid: m.pid });
+        }
+        this.emit();
+      }
+      // если все поторопились, ждём, пока «!» всё-таки покажется
+      if (this.now < at + 300) await this.sleep(epoch, at + 300 - this.now);
+      const times = Object.fromEntries(iai.cut.map((id) => [id, Math.round(presses[id] - at)]));
+      const ranked = [...iai.cut].sort((a, b) => times[a] - times[b]);
+      ranked.slice(0, 3).forEach((id, i) => { points[id] += 3 - i; });
+      for (const id of iai.cut) best[id] = Math.min(best[id] ?? Infinity, times[id]);
+      iai.times = times;
+      iai.step = 'done';
+      this.emit();
+      this.io.fx?.('iaiCut', { pid: ranked[0] ?? null });
+      if (ranked[0]) this.log(`斬 ${this.s.players[ranked[0]]?.name}: ${times[ranked[0]]} мс`);
+      await this.sleep(epoch, 4500);
+    }
+    g.iai = undefined;
+    return { points, best };
+  }
+
+  /** боты: реакция 0,25–0,6 c, иногда фальстарт */
+  private botIaido(g: GroupPublic, iai: IaiRound, at: number) {
+    for (const id of g.players) if (this.s.players[id]?.bot) {
+      const t = Math.random() < 0.12 ? at - 300 - randInt(1500) : at + 250 + randInt(350);
+      setT(() => {
+        if (this.s.g !== g || g.iai !== iai) return;
+        this.feed({ t: 'pick', pid: id, kind: 'iaido', value: { r: iai.round, at: t } });
+      }, Math.max(0, t - this.now + 40));
+    }
   }
 
   private onDraw(m: Extract<InputMsg, { t: 'draw' }>) {
