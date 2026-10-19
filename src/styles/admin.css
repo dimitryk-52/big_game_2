@@ -41,3 +41,9 @@ label { display: inline-flex; gap: 6px; align-items: center; }
 .ie-palette button.on { outline: 3px solid #ffd23f; }
 .ie-palette input[type=color] { width: 34px; height: 30px; }
 .ie-preview { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; padding: 10px; background: #3b6e3a; min-height: 64px; }
+.admin:has(.prefmap) { height: 100vh; display: flex; flex-direction: column; }
+.prefmap { display: flex; flex: 1; min-height: 0; }
+.prefmap-map { flex: 1; min-width: 0; position: relative; overflow: hidden; }
+.prefmap-side { width: 360px; flex-shrink: 0; padding: 16px; overflow-y: auto; border-left: 3px solid #fff; background: var(--bg2); }
+.prefmap-side .set-row { align-items: center; }
+@media (max-width: 760px) { .prefmap { flex-direction: column; height: auto; } .prefmap-map { height: 60vh; flex: none; } .prefmap-side { width: auto; border-left: 0; border-top: 3px solid #fff; } }

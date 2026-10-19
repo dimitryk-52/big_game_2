@@ -14,6 +14,8 @@ export interface MapUpdate {
   players: Player[];
   highlight?: number[];
   highlight2?: number[];
+  /** розовая заливка без ограничения нажатий (админка: префектуры с групповой игрой) */
+  marked?: number[];
   blocked?: number[];
   selected?: number | null;
   activePid?: string | null;
@@ -86,6 +88,8 @@ export class MapView {
 
   onTap: ((code: number) => void) | null = null;
   interactive = true;
+  /** значки видны при любом зуме (админка) */
+  iconsAlways = false;
 
   static async create(el: HTMLElement, opts: { interactive?: boolean; background?: number } = {}) {
     const v = new MapView();
@@ -193,6 +197,7 @@ export class MapView {
     };
     add(u.highlight, 0xfff27a);
     add(u.highlight2, 0xff9df0);
+    add(u.marked, 0xff9df0);
     if (this.outline) { this.outline.destroy(); this.outline = null; }
     if (u.selected) {
       const s = this.layerSprite('outline', u.selected);
@@ -544,7 +549,7 @@ export class MapView {
     for (const t of this.icons.values()) {
       t.scale.set(iconScale);
       t.pivot.y = t.kind === 'reward' ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0;
-      t.visible = this.cam.z > 0.75;
+      t.visible = this.iconsAlways || this.cam.z > 0.75;
     }
 
     for (const t of this.tokens.values()) {

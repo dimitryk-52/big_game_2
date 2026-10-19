@@ -14,9 +14,10 @@ import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
 import { GroupEditor } from './GroupEditor';
+import { PrefMap } from './PrefMap';
 import { fmtYen, uid } from '../shared/util';
 
-type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'settings' | 'remote';
+type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'settings' | 'remote';
 
 function App() {
   const [tab, setTab] = useState<Tab>('questions');
@@ -39,7 +40,7 @@ function App() {
       <header class="admin-hdr">
         <b>BIG GAME 2 · ведущий</b>
         <nav>
-          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['group', 'Групповые игры'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
+          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['group', 'Групповые игры'], ['prefs', 'Префектуры'], ['map', 'Карта'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
             <button class={'btn small' + (tab === k ? ' yellow' : '')} onClick={() => setTab(k)}>{l}</button>
           ))}
           <a class="btn small ghost" href="ui.html" target="_blank" title="Все элементы интерфейса: кнопки, барабан, иконки">UI-кит ↗</a>
@@ -54,6 +55,7 @@ function App() {
           {tab === 'topics' && <Topics settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} onAddQuestion={(topic) => { setNewIn({ topic, n: Date.now() }); setTab('questions'); }} />}
           {tab === 'group' && <GroupEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'prefs' && <Prefs settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
+          {tab === 'map' && <PrefMap settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'settings' && <SettingsEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'remote' && <Remote />}
         </>
