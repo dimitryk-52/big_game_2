@@ -111,13 +111,14 @@
 .qmedia { max-height: 38vh; max-width: 100%; object-fit: contain; align-self: center; border: 3px solid #fff; background: #000; }
 .qaudio { align-self: center; }
 .qanswers { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7em; }
-.qans { position: relative; display: flex; align-items: center; gap: 0.7em; background: var(--panel2); border: 3px solid #fff; padding: 0.6em 0.8em; font-size: 1.35em; min-height: 2.6em; box-shadow: 4px 4px 0 var(--shadow); }
+/* без букв и по центру: у каждого игрока на телефоне свой порядок кнопок */
+.qans { position: relative; display: flex; align-items: center; justify-content: center; text-align: center; gap: 0.7em; background: var(--panel2); border: 3px solid #fff; padding: 0.6em 0.8em; font-size: 1.35em; min-height: 2.6em; box-shadow: 4px 4px 0 var(--shadow); }
 .qanswers.imgs .qans { flex-direction: column; }
 .qans img { max-height: 18vh; max-width: 100%; object-fit: contain; image-rendering: auto; }
 .qans.correct { background: #1f8a35; animation: pop 0.4s; }
 .qans.wrong { background: #8a1f2b; }
 .qans.dim { opacity: 0.45; }
-.qchoosers { margin-left: auto; display: flex; gap: 2px; }
+.qchoosers { position: absolute; right: 0.4em; bottom: 0.3em; display: flex; gap: 2px; }
 .qparts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .qpart { display: flex; align-items: center; gap: 4px; background: #11142b; border: 2px solid #555; padding: 2px 8px 2px 2px; font-size: 0.85em; }
 .qpart.waiting { opacity: 0.45; }

@@ -104,7 +104,7 @@ function Catalog() {
         </div>
         <div class="ui-col" style={{ width: 420 }}>
           {['', 'correct', 'wrong', 'dim'].map((k, i) => (
-            <div class={'qans ' + k}><span class="qletter">{LETTERS[i]}</span><span>ТВ: {k || 'обычный'}</span></div>
+            <div class={'qans ' + k}><span>ТВ: {k || 'обычный'}</span></div>
           ))}
         </div>
       </Section>

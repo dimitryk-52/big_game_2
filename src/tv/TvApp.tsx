@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
+import { Avatar, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
@@ -424,7 +424,6 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
             const cls = q.revealed ? (i === q.correct ? ' correct' : choosers(i).length ? ' wrong' : ' dim') : '';
             return (
               <div class={'qans' + cls}>
-                <span class="qletter">{LETTERS[i]}</span>
                 {a.image ? <img src={a.image} alt="" /> : <span class="qans-text">{a.text}</span>}
                 {q.revealed && (
                   <span class="qchoosers">
