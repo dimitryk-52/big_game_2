@@ -18,7 +18,7 @@ const topics = DEFAULT_SETTINGS.topics;
 const combat = topics.filter((t) => t.combat);
 const mk = (name: string, color: string, hat: number, extra: Partial<Player> = {}): Player => ({
   id: name, name, color, hat, pref: 13, hp: 7, maxHp: 10, yen: 1200, stars: 3,
-  stats: { music: 3, culture: 1, geo: 2 }, calib: {}, bonuses: { fifty1: 1, fifty2: 0, move2: 1 }, specials: 1, prizes: [],
+  stats: { music: 3, culture: 1, geo: 2 }, calib: {}, bonuses: { fifty1: 1, fifty2: 0, move2: 1, turn2: 1 }, specials: 1, prizes: [],
   online: true, busy: null, ...extra,
 });
 const A = mk('Дима', '#4dabff', 0);
@@ -43,11 +43,12 @@ const Label = ({ t }: { t: string }) => <div class="ui-label">{t}</div>;
 function bonusSegs(): WheelSeg[] {
   return [
     { id: 'money', label: '¥300', short: '¥300', color: '#3cb54a', icon: pixelIconUrl('money', 4) },
-    { id: 'fifty1', label: 'Убрать 1 неверный ответ', short: '−1', color: '#4a55a8' },
+    { id: 'fifty1', label: 'Убрать 1 неверный ответ', short: '−1', color: '#4a55a8', icon: pixelIconUrl('bonus_fifty1', 4) },
     { id: 'stars', label: '+1 ★', color: '#f2b51f', icon: pixelIconUrl('stars', 4) },
-    { id: 'move2', label: 'Ход на 2 префектуры', short: '×2', color: '#ff9f43' },
+    { id: 'move2', label: 'Ход на 2 префектуры', short: '×2', color: '#ff9f43', icon: pixelIconUrl('bonus_move2', 4) },
+    { id: 'turn2', label: 'Дополнительный ход', short: '↻', color: '#2fa23f', weight: 0.6, icon: pixelIconUrl('bonus_turn2', 4) },
     { id: 'special', label: 'Спецвопрос', color: '#ffffff', rainbow: true, weight: 0.6, icon: topicIconUrl('special', '#fff', 4) },
-    { id: 'fifty2', label: '50/50', short: '50/50', color: '#2e7fd6', weight: 0.8 },
+    { id: 'fifty2', label: '50/50', short: '50/50', color: '#2e7fd6', weight: 0.8, icon: pixelIconUrl('bonus_fifty2', 4) },
     { id: 'hp', label: '+2 HP', short: '+2♥', color: '#e8364e' },
     { id: 'none', label: 'Мимо!', short: '✕', color: '#5b5f7e' },
   ];

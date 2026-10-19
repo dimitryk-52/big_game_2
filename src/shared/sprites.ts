@@ -172,7 +172,7 @@ export function rainbowGrid(n = 11): Grid {
 export const SPECIAL_TOPIC = { id: 'special', name: 'Спецтема', color: '#ffffff' };
 
 /** пиксели иконки по id; спецвопрос везде — радужный шар, как на колесе */
-const iconGrid = (id: string): Grid => (id === 'special' ? grids.get('topic_special') ?? rainbowGrid() : grids.get(id) ?? MISSING);
+const iconGrid = (id: string): Grid => (id === 'special' ? grids.get('topic_special') ?? rainbowGrid() : grids.get(id) ?? grids.get('bonus_' + id) ?? MISSING);
 
 /** холст иконки с контуром (и тенью); scale — размер пикселя иконки */
 function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {

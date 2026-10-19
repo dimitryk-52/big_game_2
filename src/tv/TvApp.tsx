@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
+import { Avatar, BonusIcon, BONUS_IDS, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
@@ -15,6 +15,7 @@ import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
+import { GroupTv } from './GroupTv';
 import { refreshMusic, setMusic } from './bgMusic';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 
@@ -102,6 +103,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
       machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+      shops: s.settings.shopPrefs,
     });
     const key = st.t + ':' + ('pid' in st ? (st as any).pid : '') + ':' + (st.t === 'moving' ? st.to : '');
     if (key === lastStageKey.current) return;
@@ -141,6 +143,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   if (st.t === 'prefIntro') bgCode = st.code;
   else if (st.t === 'question' && s.q?.pref) bgCode = s.q.pref;
   else if (st.t === 'bonus') bgCode = sceneCode.current;
+  else if (st.t === 'group' && s.g) bgCode = s.g.pref;
   // зум фона — только если сцена началась с интро
   const sceneZoom = useRef(false);
   if (bgCode && sceneCode.current === null) sceneZoom.current = st.t === 'prefIntro';
@@ -181,7 +184,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> выбирает, куда идти
           <div class="prompt-opts">
             {st.options.map((c) => <span class="chip">{PREF[c].ru}</span>)}
-            {st.options2.map((c) => <span class="chip two">👟 {PREF[c].ru}</span>)}
+            {st.options2.map((c) => <span class="chip two"><BonusIcon b="move2" size={18} /> {PREF[c].ru}</span>)}
           </div>
           {!s.players[st.pid]?.online && <div class="muted" style={{ fontSize: '0.7em' }}>Игрок не на связи — случайный ход через 15 c (или Пробел)</div>}
         </Prompt>
@@ -203,6 +206,19 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         </div>
       )}
       {st.t === 'duelResult' && s.duel && <DuelResult s={s} />}
+      {st.t === 'shop' && (
+        <Prompt>
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> {st.entered ? 'в магазине' : 'у магазина'} <PixIcon id="shop" size={32} />
+          <div class="prompt-timer"><TimerBar start={st.deadline - s.settings.shopTime * 1000} end={st.deadline} now={now} /></div>
+        </Prompt>
+      )}
+      {st.t === 'extraTurn' && (
+        <Prompt>
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> может сходить ещё раз <BonusIcon b="turn2" size={32} />
+          <div class="prompt-timer"><TimerBar start={st.deadline - 15000} end={st.deadline} now={now} /></div>
+        </Prompt>
+      )}
+      {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
       {st.t === 'end' && <EndScreen s={s} />}
@@ -287,7 +303,7 @@ function PlayerList({ s }: { s: GameState }) {
                   <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
                   {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
                   {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
-                  {(['fifty1', 'fifty2', 'move2'] as const).map((b) => p.bonuses[b] > 0 && <span>{BONUS_INFO[b].icon}{p.bonuses[b]}</span>)}
+                  {BONUS_IDS.map((b) => (p.bonuses[b] ?? 0) > 0 && <span class="pc-stars"><BonusIcon b={b} size={16} />{p.bonuses[b]}</span>)}
                 </div>
               </div>
             </div>
@@ -392,7 +408,7 @@ function BonusPrompt({ s }: { s: GameState }) {
         {st.pids.map((id) => (
           <span class="chip">
             <Avatar p={s.players[id]} size={24} /> {s.players[id].name}
-            {st.picked[id] ? (st.picked[id] === 'none' ? ' — нет' : ' ' + BONUS_INFO[st.picked[id] as 'fifty1'].icon) : ' …'}
+            {st.picked[id] ? (st.picked[id] === 'none' ? ' — нет' : <> <BonusIcon b={st.picked[id] as 'fifty1'} size={20} /></>) : ' …'}
           </span>
         ))}
       </div>

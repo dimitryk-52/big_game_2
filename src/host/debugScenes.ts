@@ -86,7 +86,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     }
     case 'reward': {
       const reward = (sub ?? 'money') as RewardType;
-      const text = { money: `+¥${s.settings.reward.prefMoney}`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус: 50/50', special: 'Спецвопрос', prize: 'Крутим рулетку…' }[reward];
+      const text = { money: `+¥${s.settings.reward.prefMoney}`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус: 50/50', special: 'Спецвопрос', turn2: 'Дополнительный ход', prize: 'Крутим рулетку…' }[reward];
       return view({ t: 'reward', pid, reward, text, pref });
     }
     case 'prize': return view({ t: 'prize', pid, text: s.settings.prizeNames[0] ?? 'Приз' });

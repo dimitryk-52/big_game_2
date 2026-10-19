@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
-import { Avatar, HpBar, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
+import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
@@ -13,6 +13,7 @@ import { RhythmBoard } from '../games/RhythmBoard';
 import { Pachinko } from './Pachinko';
 import { RingGame } from './RingGame';
 import { Shop } from './Shop';
+import { GroupGame } from './GroupGame';
 import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
@@ -125,7 +126,7 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 // ───────── игра ─────────
 
-type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | null;
+type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'extraTurn' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -135,12 +136,15 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'move' && st.pid === me.id) return 'move';
   if (st.t === 'duelPick' && st.pid === me.id) return 'duelPick';
   if (st.t === 'rhythm' && s.rhythm?.players.includes(me.id)) return 'rhythm';
+  if (st.t === 'shop' && st.pid === me.id) return 'shop';
+  if (st.t === 'extraTurn' && st.pid === me.id) return 'extraTurn';
+  if (st.t === 'group' && s.g?.players.includes(me.id)) return 'group';
   return null;
 }
 
 function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const att = attention(s, me);
-  const [tab, setTab] = useState<'home' | 'shop' | 'map' | 'pachinko' | 'ring'>('home');
+  const [tab, setTab] = useState<'home' | 'map' | 'pachinko' | 'ring'>('home');
   const lastAtt = useRef<Attention>(null);
   useEffect(() => {
     if (att && att !== lastAtt.current) vibrate([60, 40, 60]);
@@ -191,13 +195,15 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
         {(att === 'landing' || att === 'move') && <MapPick key={att} client={client} s={s} me={me} mode={att} />}
         {att === 'duelPick' && <DuelPick client={client} s={s} me={me} />}
+        {att === 'shop' && <Shop client={client} s={s} me={me} />}
+        {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
+        {att === 'group' && <GroupGame client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
           <div class="rhythm-wrap">
             <RhythmBoard key={s.rhythm.id} r={s.rhythm} now={() => client.hostNow()} onDone={(score, hits, total) => client.send({ t: 'rhythm', pid: me.id, id: s.rhythm!.id, score, hits, total })} />
           </div>
         )}
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
-        {!att && tab === 'shop' && <Shop client={client} s={s} me={me} />}
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
         {!att && tab === 'ring' && hasRing && <RingGame client={client} s={s} me={me} onExit={() => setTab('home')} />}
       </div>
@@ -205,7 +211,6 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         <nav class="tabbar">
           <button class={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}>🏠<span>Игра</span></button>
           <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>🗾<span>Карта</span></button>
-          <button class={tab === 'shop' ? 'on' : ''} onClick={() => setTab('shop')}>🛒<span>Магазин</span></button>
           {(hasPachinko || hasBalls) && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}>🎰<span>Пачинко</span></button>}
           {hasRing && <button class={tab === 'ring' ? 'on' : ''} onClick={() => setTab('ring')}>🎡<span>Приз</span></button>}
         </nav>
@@ -255,6 +260,9 @@ function stageText(s: GameState, me: Player): string {
     case 'question': return s.q ? 'Вопрос на ТВ: ' + s.q.title : 'Вопрос';
     case 'prefIntro': return PREF[st.code]?.ru ?? '';
     case 'reward': return `${n(st.pid)}: ${st.text}`;
+    case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине 🛒`;
+    case 'group': return 'Групповая игра — смотри на ТВ!';
+    case 'extraTurn': return `${n(st.pid)} решает, ходить ли ещё раз`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
     case 'duelResult': return 'Итоги дуэли';
@@ -272,13 +280,8 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         <div class="row"><span class="muted">Где ты:</span> <b>{me.pref ? `${PREF[me.pref].ru} ${PREF[me.pref].ja}` : '—'}</b></div>
         <div class="muted">Сила</div>
         <SkillChips topics={topics} stats={me.stats} size={26} grid />
-        <div class="muted">Бонусы</div>
-        <div class="row wrap">
-          {(['fifty1', 'fifty2', 'move2'] as const).map((b) => (
-            <span class="chip">{BONUS_INFO[b].icon} {BONUS_INFO[b].short}: <b>{me.bonuses[b]}</b></span>
-          ))}
-          <span class="chip"><PixIcon id="special" size={18} /> Спецвопросы: <b>{me.specials}</b></span>
-        </div>
+        <div class="muted">Инвентарь</div>
+        <Inventory p={me} size={36} all />
         {me.prizes.length > 0 && <div class="prizes">🏆 Призы: {me.prizes.join(', ')}</div>}
       </div>
       <div class="panel col small-text">
@@ -372,9 +375,26 @@ function BonusPick({ client, s, me }: { client: GameClient; s: GameState; me: Pl
       <h2>Использовать бонус?</h2>
       <TimerBar start={st.deadline - s.settings.bonusTime * 1000} end={st.deadline} now={() => client.hostNow()} />
       {offers.map((b) => (
-        <button class="btn yellow big-btn" onClick={() => client.pick('bonus', b)}>{BONUS_INFO[b].icon} {BONUS_INFO[b].name} (есть {me.bonuses[b]})</button>
+        <button class="btn yellow big-btn" onClick={() => client.pick('bonus', b)}><BonusIcon b={b} size={28} /> {BONUS_INFO[b].name} (есть {me.bonuses[b]})</button>
       ))}
       <button class="btn big-btn" onClick={() => client.pick('bonus', null)}>Не хочу</button>
+    </div>
+  );
+}
+
+function ExtraTurn({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
+  const st = s.stage;
+  const [sent, setSent] = useState(false);
+  if (st.t !== 'extraTurn') return null;
+  const send = (v: boolean) => { if (sent) return; setSent(true); client.pick('extra', v); vibrate(30); };
+  return (
+    <div class="pad col center-screen">
+      <div class="shop-door pop"><BonusIcon b="turn2" size={96} /></div>
+      <h2>Ещё один ход?</h2>
+      <div class="muted">У тебя {me.bonuses.turn2 ?? 0} × «{BONUS_INFO.turn2.name}». Можно сходить ещё раз прямо сейчас.</div>
+      <TimerBar start={st.deadline - 15000} end={st.deadline} now={() => client.hostNow()} />
+      <button class="btn yellow big-btn" disabled={sent} onClick={() => send(true)}>Ходить ещё раз</button>
+      <button class="btn big-btn" disabled={sent} onClick={() => send(false)}>Приберечь</button>
     </div>
   );
 }
@@ -444,6 +464,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
       activePid: me.id,
       machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+      shops: s.settings.shopPrefs,
     });
   };
   useEffect(refresh, [sel, s.v]);
@@ -465,10 +486,10 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
         {st.t === 'move' && (
           <div class="opt-list">
             {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{PREF[c].ru}</button>)}
-            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>👟 {PREF[c].ru}</button>)}
+            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {PREF[c].ru}</button>)}
           </div>
         )}
-        {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text">👟 — ход на 2 префектуры (потратит бонус)</div>}
+        {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text"><BonusIcon b="move2" size={16} /> — ход на 2 префектуры (потратит сапог)</div>}
         {st.t === 'landing' && <div class="muted small-text">Тёмные префектуры заняты или рядом с соперниками. Тапни по карте.</div>}
         <button class="btn primary big-btn" disabled={!sel || sent} onClick={confirm}>
           {!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться: ${PREF[sel].ru}`}
@@ -496,6 +517,7 @@ function FreeMap({ s, me }: { s: GameState; me: Player }) {
     players: s.joinOrder.map((id) => s.players[id]).filter(Boolean),
     activePid: me.id,
     machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+      shops: s.settings.shopPrefs,
   });
   useEffect(upd, [s.v]);
   return <div class="freemap" ref={el} />;

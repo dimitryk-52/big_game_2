@@ -1,4 +1,4 @@
-import type { BonusId, Question, RewardType, Settings } from './types';
+import type { BonusId, GroupGameId, Question, RewardType, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -43,6 +43,24 @@ export const DEFAULT_SETTINGS: Settings = {
     move2: { yen: 400, stars: 0 },
   },
   pachinkoPrefs: [13, 27, 23],
+  // сеть магазинов: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин;
+  // 4 внутри страны, остальные на побережье там, где без этого не обойтись
+  shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
+  shopTime: 45,
+  groupPrefs: { 26: 'calligraphy' },
+  groupTasks: [
+    { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人' },
+    { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山' },
+    { id: 'cal3', game: 'calligraphy', text: 'Нарисуйте кандзи «сердце» 心' },
+    { id: 'cal4', game: 'calligraphy', text: 'Нарисуйте кандзи «огонь» 火' },
+    { id: 'cal5', game: 'calligraphy', text: 'Нарисуйте свой кандзи года — какой хотите' },
+  ],
+  group: {
+    drawTime: 30,
+    voteTime: 20,
+    showMs: 4000,
+    prizes: [{ yen: 1000, stars: 3 }, { yen: 600, stars: 2 }, { yen: 300, stars: 1 }],
+  },
   ringPrefs: [14, 40, 4],
   pachinko: { yenPerBall: 4, pack: 25 },
   ring: { cost: 200, prizeYen: 1500, physicalPrize: true, cellMs: 70 },
@@ -55,7 +73,7 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   const d = structuredClone(DEFAULT_SETTINGS);
   if (!saved) return d;
   const out: any = { ...d, ...saved };
-  for (const k of ['reward', 'shop', 'pachinko', 'ring'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
+  for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
   return out;
 }
 
@@ -69,6 +87,7 @@ export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: st
   fifty1: { name: 'Убрать 1 неверный ответ', short: '−1 ответ', icon: '✂️' },
   fifty2: { name: 'Убрать 2 неверных ответа', short: '50/50', icon: '🎯' },
   move2: { name: 'Ход на 2 префектуры', short: '×2 ход', icon: '👟' },
+  turn2: { name: 'Дополнительный ход', short: 'доп. ход', icon: '🔁' },
 };
 
 export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
@@ -76,7 +95,12 @@ export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   stars: { name: 'Звёзды', icon: '⭐' },
   bonus: { name: 'Бонус', icon: '🎁' },
   special: { name: 'Спецвопрос', icon: '🌈' },
+  turn2: { name: 'Доп. ход', icon: '🔁' },
   prize: { name: 'ПРИЗ', icon: '🏆' },
+};
+
+export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string }> = {
+  calligraphy: { name: 'Каллиграфия', ja: '書道' },
 };
 
 export const PLAYER_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff', '#ff9f43', '#2ee6d6', '#ff7ad9', '#a3a3ff', '#f5f5f5'];

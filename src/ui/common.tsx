@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { GameState, Player, RewardType, Topic } from '../shared/types';
-import { REWARD_INFO } from '../shared/settings';
+import type { BonusId, GameState, Player, RewardType, Topic } from '../shared/types';
+import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
 import { characterUrl, pixelIconUrl, topicIconUrl } from '../shared/sprites';
 import { prefBgUrl, useSmoothBg } from '../shared/prefBg';
 import { PREF } from '../map/mapData';
@@ -95,6 +95,31 @@ export function SkillIcon({ t, size = 18 }: { t: Pick<Topic, 'id' | 'color' | 'n
 /** пиксельная иконка из sprites.ts (stars, money, bonus, special, prize, pachinko, ring) */
 export function PixIcon({ id, size = 18 }: { id: string; size?: number }) {
   return <img class="pix-icon" src={pixelIconUrl(id)} height={size} alt="" draggable={false} />;
+}
+
+export const BONUS_IDS: BonusId[] = ['fifty1', 'fifty2', 'move2', 'turn2'];
+
+/** иконка бонуса (src/img/icons/bonus_<id>.png) */
+export function BonusIcon({ b, size = 18 }: { b: BonusId; size?: number }) {
+  return <img class="pix-icon" src={pixelIconUrl('bonus_' + b)} height={size} alt={BONUS_INFO[b].name} title={BONUS_INFO[b].name} draggable={false} />;
+}
+
+/** инвентарь: иконки со счётчиком, без подписей (название — во всплывающей подсказке) */
+export function Inventory({ p, size = 32, all }: { p: Pick<Player, 'bonuses' | 'specials'>; size?: number; all?: boolean }) {
+  const items: { key: string; icon: any; n: number; title: string }[] = [
+    ...BONUS_IDS.map((b) => ({ key: b, icon: <BonusIcon b={b} size={size} />, n: p.bonuses[b] ?? 0, title: BONUS_INFO[b].name })),
+    { key: 'special', icon: <PixIcon id="special" size={size} />, n: p.specials, title: 'Спецвопрос' },
+  ];
+  return (
+    <div class="inv">
+      {items.filter((x) => all || x.n > 0).map((x) => (
+        <span class={'inv-slot' + (x.n ? '' : ' empty')} title={x.title}>
+          {x.icon}
+          <b class="inv-n">{x.n}</b>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** текст результата, где {skill:id} — иконка скилла (например «+1 {skill:music}») */

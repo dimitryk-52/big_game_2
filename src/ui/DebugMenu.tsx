@@ -9,7 +9,7 @@ import { PixIcon } from './common';
 
 type Send = (cmd: string, args?: any) => void;
 
-const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring'];
+const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring', 'shop', 'bonus_fifty1', 'bonus_fifty2', 'bonus_move2', 'bonus_turn2'];
 
 export function DebugMenu({ s, send, onClose, fx, onGame }: {
   s: GameState; send: Send; onClose: () => void; fx?: boolean;
@@ -55,6 +55,8 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
         <div class="debug-btns">
           <button class="btn small" onClick={() => send('pause')}>{s.paused ? '▶ Снять паузу' : '⏸ Пауза игры'}</button>
           <button class="btn small" onClick={() => send('next')}>⏭ Далее</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref })}>🖌 Каллиграфия</button>
+          <button class="btn small" title="Открыть магазин игроку сейчас (ход начнётся заново)" onClick={() => send('shopTest', { pid })}>🛒 Магазин</button>
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
           <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>
           <button class="btn small" onClick={() => send('teleport', { pid, pref })}>Переместить игрока сюда</button>

@@ -1,0 +1,54 @@
+// Админка: групповые игры — задания, время, награды за места.
+import { useState } from 'preact/hooks';
+import type { GroupGameId, Settings } from '../shared/types';
+import { GROUP_GAMES } from '../shared/settings';
+import { PREF } from '../map/mapData';
+import { uid } from '../shared/util';
+
+export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: (s: Settings) => Promise<void> }) {
+  const [s, setS] = useState<Settings>(structuredClone(settings));
+  const [saved, setSaved] = useState(false);
+  const [game, setGame] = useState<GroupGameId>('calligraphy');
+  const upd = (fn: (x: Settings) => void) => { const c = structuredClone(s); fn(c); setS(c); };
+  const tasks = s.groupTasks.filter((t) => t.game === game);
+  const prefs = Object.entries(s.groupPrefs).filter(([, g]) => g === game).map(([c]) => PREF[+c]?.ru).filter(Boolean);
+  const num = (label: string, get: () => number, set: (c: Settings, v: number) => void) => (
+    <label class="set-row">
+      <span>{label}</span>
+      <input class="inp-s num" type="number" value={get()} onInput={(e) => upd((c) => set(c, Number((e.target as HTMLInputElement).value)))} />
+    </label>
+  );
+  return (
+    <div class="pad col" style={{ maxWidth: 900 }}>
+      <div class="row">
+        <button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button>
+        <select value={game} onChange={(e) => setGame((e.target as HTMLSelectElement).value as GroupGameId)}>
+          {(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => <option value={g}>{GROUP_GAMES[g].name} {GROUP_GAMES[g].ja}</option>)}
+        </select>
+      </div>
+      <div class="note">
+        Каллиграфия: у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
+        и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
+        <br />Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задания берутся по очереди в случайном порядке.
+      </div>
+      <h3 style={{ margin: '8px 0 0' }}>Задания</h3>
+      {tasks.map((t) => (
+        <div class="row">
+          <input class="inp-s grow" value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />
+          <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
+        </div>
+      ))}
+      <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '' }); })}>+ Задание</button></div>
+      <h3 style={{ margin: '8px 0 0' }}>Время и награды</h3>
+      <div class="settings-grid">
+        {num('Время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
+        {num('Время на голос, сек', () => s.group.voteTime, (c, v) => (c.group.voteTime = v))}
+        {num('Показ каждой работы, мс', () => s.group.showMs, (c, v) => (c.group.showMs = v))}
+        {[0, 1, 2].flatMap((i) => [
+          num(`${i + 1} место, ¥`, () => s.group.prizes[i]?.yen ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).yen = v; }),
+          num(`${i + 1} место, ★`, () => s.group.prizes[i]?.stars ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).stars = v; }),
+        ])}
+      </div>
+    </div>
+  );
+}

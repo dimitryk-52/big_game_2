@@ -18,6 +18,8 @@ export interface MapUpdate {
   selected?: number | null;
   activePid?: string | null;
   machines?: { pachinko: number[]; ring: number[] };
+  /** магазины: плашка видна всегда, даже под туманом */
+  shops?: number[];
   showRewards?: boolean;
   /** путь стрелки хода (коды префектур от текущей до цели) */
   arrow?: number[] | null;
@@ -234,6 +236,7 @@ export class MapView {
     for (const [icon, codes] of machines) for (const c of codes) {
       if (shown(c)) want.set(icon + c, { code: c, icon, dx: hasReward(c) ? -24 : 0, kind: 'machine' });
     }
+    for (const c of u.shops ?? []) if (!occupied.has(c)) want.set('shop' + c, { code: c, icon: 'shop', dx: hasReward(c) ? -24 : 0, kind: 'machine' });
     for (const [k, t] of this.icons) if (!want.has(k) || t.kind !== want.get(k)!.kind) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);

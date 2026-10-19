@@ -1,5 +1,5 @@
 // Клиент игрока: принимает состояние от хоста, синхронизирует часы, шлёт действия.
-import type { GameMsg, GameState, InputMsg } from './types';
+import type { GameMsg, GameState, InputMsg, PickKind } from './types';
 import { createTransport, type NetStatus, type Transport } from './net';
 import { ClockSync } from './clock';
 import { uid } from './util';
@@ -141,7 +141,7 @@ export class GameClient {
     if (!this.pid) return;
     this.send({ t: 'answer', pid: this.pid, n, choice, at: this.hostNow() });
   }
-  pick(kind: 'landing' | 'move' | 'bonus' | 'duel', value: any) {
+  pick(kind: PickKind, value: any) {
     if (!this.pid) return;
     this.send({ t: 'pick', pid: this.pid, kind, value });
   }

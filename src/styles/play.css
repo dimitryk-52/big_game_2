@@ -99,3 +99,25 @@
 .ringgame { align-items: center; flex: 1; overflow-y: auto; }
 .ring-cv { width: min(86vw, 420px); height: min(86vw, 420px); image-rendering: pixelated; border: 4px solid #fff; box-shadow: 6px 6px 0 var(--shadow); }
 .stop-btn { font-size: 28px; padding: 22px; touch-action: none; }
+
+/* групповая игра: холст для каллиграфии */
+.group-phone { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.drawpad { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 8px; }
+.drawpad-head { display: flex; flex-direction: column; gap: 4px; }
+.drawpad-task { font-size: 18px; text-align: center; }
+.drawpad-area { flex: 1; min-height: 0; display: grid; place-items: center; }
+.drawpad-paper { position: relative; background-size: cover; border: 3px solid #2a2016; box-shadow: 4px 4px 0 var(--shadow); touch-action: none; }
+.drawpad-paper canvas { display: block; touch-action: none; }
+.drawpad-paper.locked canvas { pointer-events: none; }
+.drawpad-wait { position: absolute; inset: 0; display: grid; place-items: center; font-size: 120px; color: rgba(14, 12, 18, 0.12); pointer-events: none; }
+.drawpad-tools { display: flex; gap: 6px; align-items: stretch; }
+.brush-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; background: #11142b; border: 3px solid #555; font-size: 13px; }
+.brush-btn.on { border-color: var(--yellow); background: var(--panel2); }
+.brush-dot { display: block; border-radius: 50%; background: #f4eddc; }
+.group-mynum { font-size: 22px; }
+.vote-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+.vote-btn { aspect-ratio: 1; font-size: 40px; background: #f4eddc; color: #1a1410; border: 4px solid #2a2016; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.vote-btn small { font-size: 13px; color: #8a7a60; }
+.vote-btn.on { background: #c8262a; color: #fff; border-color: #fff; }
+.vote-btn:disabled:not(.on) { opacity: 0.35; }
+.shop-door img { image-rendering: pixelated; }

@@ -3,7 +3,7 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, GameMsg, GameState, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, GameMsg, GameState, GroupPublic, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
 import { BONUS_INFO, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
@@ -34,6 +34,8 @@ interface Secrets {
   landingIdx: number;
   rhythmN: number;
   ring: Record<string, { seed: number; t0: number }>;
+  groupN?: number;
+  usedTasks?: string[];
 }
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
@@ -87,11 +89,12 @@ export class GameEngine {
       this.s.q = null;
       this.s.duel = null;
       this.s.rhythm = null;
+      this.s.g = null;
       this.s.paused = false;
     } else {
       this.s = {
         v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
-        prefs: {}, q: null, duel: null, rhythm: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
+        prefs: {}, q: null, duel: null, rhythm: null, g: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
       };
       this.sec = { pins: {}, used: [], qn: 0, logN: 0, calibIdx: 0, landingIdx: 0, rhythmN: 0, ring: {} };
     }
@@ -126,6 +129,7 @@ export class GameEngine {
       case 'answer': return this.onAnswer(m);
       case 'req': return this.onReq(m);
       case 'rhythm': return this.onRhythm(m);
+      case 'draw': return this.onDraw(m);
       case 'pnp': return this.io.fx?.('pnp', m);
       case 'ctl': return this.onCtl(m.cmd, m.args);
     }
@@ -184,6 +188,25 @@ export class GameEngine {
         this.s.debug = v;
         if (v?.rhythm) this.io.fx?.('rhythm', v.rhythm);
         this.emit();
+        break;
+      }
+      case 'groupTest':
+      case 'shopTest': {
+        // отладка: прервать текущий ход, сыграть сцену и продолжить игру с начала хода
+        if (this.s.joinOrder.length < (cmd === 'groupTest' ? 2 : 1)) break;
+        const p = this.s.players[args?.pid] ?? this.s.players[this.s.joinOrder[0]];
+        this.abort();
+        const ep = this.epoch;
+        this.s.q = null;
+        this.s.duel = null;
+        this.s.g = null;
+        void (async () => {
+          try {
+            if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26);
+            else if (p) await this.shopVisit(ep, p, true);
+          } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
+          if (ep === this.epoch) void this.run(ep);
+        })();
         break;
       }
       case 'debugFx':
@@ -349,7 +372,8 @@ export class GameEngine {
 
   private initPrefs() {
     const st = this.s.settings;
-    const weighted: RewardType[] = ['money', 'money', 'money', 'money', 'stars', 'stars', 'stars', 'bonus', 'bonus', 'special'];
+    // доп. ход редкий — так же, как спецвопрос
+    const weighted: RewardType[] = ['money', 'money', 'money', 'money', 'stars', 'stars', 'stars', 'bonus', 'bonus', 'special', 'turn2'];
     for (const code of PREF_CODES) {
       const manual = st.prefRewards?.[code];
       this.s.prefs[code] = { rev: false, reward: manual ?? pick(weighted), prizeTaken: false, visits: 0 };
@@ -413,6 +437,9 @@ export class GameEngine {
       let blocked = new Set<number>(occupied);
       occupied.forEach((o) => neighbors(o).forEach((n) => blocked.add(n)));
       if (blocked.size >= PREF_CODES.length) blocked = new Set(occupied);
+      // на магазин и групповую игру не высаживаются — туда нужно прийти
+      const special = [...(this.s.settings.shopPrefs ?? []), ...Object.keys(this.s.settings.groupPrefs ?? {}).map(Number)];
+      if (PREF_CODES.some((c) => !blocked.has(c) && !special.includes(c))) special.forEach((c) => blocked.add(c));
       const allowed = PREF_CODES.filter((c) => !blocked.has(c));
       const ms = this.s.settings.landingTime * 1000;
       this.setStage({ t: 'landing', pid, deadline: this.now + ms, blocked: [...blocked] });
@@ -441,6 +468,8 @@ export class GameEngine {
         await this.gate(epoch);
         const pid = this.s.turnOrder[this.s.turnIdx];
         if (this.s.players[pid]) await this.turn(epoch, pid);
+        // редкий бонус: после хода можно сходить ещё раз
+        while (this.s.players[pid] && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
         this.s.turnIdx++;
         this.snapshot();
       }
@@ -500,7 +529,15 @@ export class GameEngine {
     }
     await this.gate(epoch);
 
-    await this.prefQuestion(epoch, p, to);
+    // групповая игра — при первом приходе вместо вопроса префектуры
+    const game = st.groupPrefs?.[to];
+    if (game && !ps.groupDone && this.s.joinOrder.length >= 2) {
+      ps.groupDone = true;
+      await this.groupGame(epoch, to);
+    } else await this.prefQuestion(epoch, p, to);
+
+    // магазин — после вопроса, до дуэли
+    if (st.shopPrefs?.includes(to) && p.hp > 0) await this.shopVisit(epoch, p);
 
     // ── дуэль ──
     const other = this.occupants(to, pid)[0];
@@ -561,6 +598,7 @@ export class GameEngine {
         break;
       }
       case 'special': p.specials++; text = 'Спецвопрос (сила ' + st.specialPower + ')'; break;
+      case 'turn2': p.bonuses.turn2 = (p.bonuses.turn2 ?? 0) + 1; text = 'Дополнительный ход'; break;
       case 'prize': {
         ps.prizeTaken = true;
         ps.reward = 'money';
@@ -733,6 +771,199 @@ export class GameEngine {
     this.rhythmDone?.();
   }
 
+  // ───────── доп. ход ─────────
+
+  private async offerExtraTurn(epoch: number, pid: string): Promise<boolean> {
+    const p = this.s.players[pid];
+    if (!p || p.hp <= 0 || (p.bonuses.turn2 ?? 0) <= 0) return false;
+    const ms = 15000;
+    this.setStage({ t: 'extraTurn', pid, deadline: this.now + ms });
+    const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'extra' && m.pid === pid ? !!m.value : undefined), p.online || p.bot ? ms + 400 : 3000);
+    if (!v) return false;
+    p.bonuses.turn2--;
+    this.log(`${p.name} использует «${BONUS_INFO.turn2.name}»`);
+    this.setStage({ t: 'banner', text: 'Ещё один ход!', sub: p.name, big: true });
+    await this.sleep(epoch, 1800);
+    return true;
+  }
+
+  // ───────── магазин ─────────
+
+  /** игрок пришёл в префектуру с магазином: решает, зайти ли; ассортимент видит только он */
+  private async shopVisit(epoch: number, p: Player, force = false) {
+    if (p.bot && !force) return;
+    const ms = this.s.settings.shopTime * 1000;
+    const stage: Extract<Stage, { t: 'shop' }> = { t: 'shop', pid: p.id, deadline: this.now + ms, entered: false };
+    this.setStage(stage);
+    const end = stage.deadline + 300;
+    while (this.now < end) {
+      // без связи долго не ждём
+      const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'shop' && m.pid === p.id ? String(m.value) : undefined), p.online ? end - this.now : Math.min(end - this.now, 8000));
+      if (v === 'enter' && !stage.entered) {
+        stage.entered = true;
+        this.emit();
+        continue;
+      }
+      break;
+    }
+  }
+
+  // ───────── групповые игры ─────────
+
+  /** рисунки текущей групповой игры (только на ТВ, в состояние не попадают) */
+  groupImgs: Record<string, string | null> = {};
+  private drawParts: Record<string, string[]> = {};
+  private votes: Record<string, number[]> = {};
+  private groupDone: (() => void) | null = null;
+
+  private async groupGame(epoch: number, code: number) {
+    const st = this.s.settings;
+    const tasks = (st.groupTasks ?? []).filter((t) => t.game === 'calligraphy' && t.text.trim());
+    const used = (this.sec.usedTasks ??= []);
+    const fresh = tasks.filter((t) => !used.includes(t.id));
+    const task = fresh.length ? pick(fresh) : tasks.length ? pick(tasks) : null;
+    if (task) used.push(task.id);
+    const players = this.s.joinOrder.filter((id) => this.s.players[id]);
+    const g: GroupPublic = {
+      id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game: 'calligraphy', prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
+      phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
+      voteRounds: Math.min(3, players.length - 1), voted: [],
+    };
+    this.groupImgs = {};
+    this.drawParts = {};
+    this.votes = {};
+    this.s.g = g;
+    this.setStage({ t: 'group' });
+    this.io.fx?.('group', g);
+    // ведущий зачитывает задание
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 6000);
+
+    // ── рисуем ──
+    g.phase = 'draw';
+    g.startAt = this.now + LEAD;
+    g.deadline = g.startAt + st.group.drawTime * 1000;
+    this.emit();
+    this.botDraw(g);
+    await new Promise<void>((resolve) => {
+      const done = () => { clearT(t); this.skipCbs.delete(done); this.groupDone = null; resolve(); };
+      // после конца времени ждём, пока рисунки долетят
+      const t = setT(done, g.deadline - this.now + 8000);
+      this.skipCbs.add(done);
+      this.groupDone = () => { if (g.players.every((id) => g.submitted.includes(id) || !this.s.players[id])) done(); };
+    });
+    this.check(epoch);
+    // ведущий закончил раньше — телефоны увидят смену фазы и сдадут рисунки; ждём их чуть-чуть
+    if (g.players.some((id) => !g.submitted.includes(id) && this.s.players[id]?.online)) {
+      g.phase = 'show';
+      g.showIdx = -1;
+      this.emit();
+      const until = this.now + 4000;
+      while (this.now < until && g.players.some((id) => !g.submitted.includes(id) && this.s.players[id]?.online)) {
+        await new Promise<void>((r) => { this.groupDone = r; setT(r, until - this.now); });
+        this.check(epoch);
+      }
+      this.groupDone = null;
+    }
+    // кто не успел прислать — пустой лист
+    for (const id of g.players) if (!(id in this.groupImgs)) this.groupImgs[id] = null;
+
+    // ── показ работ по одной ──
+    g.phase = 'show';
+    for (let i = 0; i < g.order.length; i++) {
+      g.showIdx = i;
+      this.emit();
+      await this.sleep(epoch, st.group.showMs);
+    }
+
+    // ── голосование: за 1, 2 и 3 место по очереди ──
+    g.phase = 'vote';
+    for (let r = 1; r <= g.voteRounds; r++) {
+      await this.gate(epoch);
+      g.voteRound = r;
+      g.voted = [];
+      g.startAt = this.now + LEAD;
+      g.deadline = g.startAt + st.group.voteTime * 1000;
+      this.emit();
+      const voters = () => g.players.filter((id) => this.s.players[id] && (this.s.players[id].online || this.s.players[id].bot));
+      const end = g.deadline + ANSWER_GRACE;
+      while (voters().some((id) => !g.voted.includes(id)) && this.now < end) {
+        const m = await this.waitInput(epoch, (x) => {
+          if (x.t !== 'pick' || x.kind !== 'vote' || !g.players.includes(x.pid) || g.voted.includes(x.pid)) return undefined;
+          const n = Number(x.value);
+          const mine = this.votes[x.pid] ?? [];
+          if (!(n >= 1 && n <= g.order.length) || g.order[n - 1] === x.pid || mine.includes(n)) return undefined;
+          return { pid: x.pid, n };
+        }, end - this.now);
+        if (!m) break;
+        (this.votes[m.pid] ??= [])[r - 1] = m.n;
+        g.voted.push(m.pid);
+        this.io.fx?.('answered', { pid: m.pid });
+        this.emit();
+      }
+    }
+
+    // ── итоги: 3 очка за голос «1 место», 2 — за второе, 1 — за третье ──
+    const points: Record<string, number> = Object.fromEntries(g.players.map((id) => [id, 0]));
+    for (const vs of Object.values(this.votes)) vs.forEach((n, i) => { if (n) points[g.order[n - 1]] += 3 - i; });
+    // одинаковые очки — одно место на всех (1, 1, 2, 3…)
+    const levels = [...new Set(Object.values(points).filter((x) => x > 0))].sort((a, b) => b - a);
+    const places: Record<string, number> = {};
+    const awards: Record<string, string> = {};
+    for (const id of g.players) {
+      const lv = levels.indexOf(points[id]);
+      const p = this.s.players[id];
+      if (lv < 0 || lv > 2 || !p) continue;
+      places[id] = lv + 1;
+      const pr = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      p.yen += pr.yen;
+      p.stars += pr.stars;
+      awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
+    }
+    g.points = points;
+    g.places = places;
+    g.awards = awards;
+    g.phase = 'results';
+    this.emit();
+    this.io.fx?.('prize', {});
+    const win = g.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
+    if (win.length) this.log(`🖌 Каллиграфия: побеждает ${win.join(', ')}`);
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
+    this.s.g = null;
+    this.groupImgs = {};
+    this.emit();
+  }
+
+  private onDraw(m: Extract<InputMsg, { t: 'draw' }>) {
+    const g = this.s.g;
+    if (!g || g.id !== m.id || !g.players.includes(m.pid) || g.submitted.includes(m.pid)) return;
+    if (g.phase !== 'draw' && !(g.phase === 'show' && g.showIdx < 0)) return;
+    const total = Math.max(1, Math.min(40, m.total | 0));
+    const parts = (this.drawParts[m.pid] ??= new Array(total).fill(''));
+    if (!(m.part >= 0 && m.part < total) || typeof m.data !== 'string') return;
+    parts[m.part] = m.data;
+    if (parts.some((x) => !x)) return;
+    const url = parts.join('');
+    delete this.drawParts[m.pid];
+    this.groupImgs[m.pid] = url.startsWith('data:image/') ? url : null;
+    g.submitted.push(m.pid);
+    this.io.fx?.('answered', { pid: m.pid });
+    this.emit();
+    this.groupDone?.();
+  }
+
+  /** боты «сдают» пустой лист незадолго до конца времени */
+  private botDraw(g: GroupPublic) {
+    for (const id of g.players) if (this.s.players[id]?.bot) {
+      setT(() => {
+        if (this.s.g !== g || g.submitted.includes(id)) return;
+        this.groupImgs[id] = null;
+        g.submitted.push(id);
+        this.emit();
+        this.groupDone?.();
+      }, Math.max(0, g.deadline - this.now - 1000 - randInt(3000)));
+    }
+  }
+
   // ───────── бонусы ─────────
 
   private async bonusPhase(epoch: number, pids: string[], sequential: boolean, q: Question): Promise<Record<string, number[]>> {
@@ -868,7 +1099,7 @@ export class GameEngine {
     for (const t of st.topics.filter((x) => x.combat)) { stats[t.id] = st.baseStrength; calib[t.id] = 0; }
     return {
       id: uid(10), name, color, hat, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
-      bonuses: { fifty1: 0, fifty2: 0, move2: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
+      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
     };
   }
 
@@ -941,6 +1172,8 @@ export class GameEngine {
     };
     switch (m.op) {
       case 'buy': {
+        const ss = this.s.stage;
+        if (ss.t !== 'shop' || ss.pid !== p.id || !ss.entered) return reply(false, null, 'Покупки — только в магазине');
         const item = a.item as keyof Settings['shop'];
         const cost = st.shop[item];
         if (!cost) return reply(false, null, 'Нет такого товара');
@@ -1057,6 +1290,9 @@ export class GameEngine {
       for (const id of st.pids) if (isBot(id)) this.botLater('bonus' + id, 800 + randInt(1500), () =>
         this.handle({ t: 'pick', pid: id, kind: 'bonus', value: Math.random() < 0.5 ? st.offers[id][0] : null }));
     }
+    if (st.t === 'extraTurn' && isBot(st.pid)) {
+      this.botLater('extra', 1200, () => this.handle({ t: 'pick', pid: st.pid, kind: 'extra', value: Math.random() < 0.7 }));
+    }
     if (st.t === 'duelPick' && isBot(st.pid)) {
       this.botLater('duel', 1500, () => {
         const opts: string[] = [...st.topics];
@@ -1074,6 +1310,18 @@ export class GameEngine {
           const opts = [0, 1, 2, 3].filter((i) => !removed.includes(i));
           const choice = Math.random() < 0.55 ? this.curCorrect : pick(opts);
           this.handle({ t: 'answer', pid: id, n, choice, at: this.now });
+        });
+      }
+    }
+    const g = this.s.g;
+    if (st.t === 'group' && g && g.phase === 'vote') {
+      for (const id of g.players) if (isBot(id) && !g.voted.includes(id)) {
+        const round = g.voteRound;
+        this.botLater('vote' + id + g.id + '_' + round, 1000 + randInt(3000), () => {
+          if (this.s.g !== g || g.voteRound !== round) return;
+          const mine = this.votes[id] ?? [];
+          const opts = g.order.map((_, i) => i + 1).filter((n) => g.order[n - 1] !== id && !mine.includes(n));
+          if (opts.length) this.handle({ t: 'pick', pid: id, kind: 'vote', value: pick(opts) });
         });
       }
     }

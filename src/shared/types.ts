@@ -2,8 +2,8 @@
 // публичное состояние и отправляют только действия игрока.
 
 export type TopicId = string;
-export type BonusId = 'fifty1' | 'fifty2' | 'move2';
-export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'prize';
+export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2';
+export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
 
 export interface Topic {
   id: TopicId;
@@ -67,6 +67,41 @@ export interface PrefState {
   /** награду уже забрали — больше не выдаётся и не видна на карте */
   taken?: boolean;
   visits: number;
+  /** групповая игра этой префектуры уже сыграна */
+  groupDone?: boolean;
+}
+
+/** групповые игры: запускаются в префектурах, отмеченных в админке */
+export type GroupGameId = 'calligraphy';
+
+/** задание групповой игры (например, «Нарисуйте кандзи „человек“») */
+export interface GroupTask {
+  id: string;
+  game: GroupGameId;
+  text: string;
+}
+
+/** публичная часть групповой игры; сами рисунки в состояние не попадают (их видит только ТВ) */
+export interface GroupPublic {
+  id: number;
+  game: GroupGameId;
+  prompt: string;
+  pref: number;
+  phase: 'intro' | 'draw' | 'show' | 'vote' | 'results';
+  players: string[];
+  startAt: number;
+  deadline: number;
+  /** номер работы i+1 → автор; перемешан, чтобы номер не выдавал автора */
+  order: string[];
+  submitted: string[];
+  showIdx: number;
+  voteRound: number;
+  voteRounds: number;
+  voted: string[];
+  /** итоги (после голосования) */
+  points?: Record<string, number>;
+  places?: Record<string, number>;
+  awards?: Record<string, string>;
 }
 
 export type QContext = 'calib' | 'pref' | 'duel' | 'revive';
@@ -137,6 +172,11 @@ export type Stage =
   /** интро префектуры при первом входе: фон и название по центру */
   | { t: 'prefIntro'; code: number; pid: string }
   | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number }
+  /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
+  | { t: 'shop'; pid: string; deadline: number; entered: boolean }
+  | { t: 'group' }
+  /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
+  | { t: 'extraTurn'; pid: string; deadline: number }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
@@ -187,6 +227,21 @@ export interface Settings {
     move2: { yen: number; stars: number };
   };
   pachinkoPrefs: number[];
+  /** префектуры с магазином: покупки только здесь, после вопроса */
+  shopPrefs: number[];
+  /** сколько секунд игрок может пробыть в магазине */
+  shopTime: number;
+  /** префектуры с групповой игрой: код → игра */
+  groupPrefs: Record<number, GroupGameId>;
+  groupTasks: GroupTask[];
+  group: {
+    drawTime: number;
+    voteTime: number;
+    /** сколько показывать каждую работу на ТВ, мс */
+    showMs: number;
+    /** награды за 1, 2 и 3 место */
+    prizes: { yen: number; stars: number }[];
+  };
   ringPrefs: number[];
   pachinko: { yenPerBall: number; pack: number };
   ring: { cost: number; prizeYen: number; physicalPrize: boolean; cellMs: number };
@@ -210,6 +265,7 @@ export interface GameState {
   q: PublicQuestion | null;
   duel: DuelPublic | null;
   rhythm: RhythmPublic | null;
+  g?: GroupPublic | null;
   log: LogEntry[];
   settings: Settings;
   paused: boolean;
@@ -228,6 +284,8 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra';
+
 /** телефон/админ → хост (канал input) */
 export type InputMsg =
   | { t: 'hello'; cid: string; pid?: string }
@@ -235,7 +293,9 @@ export type InputMsg =
   | { t: 'restore'; cid: string; name: string; pin: string }
   | { t: 'ping'; cid: string; n: number; t0: number; pid?: string }
   | { t: 'answer'; pid: string; n: number; choice: number; at: number }
-  | { t: 'pick'; pid: string; kind: 'landing' | 'move' | 'bonus' | 'duel'; value: any }
+  | { t: 'pick'; pid: string; kind: PickKind; value: any }
+  /** рисунок групповой игры, по кускам (лимит размера сообщения) */
+  | { t: 'draw'; pid: string; id: number; part: number; total: number; data: string }
   | { t: 'req'; pid: string; rid: number; op: string; args?: any }
   | { t: 'pnp'; pid: string; ev: any }
   | { t: 'rhythm'; pid: string; id: number; score: number; hits: number; total: number }

@@ -127,3 +127,11 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 /* логотип в меню */
 .menu-logo { display: block; width: min(360px, 80%); height: auto; margin: 0 auto 12px; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.5)); }
 .menu-logo.small { width: min(220px, 60%); margin-bottom: 4px; }
+
+/* инвентарь: иконки бонусов со счётчиком */
+.inv { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-slot { position: relative; display: grid; place-items: center; padding: 6px; background: #11142b; border: 3px solid #555; box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4); }
+.inv-slot img { image-rendering: pixelated; display: block; }
+.inv-slot.empty img { opacity: 0.3; filter: grayscale(1); }
+.inv-n { position: absolute; right: -6px; bottom: -6px; min-width: 20px; padding: 0 3px; text-align: center; background: var(--yellow, #ffd23f); color: #111; border: 2px solid #111; font-size: 14px; line-height: 16px; }
+.inv-slot.empty .inv-n { background: #555; color: #ccc; }

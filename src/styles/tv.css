@@ -160,3 +160,43 @@
 /* две колонки игроков (больше 5) — сдвигаем вопрос и пнп */
 .tv.wide-list .qwrap { right: calc(clamp(440px, 34vw, 640px) + 24px); }
 .tv.wide-list .pnp-layer { right: calc(clamp(440px, 34vw, 640px) + 24px); }
+
+/* групповая игра */
+.group-tv { position: absolute; inset: 70px calc(clamp(240px, 18vw, 340px) + 24px) 12px 12px; display: grid; place-items: center; z-index: 25; }
+.wide-list .group-tv { right: calc(clamp(460px, 34vw, 660px) + 24px); }
+.group-tv > div { background: rgba(27, 31, 58, 0.96); border: 4px solid #fff; box-shadow: 8px 8px 0 var(--shadow); padding: 1em 1.4em; display: flex; flex-direction: column; align-items: center; gap: 0.6em; max-height: 100%; max-width: 100%; min-width: min(900px, 100%); }
+.group-head { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.group-game { font-size: 1.3em; color: var(--yellow); }
+.group-game .jp { color: var(--pink); }
+.group-task { font-size: 1.1em; }
+.group-intro { text-align: center; }
+.group-kanji { font-size: 5em; line-height: 1; color: #f4eddc; text-shadow: 6px 6px 0 #000; }
+.group-title { font-size: 2.6em; color: var(--yellow); text-shadow: 4px 4px 0 #000; }
+.group-sub { font-size: 1.1em; color: #ccd; }
+.group-prompt { font-size: 1.8em; max-width: 1000px; }
+.group-brush { font-size: 4em; animation: brushWave 1.4s ease-in-out infinite; }
+@keyframes brushWave { 0%, 100% { transform: rotate(-20deg) translateX(-20px); } 50% { transform: rotate(15deg) translateX(20px); } }
+.group-draw .timer, .group-vote .timer { width: 100%; }
+
+.sheet { position: relative; aspect-ratio: 3 / 4; background-size: cover; border: 3px solid #2a2016; box-shadow: 6px 6px 0 var(--shadow); height: 100%; max-height: 100%; }
+.sheet img { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: multiply; }
+.sheet-empty { position: absolute; inset: 0; display: grid; place-items: center; color: #b7a98c; font-size: 0.9em; }
+.sheet.big { height: min(62vh, 100%); animation: sheetIn 0.5s both; }
+@keyframes sheetIn { from { transform: translateY(30px) rotate(-2deg); opacity: 0; } to { transform: none; opacity: 1; } }
+/* печать-номер, как ханко */
+.hanko { position: absolute; right: 6%; bottom: 4%; min-width: 1.6em; height: 1.6em; padding: 0 0.2em; display: grid; place-items: center; background: #c8262a; color: #fff3e6; font-size: 1.3em; border: 3px solid #8e1418; box-shadow: inset 0 0 0 2px #e85a5a; transform: rotate(-4deg); opacity: 0.92; }
+.sheet.big .hanko { font-size: 2.2em; }
+.group-show { height: 100%; }
+.group-vote { height: 100%; width: 100%; }
+.gallery { flex: 1; min-height: 0; width: 100%; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-content: center; }
+.gallery .sheet { height: 44%; min-height: 140px; }
+.gallery.many .sheet { height: 30%; }
+.group-results { height: 100%; width: 100%; }
+.podium { flex: 1; min-height: 0; display: flex; gap: 1.6em; align-items: flex-end; justify-content: center; overflow: hidden; }
+.podium-item { display: flex; flex-direction: column; align-items: center; gap: 6px; width: calc(min(15vw, 24vh) * var(--k, 1)); order: 3; }
+.podium-item.place1 { width: calc(min(20vw, 34vh) * var(--k, 1)); order: 2; }
+.podium-item.place2 { width: calc(min(17vw, 28vh) * var(--k, 1)); order: 1; }
+.podium-item .sheet { width: 100%; height: auto; }
+.podium-name { display: flex; align-items: center; gap: 6px; font-size: 1.1em; }
+.medal { font-size: 1.5em; }
+.podium-pts { color: var(--yellow); }

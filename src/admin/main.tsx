@@ -5,17 +5,18 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/admin.css';
 import '../styles/kit.css';
-import type { GameMsg, GameState, Question, RewardType, Settings } from '../shared/types';
+import type { GameMsg, GameState, GroupGameId, Question, RewardType, Settings } from '../shared/types';
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
-import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ } from '../shared/settings';
+import { DEFAULT_SETTINGS, GROUP_GAMES, REWARD_INFO, isSpecialQ } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
+import { GroupEditor } from './GroupEditor';
 import { fmtYen, uid } from '../shared/util';
 
-type Tab = 'questions' | 'topics' | 'prefs' | 'settings' | 'remote';
+type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'settings' | 'remote';
 
 function App() {
   const [tab, setTab] = useState<Tab>('questions');
@@ -38,7 +39,7 @@ function App() {
       <header class="admin-hdr">
         <b>BIG GAME 2 · ведущий</b>
         <nav>
-          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
+          {([['questions', 'Вопросы'], ['topics', 'Темы'], ['group', 'Групповые игры'], ['prefs', 'Префектуры'], ['settings', 'Настройки'], ['remote', 'Пульт']] as [Tab, string][]).map(([k, l]) => (
             <button class={'btn small' + (tab === k ? ' yellow' : '')} onClick={() => setTab(k)}>{l}</button>
           ))}
           <a class="btn small ghost" href="ui.html" target="_blank" title="Все элементы интерфейса: кнопки, барабан, иконки">UI-кит ↗</a>
@@ -51,6 +52,7 @@ function App() {
         <>
           {tab === 'questions' && <Questions questions={questions} settings={settings} onChange={reload} newIn={newIn} />}
           {tab === 'topics' && <Topics settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} onAddQuestion={(topic) => { setNewIn({ topic, n: Date.now() }); setTab('questions'); }} />}
+          {tab === 'group' && <GroupEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'prefs' && <Prefs settings={settings} questions={questions} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'settings' && <SettingsEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'remote' && <Remote />}
@@ -253,10 +255,10 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
   const toggle = (list: number[], code: number) => (list.includes(code) ? list.filter((x) => x !== code) : [...list, code]);
   return (
     <div class="pad col">
-      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены.</div>
+      <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра запускается при первом приходе в префектуру вместо вопроса. На магазин и групповую игру нельзя высадиться.</div>
       <div class="row"><button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button></div>
       <table class="qtable">
-        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>Своих вопросов</th></tr></thead>
+        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>🛒 Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
         <tbody>
           {PREFS.map((p) => (
             <tr>
@@ -275,6 +277,18 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
               </td>
               <td><input type="checkbox" checked={s.pachinkoPrefs.includes(p.code)} onChange={() => setS({ ...s, pachinkoPrefs: toggle(s.pachinkoPrefs, p.code) })} /></td>
               <td><input type="checkbox" checked={s.ringPrefs.includes(p.code)} onChange={() => setS({ ...s, ringPrefs: toggle(s.ringPrefs, p.code) })} /></td>
+              <td><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></td>
+              <td>
+                <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {
+                  const v = (e.target as HTMLSelectElement).value as GroupGameId | '';
+                  const gp = { ...s.groupPrefs };
+                  if (v) gp[p.code] = v; else delete gp[p.code];
+                  setS({ ...s, groupPrefs: gp });
+                }}>
+                  <option value="">—</option>
+                  {(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => <option value={g}>{GROUP_GAMES[g].name}</option>)}
+                </select>
+              </td>
               <td class={qCount(p.code) ? '' : 'muted'}>{qCount(p.code)}</td>
             </tr>
           ))}
@@ -294,6 +308,7 @@ const NUM_FIELDS: [string, string][] = [
   ['pickTime', 'Время на выбор темы в дуэли, сек'],
   ['landingTime', 'Время на высадку, сек'],
   ['revealMs', 'Показ ответа, мс'],
+  ['shopTime', 'Время в магазине, сек'],
   ['baseStrength', 'Базовая сила темы'],
   ['startHp', 'Стартовое HP'],
   ['specialPower', 'Сила спецвопроса'],
