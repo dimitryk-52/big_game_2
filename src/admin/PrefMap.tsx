@@ -39,6 +39,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
       players: [],
       selected: sel,
       marked: Object.keys(s.groupPrefs).map(Number),
+      groupGames: s.groupPrefs,
       machines: { pachinko: s.pachinkoPrefs, ring: s.ringPrefs },
       shops: s.shopPrefs,
     });
@@ -56,7 +57,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
           {dirty && !saved && <span class="muted small">есть несохранённые изменения</span>}
         </div>
         {!p ? (
-          <div class="note">Нажми на префектуру на карте. Значки: награда (если задана вручную), 🎰 пачинко, 🎡 призовая машина, 🛒 магазин; розовые — групповая игра. Колесо мыши — зум, перетаскивание — сдвиг.</div>
+          <div class="note">Нажми на префектуру на карте. Значки: награда (если задана вручную), 🎰 пачинко, 🎡 призовая машина, 🛒 магазин; розовые выноска и заливка — групповая игра. Колесо мыши — зум, перетаскивание — сдвиг.</div>
         ) : (
           <>
             <h3 style={{ margin: 0 }}>{p.ru} <span class="muted">{p.ja}</span> <span class="muted small">#{p.code}</span></h3>

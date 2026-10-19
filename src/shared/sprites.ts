@@ -148,6 +148,15 @@ const DIAMOND = [
 const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch) => (ch === '.' ? null : ch === 'W' ? '#ffffff' : color)));
 const MISSING: Grid = diamond('#ff00ff');
 
+// групповые игры (выноски только в админке): кисть, лицо окамэ, полоска танзаку
+const GROUP_PAL: Record<string, string> = { b: '#b5793a', g: '#c9ccd6', k: '#222233', s: '#ffe2c4', p: '#ff8fb0', r: '#d0304a', t: '#9fd3ff' };
+const GROUP_ART: Record<string, string[]> = {
+  group_calligraphy: ['........bb', '.......bbb', '......bbb.', '.....bbb..', '....ggg...', '...ggg....', '..kkk.....', '.kkk......', 'kkk.......', 'kk........'],
+  group_fukuwarai: ['..ssssss..', '.ssssssss.', 'ssssssssss', 'skksssskks', 'ssssssssss', 'spssssssps', 'sssrrrrsss', '.ssssssss.', '..ssssss..'],
+  group_senryu: ['.kk.', 'tttt', 'tktt', 'tktt', 'tttt', 'tktt', 'tktt', 'tktt', 'tttt'],
+};
+for (const [id, rows] of Object.entries(GROUP_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => GROUP_PAL[ch] ?? null)));
+
 /** спецтема: круг с радужным круговым градиентом (если нет своего topic_special.png) */
 export function rainbowGrid(n = 11): Grid {
   const c = (n - 1) / 2;
@@ -264,7 +273,7 @@ const badgeCache = new Map<string, HTMLCanvasElement>();
  * и треугольник-указатель вниз (кончик — нижний центр холста). scale — размер пикселя.
  */
 /** цвета плашки: награда — кремовая, автомат (постоянное место, не награда) — голубая */
-const BADGE_COLORS = { reward: ['#fff3d6', '#e2c48f'], machine: ['#d4ecff', '#8fb8e6'] } as const;
+const BADGE_COLORS = { reward: ['#fff3d6', '#e2c48f'], machine: ['#d4ecff', '#8fb8e6'], group: ['#ffd9f3', '#e59ccf'] } as const;
 export type BadgeKind = keyof typeof BADGE_COLORS;
 
 export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): HTMLCanvasElement {

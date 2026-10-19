@@ -1,6 +1,6 @@
 // Интерактивная карта на PixiJS: камера (зум/драг/пинч), фишки игроков,
 // подсветка вариантов хода, частицы. Используется и на ТВ, и на телефоне.
-import { Application, Container, Sprite, Text, Texture, ImageSource, Graphics } from 'pixi.js';
+import { Application, CanvasTextMetrics, Container, Sprite, Text, Texture, ImageSource, Graphics } from 'pixi.js';
 import type { Player, PrefState } from '../shared/types';
 import { PREF, PREF_CODES } from './mapData';
 import {
@@ -16,6 +16,8 @@ export interface MapUpdate {
   highlight2?: number[];
   /** розовая заливка без ограничения нажатий (админка: префектуры с групповой игрой) */
   marked?: number[];
+  /** групповые игры: код префектуры → id игры (выноска только в админке — в игре они одноразовые) */
+  groupGames?: Record<number, string>;
   blocked?: number[];
   selected?: number | null;
   activePid?: string | null;
@@ -99,7 +101,9 @@ export class MapView {
   }
 
   private async init(el: HTMLElement, bg: number) {
-    try { await document.fonts.load('16px ' + font().split(',')[0], 'Привет 日本'); } catch { /* шрифт не обязателен */ }
+    // ждём именно те начертания, которыми рисуются подписи (600) и имена (700) — иначе первые тексты уходят запасным шрифтом
+    const fam = font().split(',')[0];
+    try { await Promise.all(['500', '600', '700'].map((w) => document.fonts.load(`${w} 16px ${fam}`, 'Привет 日本'))); } catch { /* шрифт не обязателен */ }
     const assets = await loadMapAssets();
     this.regions = assets.regions;
     this.app = new Application();
@@ -124,7 +128,27 @@ export class MapView {
     this.fitAll(false);
     this.app.ticker.add((t) => this.tick(t.deltaMS));
     if (this.interactive) this.bindInput();
+    // шрифт догрузился позже — перерисовываем подписи (старые текстуры остались бы запасным шрифтом)
+    const onFonts = (e: FontFaceSetLoadEvent) => { if (e.fontfaces.some((f) => f.family.replace(/["']/g, '') === fam.replace(/["']/g, ''))) this.redrawTexts(); };
+    document.fonts.addEventListener('loadingdone', onFonts);
+    this.app.renderer.runners.destroy.add({ destroy: () => document.fonts.removeEventListener('loadingdone', onFonts) });
     new ResizeObserver(() => { if (!this.camTarget && performance.now() - this.userTouchedAt > 4000) this.refocus(); }).observe(el);
+  }
+
+  private redrawTexts() {
+    CanvasTextMetrics.clearMetrics();
+    for (const l of this.labels.values()) l.destroy();
+    this.labels.clear();
+    for (const t of this.tokens.values()) {
+      // сначала уничтожаем старую — иначе новая возьмёт из кеша ту же текстуру
+      const i = t.root.getChildIndex(t.label), name = t.label.text;
+      t.label.destroy();
+      const l = nameLabel(name);
+      t.root.addChildAt(l, i);
+      t.label = l;
+      t.plateFor = '';
+    }
+    if (this.last) { this.updateLabels(this.last); this.updateTokens(this.last); }
   }
 
   destroy() {
@@ -242,6 +266,10 @@ export class MapView {
       if (shown(c)) want.set(icon + c, { code: c, icon, dx: hasReward(c) ? -24 : 0, kind: 'machine' });
     }
     for (const c of u.shops ?? []) if (!occupied.has(c)) want.set('shop' + c, { code: c, icon: 'shop', dx: hasReward(c) ? -24 : 0, kind: 'machine' });
+    for (const [c, g] of Object.entries(u.groupGames ?? {})) {
+      const code = Number(c), other = [...want.values()].some((w) => w.code === code);
+      want.set('group' + code, { code, icon: 'group_' + g, dx: other ? 24 : 0, kind: 'group' });
+    }
     for (const [k, t] of this.icons) if (!want.has(k) || t.kind !== want.get(k)!.kind) { t.destroy(); this.icons.delete(k); }
     for (const [k, w] of want) {
       let t = this.icons.get(k);
@@ -293,10 +321,7 @@ export class MapView {
         const body = new Sprite(frames[0]);
         body.anchor.set(0.5, 1);
         body.scale.set(1.6);
-        const label = new Text({ text: p.name, style: { fontFamily: font(), fontSize: 20, fontWeight: '700', fill: 0xffffff } });
-        label.anchor.set(0.5, 1);
-        label.resolution = 2;
-        label.position.set(0, -29);
+        const label = nameLabel(p.name);
         const plate = new Graphics();
         root.addChild(ring, body, plate, label);
         this.tokenLayer.addChild(root);
@@ -599,6 +624,15 @@ export class MapView {
       if (p.life >= p.max) { p.g.destroy(); this.particles.splice(i, 1); }
     }
   }
+}
+
+/** имя над фишкой */
+function nameLabel(name: string) {
+  const label = new Text({ text: name, style: { fontFamily: font(), fontSize: 20, fontWeight: '700', fill: 0xffffff } });
+  label.anchor.set(0.5, 1);
+  label.resolution = 2;
+  label.position.set(0, -29);
+  return label;
 }
 
 /** пиксельная плашка под именем над персонажем: тёмная, рамка цвета игрока, хвостик вниз */
