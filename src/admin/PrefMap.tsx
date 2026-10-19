@@ -1,9 +1,10 @@
 // Вкладка «Карта»: то же, что «Префектуры», но выбор префектуры — нажатием на карте
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { GroupGameId, PrefState, Question, RewardType, Settings, SoloGameId } from '../shared/types';
+import type { PrefState, Question, RewardType, Settings, SoloGameId } from '../shared/types';
 import { PREF, PREF_CODES } from '../map/mapData';
 import { MapView } from '../map/MapView';
-import { GROUP_GAMES, REWARD_INFO, SOLO_GAMES, isSpecialQ, machinesOf } from '../shared/settings';
+import { REWARD_INFO, SOLO_GAMES, isSpecialQ, machinesOf } from '../shared/settings';
+import { GroupPick } from './TaskPick';
 import { PixIcon } from '../ui/common';
 
 /** состояние карты из настроек: всё открыто, значок награды — только у заданных вручную */
@@ -79,17 +80,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
             })}
             <div class="muted small">Соло-игры доступны на телефоне, пока игрок стоит в префектуре; на время вопросов и групповых игр — пауза.</div>
             <label class="set-row"><span><PixIcon id="shop" size={20} /> Магазин</span><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></label>
-            <label class="set-row"><span>Групповая игра</span>
-              <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {
-                const v = (e.target as HTMLSelectElement).value as GroupGameId | '';
-                const gp = { ...s.groupPrefs };
-                if (v) gp[p.code] = v; else delete gp[p.code];
-                setS({ ...s, groupPrefs: gp });
-              }}>
-                <option value="">—</option>
-                {(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => <option value={g}>{GROUP_GAMES[g].name}</option>)}
-              </select>
-            </label>
+            <label class="set-row"><span>Групповая игра</span><GroupPick s={s} code={p.code} setS={setS} /></label>
             <div class="muted small">Соседи: {p.adj.map((c) => PREF[c]?.ru).filter(Boolean).join(', ')}</div>
             <h4 style={{ margin: '8px 0 0' }}>Свои вопросы: {qs.length}</h4>
             {qs.map((q) => <div class="small">{isSpecialQ(s, q) ? '🌈 ' : '• '}{q.text}</div>)}

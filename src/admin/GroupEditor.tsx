@@ -19,7 +19,8 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
     if (def.length) upd((c) => { c.groupTasks.push(...structuredClone(def)); });
   }, [game]);
   const tasks = s.groupTasks.filter((t) => t.game === game);
-  const prefs = Object.entries(s.groupPrefs).filter(([, g]) => g === game).map(([c]) => PREF[+c]?.ru).filter(Boolean);
+  const codes = Object.entries(s.groupPrefs).filter(([, g]) => g === game).map(([c]) => +c).filter((c) => PREF[c]);
+  const prefs = codes.map((c) => PREF[c].ru);
   const num = (label: string, get: () => number, set: (c: Settings, v: number) => void) => (
     <label class="set-row">
       <span>{label}</span>
@@ -45,11 +46,12 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {game === 'senryu' && <>Сэнрю: в задании две первые строки через « / » (5 и 7 слогов), игроки дописывают последнюю (5 слогов), телефон считает слоги. Потом стихи по одному на ТВ и голосование.<br /></>}
         {game === 'calligraphy' && <> у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
         и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
-        <br /></>}Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задания берутся по очереди в случайном порядке.
+        <br /></>}Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задание с префектурой играется именно там; в префектуре без своего задания выпадает любое свободное (не привязанное к другой префектуре), по очереди в случайном порядке.
       </div>
       {game !== 'dragon' && <h3 style={{ margin: '8px 0 0' }}>Задания</h3>}
-      {game !== 'dragon' && tasks.map((t) => (
+      {game !== 'dragon' && tasks.map((t, i) => (
         <div class="row">
+          <b title="Номер задания: на вкладке «Префектуры» оно выбирается как «{GROUP_GAMES[game].name} {i + 1}»" style={{ minWidth: 28, textAlign: 'right' }}>{i + 1}.</b>
           {game === 'fukuwarai' && (
             <select value={t.face ?? 'okame'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.face = (e.target as HTMLSelectElement).value as FaceId; })}>
               {(Object.keys(FACES) as FaceId[]).map((f) => <option value={f}>{FACES[f].name}</option>)}
@@ -61,6 +63,14 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
             </select>
           )}
           <input class="inp-s grow" placeholder={game === 'senryu' ? 'Первая строка / Вторая строка' : 'Текст задания'} value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />
+          <select title="Префектура, где играется это задание" value={t.pref ?? ''} onChange={(e) => upd((c) => {
+            const v = Number((e.target as HTMLSelectElement).value);
+            const x = c.groupTasks.find((y) => y.id === t.id)!;
+            if (v) x.pref = v; else delete x.pref;
+          })}>
+            <option value="">любая префектура</option>
+            {[...new Set([...codes, ...(t.pref ? [t.pref] : [])])].map((c) => <option value={c}>{PREF[c]?.ru ?? `#${c}`}{codes.includes(c) ? '' : ' (игры там нет!)'}</option>)}
+          </select>
           <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
         </div>
       ))}

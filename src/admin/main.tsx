@@ -5,11 +5,12 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/admin.css';
 import '../styles/kit.css';
-import type { GameMsg, GameState, GroupGameId, Question, RewardType, Settings } from '../shared/types';
+import type { GameMsg, GameState, Question, RewardType, Settings } from '../shared/types';
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
-import { DEFAULT_SETTINGS, GROUP_GAMES, RECOMMENDED_LAYOUT, REWARD_INFO, isSpecialQ } from '../shared/settings';
+import { GroupPick } from './TaskPick';
+import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ, withRecommendedLayout } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
@@ -263,12 +264,12 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
       <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Порядок в префектуре: вопрос (или дуэль, если там уже кто-то стоит) → магазин → групповая игра. Групповая игра — один раз за игру, при первом приходе: ход заканчивается, и играют все. Соло-игры (пачинко, призовая машина, онсэн, чо-хан, судоку) доступны на телефоне, пока игрок стоит в префектуре; онсэн лечит. На магазин и групповую игру нельзя высадиться.</div>
       <div class="row">
         <button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button>
-        <button class="btn small" title="Пачинко, призовая машина, онсэн, чо-хан, судоку и групповые игры — по тематике префектур. Магазины и награды не меняются." onClick={() => {
-          if (confirm('Расставить соло- и групповые игры по рекомендуемой раскладке? Магазины и награды останутся как есть. Потом нажми «Сохранить».')) setS({ ...s, ...structuredClone(RECOMMENDED_LAYOUT) });
+        <button class="btn small" title="Пачинко, призовая машина, онсэн, чо-хан, судоку и групповые игры — по тематике префектур, по одной на префектуру; каждое задание групповой игры — в своей префектуре; магазины — не на соло-играх (два шага между магазинами). Награды не меняются." onClick={() => {
+          if (confirm('Расставить соло-игры, групповые игры, их задания и магазины по рекомендуемой раскладке? Награды останутся как есть. Потом нажми «Сохранить».')) setS(withRecommendedLayout(s));
         }}>🗾 Рекомендуемая раскладка игр</button>
       </div>
       <table class="qtable">
-        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th><PixIcon id="pachinko" size={16} /> Пачинко</th><th><PixIcon id="ring" size={16} /> Призовая машина</th><th><PixIcon id="onsen" size={16} /> Онсэн</th><th><PixIcon id="chohan" size={16} /> Чо-хан</th><th><PixIcon id="sudoku" size={16} /> Судоку</th><th><PixIcon id="shop" size={16} /> Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
+        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th><PixIcon id="pachinko" size={16} /> Пачинко</th><th><PixIcon id="ring" size={16} /> Призовая машина</th><th><PixIcon id="onsen" size={16} /> Онсэн</th><th><PixIcon id="chohan" size={16} /> Чо-хан</th><th><PixIcon id="sudoku" size={16} /> Судоку</th><th><PixIcon id="shop" size={16} /> Магазин</th><th>Групповая игра (номер задания)</th><th>Своих вопросов</th></tr></thead>
         <tbody>
           {PREFS.map((p) => (
             <tr>
@@ -291,17 +292,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
               <td><input type="checkbox" checked={(s.chohanPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, chohanPrefs: toggle(s.chohanPrefs ?? [], p.code) })} /></td>
               <td><input type="checkbox" checked={(s.sudokuPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, sudokuPrefs: toggle(s.sudokuPrefs ?? [], p.code) })} /></td>
               <td><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></td>
-              <td>
-                <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {
-                  const v = (e.target as HTMLSelectElement).value as GroupGameId | '';
-                  const gp = { ...s.groupPrefs };
-                  if (v) gp[p.code] = v; else delete gp[p.code];
-                  setS({ ...s, groupPrefs: gp });
-                }}>
-                  <option value="">—</option>
-                  {(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => <option value={g}>{GROUP_GAMES[g].name}</option>)}
-                </select>
-              </td>
+              <td><GroupPick s={s} code={p.code} setS={setS} /></td>
               <td class={qCount(p.code) ? '' : 'muted'}>{qCount(p.code)}</td>
             </tr>
           ))}

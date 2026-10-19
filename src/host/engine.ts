@@ -5,7 +5,7 @@
 import type {
   BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTasksFor, groupTime, iaidoRounds, isSpecialQ, soloAt } from '../shared/settings';
+import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
@@ -835,9 +835,9 @@ export class GameEngine {
   private async groupGame(epoch: number, code: number, game: GroupGameId) {
     if (game === 'dragon') return this.dragonGame(epoch, code);
     const st = this.s.settings;
-    let tasks = groupTasksFor(st, game);
-    // сашими: в родной префектуре рыбы — её задания
-    if (game === 'sashimi') {
+    let tasks = tasksForPref(st, game, code);
+    // сашими: в родной префектуре рыбы — её задания (если задание не привязано к префектуре напрямую)
+    if (game === 'sashimi' && !tasks.some((t) => t.pref === code)) {
       const local = tasks.filter((t) => t.fish && FISH[t.fish]?.prefs.includes(code));
       if (local.length) tasks = local;
     }

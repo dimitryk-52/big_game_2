@@ -43,34 +43,31 @@ export const DEFAULT_SETTINGS: Settings = {
     move2: { yen: 400, stars: 0 },
   },
   // соло-игры и групповые по префектурам: см. RECOMMENDED_LAYOUT
-  pachinkoPrefs: [23, 27, 13],
+  pachinkoPrefs: [23, 27, 11],
   // сеть магазинов: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин;
-  // 4 внутри страны, остальные на побережье там, где без этого не обойтись
+  // 4 внутри страны, остальные на побережье там, где без этого не обойтись; на соло-играх магазинов нет
   shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
   shopTime: 45,
-  groupPrefs: { 26: 'calligraphy', 34: 'calligraphy', 33: 'fukuwarai', 3: 'fukuwarai', 13: 'senryu', 38: 'senryu', 1: 'sashimi', 30: 'sashimi', 41: 'sashimi', 42: 'dragon' },
+  groupPrefs: {
+    26: 'calligraphy', 34: 'calligraphy', 19: 'calligraphy', 45: 'fukuwarai', 10: 'fukuwarai', 33: 'fukuwarai', 29: 'senryu', 24: 'senryu', 28: 'senryu',
+    43: 'iaido', 46: 'iaido', 13: 'iaido', 30: 'sashimi', 1: 'sashimi', 41: 'sashimi', 42: 'dragon',
+  },
   groupTasks: [
-    { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人' },
-    { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山' },
-    { id: 'cal3', game: 'calligraphy', text: 'Нарисуйте кандзи «сердце» 心' },
-    { id: 'cal4', game: 'calligraphy', text: 'Нарисуйте кандзи «огонь» 火' },
-    { id: 'cal5', game: 'calligraphy', text: 'Нарисуйте свой кандзи года — какой хотите' },
-    { id: 'fuku1', game: 'fukuwarai', text: 'Соберите лицо Окамэ — богини веселья', face: 'okame' },
-    { id: 'fuku2', game: 'fukuwarai', text: 'Соберите лицо Дарумы', face: 'daruma' },
-    { id: 'fuku3', game: 'fukuwarai', text: 'Соберите лицо демона Óни', face: 'oni' },
-    { id: 'sen1', game: 'senryu', text: 'Остыл мой рамен / Пока я его снимал' },
-    { id: 'sen2', game: 'senryu', text: 'Токийский вагон / Все спят стоя, как кони' },
-    { id: 'sen3', game: 'senryu', text: 'Сакура в цвету / Начальник под деревом' },
-    { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок' },
-    { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт' },
-    { id: 'sen6', game: 'senryu', text: 'Синкансэн летит / Фудзи мелькнула в окне' },
-    { id: 'iai1', game: 'iaido', text: 'Дуэль на рассвете у стен замка' },
-    { id: 'iai2', game: 'iaido', text: 'Поединок в бамбуковой роще' },
-    { id: 'iai3', game: 'iaido', text: 'Ронины встретились на мосту' },
-    { id: 'sash1', game: 'sashimi', text: 'Тунец из Кацууры', fish: 'tuna' },
-    { id: 'sash2', game: 'sashimi', text: 'Лосось с Хоккайдо', fish: 'salmon' },
-    { id: 'sash3', game: 'sashimi', text: 'Нога камчатского краба', fish: 'crab' },
-    { id: 'sash4', game: 'sashimi', text: 'Живой кальмар из Ёбуко', fish: 'squid' },
+    { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人', pref: 34 },
+    { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山', pref: 19 },
+    { id: 'cal5', game: 'calligraphy', text: 'Нарисуйте свой кандзи года — какой хотите', pref: 26 },
+    { id: 'fuku1', game: 'fukuwarai', text: 'Соберите лицо Окамэ — богини веселья', face: 'okame', pref: 45 },
+    { id: 'fuku2', game: 'fukuwarai', text: 'Соберите лицо Дарумы', face: 'daruma', pref: 10 },
+    { id: 'fuku3', game: 'fukuwarai', text: 'Соберите лицо демона Óни', face: 'oni', pref: 33 },
+    { id: 'sen3', game: 'senryu', text: 'Сакура в цвету / Начальник под деревом', pref: 29 },
+    { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок', pref: 24 },
+    { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт', pref: 28 },
+    { id: 'iai1', game: 'iaido', text: 'Дуэль на рассвете у стен замка', pref: 43 },
+    { id: 'iai2', game: 'iaido', text: 'Поединок в бамбуковой роще', pref: 46 },
+    { id: 'iai3', game: 'iaido', text: 'Ронины встретились на мосту', pref: 13 },
+    { id: 'sash1', game: 'sashimi', text: 'Тунец из Кацууры', fish: 'tuna', pref: 30 },
+    { id: 'sash3', game: 'sashimi', text: 'Нога камчатского краба', fish: 'crab', pref: 1 },
+    { id: 'sash4', game: 'sashimi', text: 'Живой кальмар из Ёбуко', fish: 'squid', pref: 41 },
   ],
   group: {
     drawTime: 30,
@@ -84,9 +81,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   ringPrefs: [14, 40, 4],
   onsenPrefs: [20],
-  chohanPrefs: [22, 10, 46],
+  chohanPrefs: [22, 7, 44],
   chohan: { bets: [100, 300, 500, 1000] },
-  sudokuPrefs: [13, 20, 43],
+  sudokuPrefs: [8, 39, 15],
   sudoku: { rewards: [{ yen: 200, stars: 0 }, { yen: 500, stars: 1 }, { yen: 1000, stars: 3 }], givens9: 40 },
   pachinko: { yenPerBall: 4, pack: 25 },
   ring: { cost: 200, prizeYen: 1500, physicalPrize: true, cellMs: 70 },
@@ -97,22 +94,52 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /**
  * Рекомендуемая раскладка игр по префектурам (кнопка в админке, вкладка «Префектуры»).
- * Соло: пачинко — Нагоя (родина пачинко), Осака, Токио; онсэн — Нагано (снежные обезьяны); чо-хан — Сидзуока (Симидзу-но Дзиротё),
- * Гумма (Кунисада Тюдзи), Кагосима; судоку — Токио (издательство Nikoli), Нагано, Кумамото.
- * Групповые: каллиграфия — Киото, Хиросима (кисти Кумано); фукуварай — Окаяма (Момотаро и óни),
- * Иватэ (легенда об óни и отпечатке руки); сэнрю — Токио (Эдо, Карай Сэнрю), Эхимэ (Мацуяма, город хайку);
- * сашими — Хоккайдо (краб, лосось), Вакаяма (тунец), Сага (кальмар Ёбуко).
+ * В каждой префектуре не больше одной игры. Магазин может стоять вместе с групповой игрой, но не с соло-игрой —
+ * иначе игрок, оставшийся поиграть, загораживает магазин.
+ * У каждой групповой игры три задания, и каждое привязано к своей префектуре (RECOMMENDED_TASK_PREFS):
+ * каллиграфия: «человек» — Хиросима (кисти Кумано), «гора» — Яманаси (Фудзи), кандзи года — Киото (его пишут в Киёмидзу-дэра);
+ * фукуварай: Окамэ — Миядзаки (Такатихо, танец Амэ-но Удзумэ), Дарума — Гумма (Такасаки, город дарум), óни — Окаяма (Момотаро);
+ * сэнрю: сакура и начальник — Нара (Ёсино), лягушка — Миэ (Ига, родина Басё), караоке — Хёго (караоке придумали в Кобе);
+ * иайдо: дуэль у замка — Кумамото (замок, здесь Мусаси написал «Книгу пяти колец»), бамбуковая роща — Кагосима (сацумская школа Дзигэн-рю, бамбук),
+ * ронины на мосту — Токио (47 ронинов, мост Рёгоку);
+ * сашими: тунец — Вакаяма (Кацуура), краб — Хоккайдо, кальмар — Сага (Ёбуко).
  * Джа-одори — Нагасаки (праздник Кунти).
- * Магазины не трогаем: они уживаются с любыми играми.
+ * Соло: пачинко — Айти (родина пачинко), Осака, Сайтама; призовая машина — Канагава, Фукуока, Мияги; онсэн — Нагано (снежные обезьяны);
+ * чо-хан — Сидзуока (Симидзу-но Дзиротё), Фукусима, Оита; судоку — Ибараки (Цукуба), Коти, Ниигата.
+ * Магазины: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин; 4 внутри страны.
  */
-export const RECOMMENDED_LAYOUT: Pick<Settings, 'pachinkoPrefs' | 'ringPrefs' | 'onsenPrefs' | 'chohanPrefs' | 'sudokuPrefs' | 'groupPrefs'> = {
+export const RECOMMENDED_LAYOUT: Pick<Settings, 'pachinkoPrefs' | 'ringPrefs' | 'onsenPrefs' | 'chohanPrefs' | 'sudokuPrefs' | 'groupPrefs' | 'shopPrefs'> = {
   pachinkoPrefs: DEFAULT_SETTINGS.pachinkoPrefs,
   ringPrefs: DEFAULT_SETTINGS.ringPrefs,
   onsenPrefs: DEFAULT_SETTINGS.onsenPrefs,
   chohanPrefs: DEFAULT_SETTINGS.chohanPrefs,
   sudokuPrefs: DEFAULT_SETTINGS.sudokuPrefs,
   groupPrefs: DEFAULT_SETTINGS.groupPrefs,
+  shopPrefs: DEFAULT_SETTINGS.shopPrefs,
 };
+
+/** задание → префектура в рекомендуемой раскладке (по id стандартных заданий) */
+export const RECOMMENDED_TASK_PREFS: Record<string, number> = Object.fromEntries(DEFAULT_SETTINGS.groupTasks.map((t) => [t.id, t.pref!]));
+
+/** настройки с рекомендуемой раскладкой: игры, магазины и привязка заданий к префектурам.
+ *  Свои задания без пары в раскладке теряют привязку — иначе могли бы указывать на префектуру без этой игры */
+export function withRecommendedLayout(s: Settings): Settings {
+  const groupTasks = s.groupTasks.map((t) => {
+    const { pref: _, ...rest } = t;
+    const pref = RECOMMENDED_TASK_PREFS[t.id];
+    return pref && RECOMMENDED_LAYOUT.groupPrefs[pref] === t.game ? { ...rest, pref } : rest;
+  });
+  return { ...s, ...structuredClone(RECOMMENDED_LAYOUT), groupTasks };
+}
+
+/** задание групповой игры для префектуры: привязанное к ней, иначе — не привязанное к другой префектуре этой игры */
+export function tasksForPref(st: Settings, game: GroupGameId, code: number): GroupTask[] {
+  const tasks = groupTasksFor(st, game);
+  const own = tasks.filter((t) => t.pref === code);
+  if (own.length) return own;
+  const loose = tasks.filter((t) => !t.pref || st.groupPrefs[t.pref] !== game);
+  return loose.length ? loose : tasks;
+}
 
 export function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
   const d = structuredClone(DEFAULT_SETTINGS);
