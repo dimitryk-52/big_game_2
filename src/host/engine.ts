@@ -3,14 +3,14 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, groupTasksFor, groupTime, iaidoRounds, isSpecialQ, soloAt } from '../shared/settings';
+import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTasksFor, groupTime, iaidoRounds, isSpecialQ, soloAt } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
-import { RHYTHM_LEAD_BEATS, ringCellAt, ringLayout, ringResult } from '../games/logic';
+import { RHYTHM_LEAD_BEATS, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 
@@ -26,6 +26,8 @@ class Aborted extends Error {}
 const ANSWER_GRACE = 700; // мс: льгота на доставку ответа после дедлайна
 const LEAD = 700; // мс: задержка старта таймера, чтобы вопрос успел дойти до всех
 const PREF_INTRO_MS = 5000; // мс: интро префектуры при первом входе
+const DRAGON_GRACE = 900; // мс: ждём промахи с телефонов, прежде чем засчитать шаг
+const DRAGON_SILENT = 6000; // мс: телефон молчит так долго во время танца — игрок выбыл
 
 interface Secrets {
   pins: Record<string, string>;
@@ -96,11 +98,12 @@ export class GameEngine {
       this.s.duel = null;
       this.s.rhythm = null;
       this.s.g = null;
+      this.s.dr = null;
       this.s.paused = false;
     } else {
       this.s = {
         v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
-        prefs: {}, q: null, duel: null, rhythm: null, g: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
+        prefs: {}, q: null, duel: null, rhythm: null, g: null, dr: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
       };
       this.sec = { pins: {}, used: [], qn: 0, logN: 0, calibIdx: 0, landingIdx: 0, rhythmN: 0, ring: {} };
     }
@@ -136,6 +139,7 @@ export class GameEngine {
       case 'req': return this.onReq(m);
       case 'rhythm': return this.onRhythm(m);
       case 'draw': return this.onDraw(m);
+      case 'dragon': return this.onDragon(m);
       case 'pnp': return this.io.fx?.('pnp', m);
       case 'ctl': return this.onCtl(m.cmd, m.args);
     }
@@ -206,6 +210,7 @@ export class GameEngine {
         this.s.q = null;
         this.s.duel = null;
         this.s.g = null;
+        this.s.dr = null;
         void (async () => {
           try {
             if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26, args?.game ?? 'calligraphy');
@@ -828,6 +833,7 @@ export class GameEngine {
   iaiSignal: { round: number; at: number; decoyAt?: number } | null = null;
 
   private async groupGame(epoch: number, code: number, game: GroupGameId) {
+    if (game === 'dragon') return this.dragonGame(epoch, code);
     const st = this.s.settings;
     let tasks = groupTasksFor(st, game);
     // сашими: в родной префектуре рыбы — её задания
@@ -1096,6 +1102,106 @@ export class GameEngine {
         this.groupDone?.();
       }, Math.max(0, g.deadline - this.now - 1000 - randInt(3000)));
     }
+  }
+
+  // ───────── джа-одори ─────────
+
+  /** промахи игроков (номера шагов), пока не засчитаны */
+  private dragonMiss: Record<string, Set<number>> = {};
+  /** прощённые ничьей шаги: промахи до этого шага включительно больше не считаются */
+  private dragonForgiven: Record<string, number> = {};
+
+  private async dragonGame(epoch: number, code: number) {
+    const st = this.s.settings;
+    const cfg = dragonSettings(st);
+    const players = shuffle(this.alivePids());
+    const d: DragonPublic = {
+      id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), pref: code, phase: 'intro', players, alive: [...players], out: {},
+      startAt: 0, bpm: cfg.bpm, accel: cfg.accel, maxBpm: Math.max(cfg.bpm, cfg.maxBpm), warm: Math.max(0, cfg.warm | 0),
+      steps: Math.max(8, cfg.steps | 0), tapLag: cfg.tapLag,
+    };
+    this.dragonMiss = {};
+    this.dragonForgiven = {};
+    this.s.dr = d;
+    this.setStage({ t: 'dragon' });
+    // ведущий объясняет правила
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 8000);
+
+    // ── танец ──
+    d.phase = 'play';
+    d.startAt = this.now + 2500;
+    this.emit();
+    this.io.fx?.('dragon', d);
+    const times = dragonTimes(d);
+    // боты сбиваются в случайный момент зачёта
+    for (const id of players) if (this.s.players[id]?.bot) this.dragonMiss[id] = new Set([d.warm + 4 + randInt(Math.min(d.steps - 4, 90))]);
+    let stopped = false;
+    const stop = () => { stopped = true; };
+    this.skipCbs.add(stop);
+    let settled = -1;
+    while (!stopped && d.alive.length > 1 && settled < times.length - 1) {
+      await new Promise<void>((r) => setT(r, 100));
+      this.check(epoch);
+      const t = this.now;
+      while (settled < times.length - 1 && times[settled + 1] + dragonWindow(d, settled + 1) + DRAGON_GRACE <= t) {
+        const step = ++settled;
+        if (step < d.warm) continue;
+        const alive = d.alive.filter((id) => this.s.players[id]);
+        const silent = (id: string) => !this.s.players[id].bot && Date.now() - (this.lastSeen[id] ?? 0) > DRAGON_SILENT;
+        const fails = alive.filter((id) => [...(this.dragonMiss[id] ?? [])].some((n) => n <= step) || silent(id));
+        if (fails.length && fails.length === alive.length) {
+          // сбились все оставшиеся — прощаем всем
+          for (const id of fails) {
+            this.dragonMiss[id] = new Set([...(this.dragonMiss[id] ?? [])].filter((n) => n > step));
+            this.dragonForgiven[id] = step;
+          }
+          d.tie = step;
+          this.emit();
+          continue;
+        }
+        if (!fails.length && alive.length === d.alive.length) continue;
+        for (const id of fails) d.out[id] = step;
+        d.alive = alive.filter((id) => !fails.includes(id));
+        if (fails.length) this.io.fx?.('dragonOut', { pids: fails, step });
+        this.emit();
+        if (d.alive.length <= 1) break;
+      }
+    }
+    this.skipCbs.delete(stop);
+
+    // ── итоги: кто дольше нёс, тот выше; выбывшие на одном шаге делят место ──
+    const levels = [Infinity, ...new Set(Object.values(d.out))].sort((a, b) => b - a);
+    const places: Record<string, number> = {};
+    const awards: Record<string, string> = {};
+    for (const id of d.players) {
+      const p = this.s.players[id];
+      if (!p) continue;
+      const lv = levels.indexOf(d.alive.includes(id) ? Infinity : d.out[id]);
+      if (lv < 0 || lv >= st.group.prizes.length) continue;
+      places[id] = lv + 1;
+      const pr = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      p.yen += pr.yen;
+      p.stars += pr.stars;
+      awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
+    }
+    d.places = places;
+    d.awards = awards;
+    d.phase = 'results';
+    this.emit();
+    this.io.fx?.('prize', {});
+    const win = d.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
+    if (win.length) this.log(`🐉 Джа-одори: дольше всех дракона нёс ${win.join(', ')}`);
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
+    this.s.dr = null;
+    this.emit();
+  }
+
+  private onDragon(m: Extract<InputMsg, { t: 'dragon' }>) {
+    const d = this.s.dr;
+    if (!d || d.id !== m.id || d.phase !== 'play' || !d.alive.includes(m.pid) || !Array.isArray(m.miss)) return;
+    const set = (this.dragonMiss[m.pid] ??= new Set());
+    const from = Math.max(d.warm, (this.dragonForgiven[m.pid] ?? -1) + 1);
+    for (const n of m.miss.slice(0, 50)) if (Number.isInteger(n) && n >= from) set.add(n);
   }
 
   // ───────── бонусы ─────────

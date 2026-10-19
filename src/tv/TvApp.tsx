@@ -16,6 +16,7 @@ import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
+import { DragonTv } from './DragonTv';
 import { refreshMusic, setMusic } from './bgMusic';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 
@@ -50,6 +51,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'duel': sfx.duel(); break;
         case 'iaiCut': sfx.slash(); break;
         case 'iaiEarly': sfx.early(); break;
+        case 'dragonOut': sfx.stumble(); break;
         case 'prize': {
           sfx.fanfare();
           const p = host.state.players[d.pid];
@@ -163,13 +165,13 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
   // и в вопросах с аудио/видео; в обычных вопросах тише
   const qMedia = st.t === 'question' && (s.q?.media?.type === 'audio' || s.q?.media?.type === 'video');
-  // иайдо — в тишине, чтобы был слышен «кин!»
+  // иайдо — в тишине, чтобы был слышен «кин!»; джа-одори — под свои барабаны
   const iaiQuiet = st.t === 'group' && s.g?.game === 'iaido' && s.g.phase === 'draw';
-  const track = st.t === 'lobby' || st.t === 'rhythm' || qMedia || iaiQuiet ? null : s.duel ? 'duel' : 'map';
+  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null : s.duel ? 'duel' : 'map';
   useEffect(() => { setMusic(track, st.t === 'question'); }, [track, st.t]);
 
   return (
-    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '')}>
+    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '') + (st.t === 'dragon' && s.dr ? ' dragon-on' : '')}>
       <div class="tv-map" ref={mapEl} />
       {sceneBg.src
         ? <img class={'tv-qbg' + (sceneZoom.current ? ' zoom' : '') + (sceneBg.smooth ? ' smooth' : '')} key="scene-bg" src={sceneBg.src} alt="" draggable={false} />
@@ -226,6 +228,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         </Prompt>
       )}
       {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} iaiSignal={host.engine.iaiSignal} />}
+      {st.t === 'dragon' && s.dr && <DragonTv s={s} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
       {st.t === 'end' && <EndScreen s={s} />}

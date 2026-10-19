@@ -60,6 +60,7 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'senryu' })}>📜 Сэнрю</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref, game: 'iaido' })}>⚔️ Иайдо</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново). Рыба — по выбранной префектуре" onClick={() => send('groupTest', { pref, game: 'sashimi' })}>🔪 Сашими</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref: 42, game: 'dragon' })}>🐉 Джа-одори</button>
           <button class="btn small" title="Открыть магазин игроку сейчас (ход начнётся заново)" onClick={() => send('shopTest', { pid })}>🛒 Магазин</button>
           <button class="btn small" onClick={() => send('revealAll')}>Открыть все префектуры</button>
           <button class="btn small" onClick={() => send('hideAll')}>Закрыть все префектуры</button>

@@ -1,4 +1,4 @@
-import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
+import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -48,7 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // 4 внутри страны, остальные на побережье там, где без этого не обойтись
   shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
   shopTime: 45,
-  groupPrefs: { 26: 'calligraphy', 34: 'calligraphy', 33: 'fukuwarai', 3: 'fukuwarai', 13: 'senryu', 38: 'senryu', 1: 'sashimi', 30: 'sashimi', 41: 'sashimi' },
+  groupPrefs: { 26: 'calligraphy', 34: 'calligraphy', 33: 'fukuwarai', 3: 'fukuwarai', 13: 'senryu', 38: 'senryu', 1: 'sashimi', 30: 'sashimi', 41: 'sashimi', 42: 'dragon' },
   groupTasks: [
     { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人' },
     { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山' },
@@ -80,6 +80,7 @@ export const DEFAULT_SETTINGS: Settings = {
     showMs: 4000,
     // звёзды — только тройке лидеров, йены — всем местам до 7-го
     prizes: [{ yen: 1000, stars: 3 }, { yen: 700, stars: 2 }, { yen: 500, stars: 1 }, { yen: 350, stars: 0 }, { yen: 250, stars: 0 }, { yen: 150, stars: 0 }, { yen: 100, stars: 0 }],
+    dragon: { bpm: 90, accel: 8, maxBpm: 220, warm: 8, steps: 160, tapLag: 30 },
   },
   ringPrefs: [14, 40, 4],
   onsenPrefs: [20],
@@ -101,6 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
  * Групповые: каллиграфия — Киото, Хиросима (кисти Кумано); фукуварай — Окаяма (Момотаро и óни),
  * Иватэ (легенда об óни и отпечатке руки); сэнрю — Токио (Эдо, Карай Сэнрю), Эхимэ (Мацуяма, город хайку);
  * сашими — Хоккайдо (краб, лосось), Вакаяма (тунец), Сага (кальмар Ёбуко).
+ * Джа-одори — Нагасаки (праздник Кунти).
  * Магазины не трогаем: они уживаются с любыми играми.
  */
 export const RECOMMENDED_LAYOUT: Pick<Settings, 'pachinkoPrefs' | 'ringPrefs' | 'onsenPrefs' | 'chohanPrefs' | 'sudokuPrefs' | 'groupPrefs'> = {
@@ -119,6 +121,11 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group', 'chohan', 'sudoku'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
   // в старых настройках награды только за 3 места — остальные места берём стандартные
   out.group.prizes = d.group.prizes.map((x, i) => out.group.prizes[i] ?? x);
+  // джа-одори появилась позже сохранённых настроек: один раз закрепляем её за Нагасаки, если там свободно.
+  // После сохранения в админке group.dragon уже есть — дальше решает ведущий
+  if (!saved.group?.dragon && saved.groupPrefs && !Object.values(saved.groupPrefs).includes('dragon') && !saved.groupPrefs[42]) {
+    out.groupPrefs = { ...saved.groupPrefs, 42: 'dragon' };
+  }
   return out;
 }
 
@@ -151,6 +158,7 @@ export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji:
   senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допиши последнюю строку — 5 слогов', doing: 'Сочиняют…', call: 'Заверши хокку!' },
   iaido: { name: 'Иайдо', ja: '居合道', kanji: '斬', how: 'Жми, когда на ТВ вспыхнет «!». Раньше — выбываешь из раунда', doing: 'Ждём сигнала…', call: 'Руби первым!' },
   sashimi: { name: 'Сашими', ja: '刺身', kanji: '刺', how: 'Отрежь кусок нужного веса. Побеждает самый точный', doing: 'Примеряются ножом…', call: 'Отрежь точно!', scored: true },
+  dragon: { name: 'Джа-одори', ja: '蛇踊り', kanji: '龍', how: 'Несём дракона: жмите ЛЕВУЮ и ПРАВУЮ по очереди в такт барабану. Сбился — выбыл', doing: 'Шагают…', call: 'Неси дракона!' },
 };
 
 /** соло-игры: доступны на телефоне, пока игрок стоит в префектуре; на паузе во время вопросов и групповых игр.
@@ -169,9 +177,14 @@ export function soloAt(st: Settings, code: number | null | undefined): SoloGameI
   return (Object.keys(SOLO_GAMES) as SoloGameId[]).filter((g) => (st[SOLO_GAMES[g].key] ?? DEFAULT_SETTINGS[SOLO_GAMES[g].key]).includes(code));
 }
 
+/** настройки джа-одори (в старых сохранённых настройках их нет) */
+export function dragonSettings(st: Settings): DragonSettings {
+  return { ...DEFAULT_SETTINGS.group.dragon!, ...(st.group.dragon ?? {}) };
+}
+
 /** время на работу в групповой игре, сек */
 export function groupTime(st: Settings, game: GroupGameId) {
-  if (game === 'iaido') return 0;
+  if (game === 'iaido' || game === 'dragon') return 0;
   return game === 'calligraphy' ? st.group.drawTime : st.group.times?.[game] ?? DEFAULT_SETTINGS.group.times![game]!;
 }
 

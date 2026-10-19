@@ -1,5 +1,6 @@
 // Детерминированная логика мини-игр, общая для хоста, ТВ и телефона.
 import { rng } from '../shared/util';
+import type { DragonPublic } from '../shared/types';
 
 // ───── Призовое кольцо ─────
 export const RING_CELLS = 24;
@@ -53,6 +54,53 @@ export function rhythmChart(seed: number, beats: number): RhythmNote[] {
   return notes;
 }
 export const RHYTHM_WINDOW = { perfect: 70, good: 150 };
+
+// ───── Джа-одори (дракон) ─────
+// Шаг i — левая нога при чётном i, правая при нечётном. Перед первым шагом — отсчёт DRAGON_COUNT долей.
+// Первые warm шагов — разминка, дальше зачёт; каждые 8 шагов зачёта темп растёт на accel %, до maxBpm.
+export const DRAGON_COUNT = 4;
+export const DRAGON_BAR = 8;
+export type DragonTiming = Pick<DragonPublic, 'startAt' | 'bpm' | 'accel' | 'maxBpm' | 'warm' | 'steps'>;
+
+export function dragonBpm(d: DragonTiming, i: number) {
+  const bar = Math.max(0, Math.floor((i - d.warm) / DRAGON_BAR));
+  return Math.min(d.maxBpm, d.bpm * Math.pow(1 + d.accel / 100, bar));
+}
+
+const timesCache = new Map<string, number[]>();
+/** время хоста каждого шага (разминка + зачёт) */
+export function dragonTimes(d: DragonTiming): number[] {
+  const key = `${d.startAt}|${d.bpm}|${d.accel}|${d.maxBpm}|${d.warm}|${d.steps}`;
+  let out = timesCache.get(key);
+  if (out) return out;
+  out = [];
+  let t = d.startAt + (DRAGON_COUNT * 60000) / d.bpm;
+  for (let i = 0; i < d.warm + d.steps; i++) {
+    if (i > 0) t += 60000 / dragonBpm(d, i);
+    out.push(t);
+  }
+  if (timesCache.size > 8) timesCache.clear();
+  timesCache.set(key, out);
+  return out;
+}
+
+/** окно попадания шага i, мс (на быстром темпе уже, чтобы окна соседних шагов не слипались) */
+export function dragonWindow(d: DragonTiming, i: number) {
+  return Math.min(150, (60000 / dragonBpm(d, i)) * 0.42);
+}
+
+export const dragonFoot = (i: number): 'L' | 'R' => (i % 2 ? 'R' : 'L');
+
+/** индекс шага, ближайшего ко времени t */
+export function dragonNearest(times: number[], t: number) {
+  let lo = 0, hi = times.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo > 0 && t - times[lo - 1] < times[lo] - t ? lo - 1 : lo;
+}
 
 // ───── Пачинко ─────
 export const PACHI = {

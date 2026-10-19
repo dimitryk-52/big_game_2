@@ -75,7 +75,7 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
           {head}
           {g.game === 'sashimi'
             ? <FishBoard fish={g.fish ?? 'tuna'} view={{}} scale={5} class="big" />
-            : <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', iaido: '⚔️', sashimi: '🔪' }[g.game]}</div>}
+            : <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', iaido: '⚔️', sashimi: '🔪', dragon: '🐉' }[g.game]}</div>}
           <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />

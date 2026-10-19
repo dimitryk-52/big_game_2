@@ -75,7 +75,7 @@ export interface PrefState {
 export type SoloGameId = 'pachinko' | 'ring' | 'onsen' | 'chohan' | 'sudoku';
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon';
 /** что режем в «Сашими» */
 export type FishId = 'tuna' | 'salmon' | 'crab' | 'squid';
 /** лицо для фукуварай */
@@ -138,6 +138,35 @@ export interface IaiRound {
   cut: string[];
   /** реакция, мс */
   times?: Record<string, number>;
+}
+
+/** джа-одори (танец дракона, Нагасаки): все шагают Л-П в такт, сбившийся выбывает со своим куском дракона */
+export interface DragonPublic {
+  id: number;
+  pref: number;
+  phase: 'intro' | 'play' | 'results';
+  /** цепочка от головы к хвосту */
+  players: string[];
+  /** ещё несут дракона */
+  alive: string[];
+  /** выбывшие: игрок → номер шага, на котором сбился */
+  out: Record<string, number>;
+  /** время хоста первой доли отсчёта; 0 — ещё не назначено */
+  startAt: number;
+  bpm: number;
+  /** ускорение за каждые 8 шагов зачёта, % */
+  accel: number;
+  maxBpm: number;
+  /** шагов разминки (без зачёта) */
+  warm: number;
+  /** шагов зачёта максимум; дошли до конца — оставшиеся делят первое место */
+  steps: number;
+  /** поправка на задержку касания, мс */
+  tapLag: number;
+  /** ничья на шаге: сбились все оставшиеся — никто не выбыл */
+  tie?: number;
+  places?: Record<string, number>;
+  awards?: Record<string, string>;
 }
 
 export type QContext = 'calib' | 'pref' | 'duel' | 'revive';
@@ -211,6 +240,7 @@ export type Stage =
   /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
   | { t: 'shop'; pid: string; deadline: number; entered: boolean }
   | { t: 'group' }
+  | { t: 'dragon' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
   | { t: 'extraTurn'; pid: string; deadline: number }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
@@ -281,6 +311,8 @@ export interface Settings {
     showMs: number;
     /** награды за места: [0] — 1 место и т. д. */
     prizes: { yen: number; stars: number }[];
+    /** джа-одори: темп, ускорение, разминка */
+    dragon?: DragonSettings;
   };
   ringPrefs: number[];
   /** префектуры с онсэном: отдых лечит */
@@ -300,6 +332,15 @@ export interface Settings {
   prizeNames: string[];
 }
 
+export interface DragonSettings {
+  bpm: number;
+  accel: number;
+  maxBpm: number;
+  warm: number;
+  steps: number;
+  tapLag: number;
+}
+
 export interface GameState {
   v: number;
   room: string;
@@ -314,6 +355,7 @@ export interface GameState {
   duel: DuelPublic | null;
   rhythm: RhythmPublic | null;
   g?: GroupPublic | null;
+  dr?: DragonPublic | null;
   log: LogEntry[];
   settings: Settings;
   paused: boolean;
@@ -347,6 +389,8 @@ export type InputMsg =
   | { t: 'req'; pid: string; rid: number; op: string; args?: any }
   | { t: 'pnp'; pid: string; ev: any }
   | { t: 'rhythm'; pid: string; id: number; score: number; hits: number; total: number }
+  /** джа-одори: шаги, на которых игрок сбился (телефон судит сам); без промахов — «я на связи» */
+  | { t: 'dragon'; pid: string; id: number; miss: number[] }
   | { t: 'ctl'; cmd: string; args?: any };
 
 /** хост → все (канал game) */

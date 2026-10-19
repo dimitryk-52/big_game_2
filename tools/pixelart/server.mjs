@@ -27,6 +27,9 @@ const MODELS = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview'];
 
 fs.mkdirSync(outDir, { recursive: true });
 
+/** куда кнопка «В игру» может положить картинку (относительно src/img) */
+const GAME_TARGETS = /^dragon\/(street|sky|head|body|tail|pearl)\.png$/;
+
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
@@ -96,11 +99,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, result);
     }
 
-    // Сохранение готовой (уже обработанной в браузере) картинки в tools/pixelart/out
+    // Сохранение готовой (уже обработанной в браузере) картинки в tools/pixelart/out,
+    // а для готовых заданий — прямо в игру (src/img/…, только файлы из списка GAME_TARGETS)
     if (req.method === 'POST' && url.pathname === '/api/save') {
-      const { name, dataUrl } = await readJson(req);
+      const { name, dataUrl, target } = await readJson(req);
       const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl || '');
       if (!m) return send(res, 400, { error: 'Ожидается PNG' });
+      if (target) {
+        if (!GAME_TARGETS.test(target)) return send(res, 400, { error: 'Нельзя сохранить сюда: ' + target });
+        const file = path.join(root, 'src/img', target);
+        fs.writeFileSync(file, Buffer.from(m[1], 'base64'));
+        return send(res, 200, { file: path.relative(root, file) });
+      }
       const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const file = `${slug(name)}_${stamp}.png`;
       fs.writeFileSync(path.join(outDir, file), Buffer.from(m[1], 'base64'));

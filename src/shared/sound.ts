@@ -1,5 +1,5 @@
 // 8-битные звуки на WebAudio (без файлов) + музыка для ритм-игры.
-import { RHYTHM_LEAD_BEATS, rhythmChart } from '../games/logic';
+import { DRAGON_BAR, DRAGON_COUNT, RHYTHM_LEAD_BEATS, rhythmChart, type DragonTiming } from '../games/logic';
 import { now, rng } from './util';
 
 let ctx: AudioContext | null = null;
@@ -23,7 +23,7 @@ export function setSound(on: boolean) {
   soundOn = on;
 }
 
-function tone(freq: number, dur: number, type: OscillatorType = 'square', vol = 0.3, when = 0, slide = 0) {
+function tone(freq: number, dur: number, type: OscillatorType = 'square', vol = 0.3, when = 0, slide = 0, out?: AudioNode) {
   if (!soundOn) return;
   const a = audio();
   const t = a.currentTime + when;
@@ -34,12 +34,12 @@ function tone(freq: number, dur: number, type: OscillatorType = 'square', vol = 
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master!);
+  o.connect(g).connect(out ?? master!);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
 
-function noise(dur: number, vol = 0.3, when = 0, hp = 1000) {
+function noise(dur: number, vol = 0.3, when = 0, hp = 1000, out?: AudioNode) {
   if (!soundOn) return;
   const a = audio();
   const t = a.currentTime + when;
@@ -55,7 +55,7 @@ function noise(dur: number, vol = 0.3, when = 0, hp = 1000) {
   const g = a.createGain();
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(f).connect(g).connect(master!);
+  src.connect(f).connect(g).connect(out ?? master!);
   src.start(t);
 }
 
@@ -82,7 +82,54 @@ export const sfx = {
   /** нож по рыбе */
   chop: () => { noise(0.06, 0.3, 0, 2500); tone(180, 0.1, 'square', 0.25, 0.03, -60); },
   jackpot: () => { for (let i = 0; i < 12; i++) tone(600 + i * 80, 0.08, 'square', 0.18, i * 0.06); },
+  stumble: () => { noise(0.25, 0.35, 0, 300); tone(200, 0.3, 'triangle', 0.3, 0, -140); tone(120, 0.4, 'square', 0.15, 0.12, -60); },
 };
+
+/**
+ * Барабаны джа-одори на ТВ: отсчёт «ка» по краю, на каждый шаг — удар «дон», в начале такта — акцент
+ * и нота флейты, на старте зачёта — гонг. Ноты планируются порциями на полсекунды вперёд,
+ * поэтому танец можно остановить в любой момент (возвращаемая функция).
+ */
+export function startDragonDrums(d: DragonTiming, times: number[], latencyMs = 0): () => void {
+  const a = audio();
+  const out = a.createGain();
+  out.connect(master!);
+  const outLat = ((a as any).outputLatency ?? 0) + (a.baseLatency ?? 0);
+  // время хоста → время AudioContext (с поправкой на задержку вывода)
+  const at = (th: number) => Math.max(0, (th - now()) / 1000 - outLat - latencyMs / 1000);
+  const beat0 = 60000 / d.bpm;
+  const count = Array.from({ length: DRAGON_COUNT }, (_, i) => d.startAt + i * beat0);
+  // пентатоника для флейты-синобуэ
+  const fue = [0, 2, 5, 7, 9, 12, 14].map((x) => 880 * Math.pow(2, x / 12));
+  const r = rng(d.startAt);
+  let ci = 0, si = 0;
+  const pump = () => {
+    if (!soundOn) return;
+    const horizon = now() + 600;
+    for (; ci < count.length && count[ci] < horizon; ci++) {
+      if (count[ci] < now() - 50) continue;
+      tone(ci === count.length - 1 ? 1400 : 1000, 0.05, 'square', 0.25, at(count[ci]), 0, out);
+      noise(0.03, 0.2, at(count[ci]), 4000, out);
+    }
+    for (; si < times.length && times[si] < horizon; si++) {
+      if (times[si] < now() - 50) continue;
+      const w = at(times[si]);
+      const bar = si >= d.warm && (si - d.warm) % DRAGON_BAR === 0;
+      tone(bar ? 75 : 95, bar ? 0.35 : 0.22, 'sine', bar ? 0.9 : 0.6, w, -40, out); // дон
+      noise(0.06, bar ? 0.3 : 0.15, w, 600, out);
+      if (si % 2) noise(0.02, 0.07, w + (times[si + 1] - times[si] || 300) / 2000, 7000, out); // ка между шагами
+      if (si === d.warm) { tone(55, 1.6, 'triangle', 0.5, w, 0, out); noise(1.2, 0.18, w, 2500, out); } // гонг: начался зачёт
+      if (bar || (si % 4 === 0 && r() < 0.6)) tone(fue[Math.floor(r() * fue.length)], 0.18, 'triangle', 0.12, w, 0, out);
+    }
+  };
+  pump();
+  const timer = setInterval(pump, 150);
+  return () => {
+    clearInterval(timer);
+    out.gain.setTargetAtTime(0, a.currentTime, 0.05);
+    setTimeout(() => out.disconnect(), 400);
+  };
+}
 
 /**
  * Музыка ритм-игры на ТВ. startAt — время хоста нулевой доли.
