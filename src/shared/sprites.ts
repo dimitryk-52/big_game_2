@@ -268,41 +268,57 @@ export function pixelIconUrl(id: string, scale = 3) {
 }
 
 const badgeCache = new Map<string, HTMLCanvasElement>();
-/**
- * Иконка награды на плашке-выноске: светлый фон, тёмный контур со срезанными углами
- * и треугольник-указатель вниз (кончик — нижний центр холста). scale — размер пикселя.
- */
 /** цвета плашки: награда — кремовая, автомат (постоянное место, не награда) — голубая */
 const BADGE_COLORS = { reward: ['#fff3d6', '#e2c48f'], machine: ['#d4ecff', '#8fb8e6'], group: ['#ffd9f3', '#e59ccf'] } as const;
 export type BadgeKind = keyof typeof BADGE_COLORS;
+export type BadgePart = { id: string; kind: BadgeKind };
 
-export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): HTMLCanvasElement {
-  const key = id + '|' + scale + '|' + kind;
+/**
+ * Иконка награды на плашке-выноске: светлый фон, тёмный контур со срезанными углами
+ * и треугольник-указатель вниз (кончик — нижний центр холста). scale — размер пикселя.
+ * Можно передать несколько иконок — одна общая плашка, у каждой иконки свой цвет фона,
+ * между ними тёмная перегородка (для маленьких префектур, где две выноски не помещаются).
+ */
+export function pixelBadge(id: string | BadgePart[], scale = 1, kind: BadgeKind = 'reward'): HTMLCanvasElement {
+  const parts = typeof id === 'string' ? [{ id, kind }] : id;
+  const key = parts.map((p) => p.id + ':' + p.kind).join(',') + '|' + scale;
   const c0 = badgeCache.get(key);
   if (c0) return c0;
-  const g = iconGrid(id);
-  const h = g.length, w = g[0]?.length ?? 0;
+  const grids = parts.map((p) => iconGrid(p.id));
+  const h = Math.max(...grids.map((g) => g.length));
   const PAD = 2;
-  const bw = w + PAD * 2 + 2, bh = h + PAD * 2 + 2; // плашка с контуром
+  // отрезки плашки по иконкам: [начало, конец) по x внутри контура; между отрезками — перегородка в 1 пиксель
+  const segs: [number, number][] = [];
+  let x0 = 1;
+  for (const g of grids) {
+    const sw = (g[0]?.length ?? 0) + PAD * 2;
+    segs.push([x0, x0 + sw]);
+    x0 += sw + 1;
+  }
+  const bw = x0, bh = h + PAD * 2 + 2; // плашка с контуром
   // середина плашки: один пиксель при нечётной ширине, два — при чётной (кончик тоже в два пикселя)
   const cl = Math.floor((bw - 1) / 2), cr = Math.ceil((bw - 1) / 2);
   const W = bw, H = bh + 4; // + указатель и тень
-  // карта клеток: 0 пусто, 1 контур, 2 фон, 3 тень фона снизу
+  // карта клеток: 0 пусто, 1 контур, 2+2i фон i-й иконки, 3+2i тень её фона снизу
+  const segAt = (x: number) => Math.max(0, segs.findIndex(([a, b]) => x >= a && x < b));
   const cell = Array.from({ length: H }, () => new Uint8Array(W));
   for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
     const cornerOut = (x === 0 || x === bw - 1) && (y === 0 || y === bh - 1);
     if (cornerOut) continue;
     const edge = x === 0 || y === 0 || x === bw - 1 || y === bh - 1;
     const cornerIn = (x === 1 || x === bw - 2) && (y === 1 || y === bh - 2);
-    cell[y][x] = edge || cornerIn ? 1 : y === bh - 2 ? 3 : 2;
+    const wall = segs.some(([, b], i) => i < segs.length - 1 && x === b);
+    const i = segAt(x);
+    cell[y][x] = edge || cornerIn || wall ? 1 : y === bh - 2 ? 3 + i * 2 : 2 + i * 2;
   }
-  // указатель: треугольник, сливается с плашкой
+  // указатель: треугольник, сливается с плашкой (цвет — той иконки, над которой он стоит)
+  const tip = 3 + segAt(segs.some(([a, b]) => cl >= a && cl < b) ? cl : cl - 1) * 2;
   for (let k = 0; k < 4; k++) {
     const y = bh - 1 + k, half = 3 - k;
     for (let x = cl - half - 1; x <= cr + half + 1; x++) {
       if (x < 0 || x >= W) continue;
       const border = x === cl - half - 1 || x === cr + half + 1 || k === 3;
-      cell[y][x] = border ? 1 : 3;
+      cell[y][x] = border ? 1 : tip;
     }
   }
   const c = document.createElement('canvas');
@@ -313,7 +329,7 @@ export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): H
   // тень всей выноски на пиксель ниже
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (cell[y][x]) px(x, y + 1);
-  const colors = ['', '#0d0b1e', ...BADGE_COLORS[kind]];
+  const colors = ['', '#0d0b1e', ...parts.flatMap((p) => BADGE_COLORS[p.kind])];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const v = cell[y][x];
     if (!v) continue;
@@ -321,19 +337,22 @@ export function pixelBadge(id: string, scale = 1, kind: BadgeKind = 'reward'): H
     ctx.fillStyle = colors[v];
     px(x, y);
   }
-  // иконка с тонким контуром внутри плашки
-  const ox = 1 + PAD, oy = 1 + PAD;
-  const filled = (x: number, y: number) => !!g[y]?.[x];
-  ctx.fillStyle = '#0d0b1e';
-  for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) {
-    if (filled(x, y)) continue;
-    if (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1)) px(ox + x, oy + y);
-  }
-  g.forEach((r, y) => r.forEach((col, x) => {
-    if (!col) return;
-    ctx.fillStyle = col;
-    px(ox + x, oy + y);
-  }));
+  // иконки с тонким контуром внутри плашки
+  grids.forEach((g, i) => {
+    const gh = g.length, gw = g[0]?.length ?? 0;
+    const ox = segs[i][0] + PAD, oy = 1 + PAD + Math.floor((h - gh) / 2);
+    const filled = (x: number, y: number) => !!g[y]?.[x];
+    ctx.fillStyle = '#0d0b1e';
+    for (let y = -1; y <= gh; y++) for (let x = -1; x <= gw; x++) {
+      if (filled(x, y)) continue;
+      if (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1)) px(ox + x, oy + y);
+    }
+    g.forEach((r, y) => r.forEach((col, x) => {
+      if (!col) return;
+      ctx.fillStyle = col;
+      px(ox + x, oy + y);
+    }));
+  });
   badgeCache.set(key, c);
   return c;
 }

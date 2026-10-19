@@ -7,7 +7,7 @@ import {
   CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { characterCanvas, pixelBadge, type BadgeKind } from '../shared/sprites';
+import { characterCanvas, pixelBadge, type BadgePart } from '../shared/sprites';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
@@ -74,7 +74,7 @@ export class MapView {
   private outline: Sprite | null = null;
   private tokens = new Map<string, Token>();
   private labels = new Map<number, Text>();
-  private icons = new Map<string, Sprite & { icon?: string; kind?: BadgeKind; bob?: number }>();
+  private icons = new Map<number, Sprite & { key?: string; bobs?: boolean; bob?: number }>();
   private particles: { g: Graphics; vx: number; vy: number; life: number; max: number }[] = [];
   private lastLookKey = '';
   private last: MapUpdate | null = null;
@@ -255,36 +255,39 @@ export class MapView {
   private updateIcons(u: MapUpdate) {
     // выноски над центром префектуры; пока там стоит игрок — прячем, чтобы не закрывать его имя.
     // Награда (кремовая, покачивается) — пока её не забрали; автомат (голубой, неподвижный) — всегда,
-    // это постоянное место: к нему можно вернуться и играть ещё. Если есть и то и другое — автомат левее.
-    const want = new Map<string, { code: number; icon: string; dx: number; kind: BadgeKind }>();
+    // это постоянное место: к нему можно вернуться и играть ещё. Всё, что есть в префектуре, —
+    // в одной общей выноске (автомат левее, групповая игра правее), чтобы влезало в маленькие префектуры.
+    const want = new Map<number, BadgePart[]>();
+    const add = (code: number, part: BadgePart) => {
+      if (!want.has(code)) want.set(code, []);
+      want.get(code)!.push(part);
+    };
     const occupied = new Set(u.players.map((p) => p.pref));
     const shown = (c: number) => !!u.prefs[c]?.rev && !occupied.has(c);
-    const hasReward = (c: number) => u.showRewards !== false && shown(c) && !u.prefs[c].taken;
-    for (const c of PREF_CODES) if (hasReward(c)) want.set('w' + c, { code: c, icon: u.prefs[c].reward, dx: 0, kind: 'reward' });
     const machines: [string, number[]][] = [['pachinko', u.machines?.pachinko ?? []], ['ring', u.machines?.ring ?? []]];
-    for (const [icon, codes] of machines) for (const c of codes) {
-      if (shown(c)) want.set(icon + c, { code: c, icon, dx: hasReward(c) ? -24 : 0, kind: 'machine' });
+    for (const [icon, codes] of machines) for (const c of codes) if (shown(c)) add(c, { id: icon, kind: 'machine' });
+    for (const c of u.shops ?? []) if (!occupied.has(c)) add(c, { id: 'shop', kind: 'machine' });
+    for (const c of PREF_CODES) {
+      if (u.showRewards !== false && shown(c) && !u.prefs[c].taken) add(c, { id: u.prefs[c].reward, kind: 'reward' });
     }
-    for (const c of u.shops ?? []) if (!occupied.has(c)) want.set('shop' + c, { code: c, icon: 'shop', dx: hasReward(c) ? -24 : 0, kind: 'machine' });
-    for (const [c, g] of Object.entries(u.groupGames ?? {})) {
-      const code = Number(c), other = [...want.values()].some((w) => w.code === code);
-      want.set('group' + code, { code, icon: 'group_' + g, dx: other ? 24 : 0, kind: 'group' });
-    }
-    for (const [k, t] of this.icons) if (!want.has(k) || t.kind !== want.get(k)!.kind) { t.destroy(); this.icons.delete(k); }
-    for (const [k, w] of want) {
-      let t = this.icons.get(k);
-      if (!t || t.icon !== w.icon) {
+    for (const [c, g] of Object.entries(u.groupGames ?? {})) add(Number(c), { id: 'group_' + g, kind: 'group' });
+    const sig = (parts: BadgePart[]) => parts.map((p) => p.id + ':' + p.kind).join(',');
+    for (const [k, t] of this.icons) if (!want.has(k)) { t.destroy(); this.icons.delete(k); }
+    for (const [code, parts] of want) {
+      let t = this.icons.get(code);
+      const key = sig(parts);
+      if (!t || t.key !== key) {
         t?.destroy();
-        const tex = Texture.from(pixelBadge(w.icon, 1, w.kind));
+        const tex = Texture.from(pixelBadge(parts, 1));
         tex.source.scaleMode = 'nearest';
-        t = Object.assign(new Sprite(tex), { icon: w.icon, kind: w.kind, bob: Math.random() * 6 });
+        t = Object.assign(new Sprite(tex), { key, bobs: parts.some((p) => p.kind === 'reward'), bob: Math.random() * 6 });
         // якорь — кончик указателя (посередине снизу)
         t.anchor.set(0.5, (tex.height - 1) / tex.height);
         this.iconLayer.addChild(t);
-        this.icons.set(k, t);
+        this.icons.set(code, t);
       }
-      const a = prefAnchorWorld(w.code);
-      t.position.set(a.x + w.dx, a.y);
+      const a = prefAnchorWorld(code);
+      t.position.set(a.x, a.y);
     }
   }
 
@@ -573,7 +576,7 @@ export class MapView {
     const iconScale = 1.4 * Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
     for (const t of this.icons.values()) {
       t.scale.set(iconScale);
-      t.pivot.y = t.kind === 'reward' ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0;
+      t.pivot.y = t.bobs ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0;
       t.visible = this.iconsAlways || this.cam.z > 0.75;
     }
 
