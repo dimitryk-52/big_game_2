@@ -3,9 +3,9 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, BusyKind, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, groupTasksFor, groupTime, iaidoRounds, isSpecialQ } from '../shared/settings';
+import { BONUS_INFO, BUSY_INFO, BUSY_KINDS, GROUP_GAMES, REWARD_INFO, STAY_MS, busyKindsAt, groupTasksFor, groupTime, iaidoRounds, isSpecialQ } from '../shared/settings';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -85,7 +85,8 @@ export class GameEngine {
       this.s = snapshot.s;
       this.sec = snapshot.sec;
       this.s.settings = settings;
-      for (const p of Object.values(this.s.players)) { p.online = !!p.bot; p.busy = null; }
+      // busy не сбрасываем: игрок остался на круг — это часть игры, а не состояние телефона
+      for (const p of Object.values(this.s.players)) p.online = !!p.bot;
       this.s.q = null;
       this.s.duel = null;
       this.s.rhythm = null;
@@ -190,7 +191,16 @@ export class GameEngine {
         this.emit();
         break;
       }
+      case 'setBusy': {
+        // отладка: сразу занять игрока делом на круг (или снять)
+        const p = this.s.players[args?.pid];
+        if (!p) break;
+        p.busy = BUSY_KINDS.includes(args?.busy) ? args.busy : null;
+        this.emit();
+        break;
+      }
       case 'groupTest':
+      case 'stayTest':
       case 'shopTest': {
         // отладка: прервать текущий ход, сыграть сцену и продолжить игру с начала хода
         if (this.s.joinOrder.length < (cmd === 'groupTest' ? 2 : 1)) break;
@@ -203,6 +213,7 @@ export class GameEngine {
         void (async () => {
           try {
             if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26, args?.game ?? 'calligraphy');
+            else if (cmd === 'stayTest') { if (p) await this.offerStay(ep, p, p.pref, BUSY_KINDS); }
             else if (p) await this.shopVisit(ep, p, true);
           } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
           if (ep === this.epoch) void this.run(ep);
@@ -467,9 +478,12 @@ export class GameEngine {
       while (this.s.turnIdx < this.s.turnOrder.length) {
         await this.gate(epoch);
         const pid = this.s.turnOrder[this.s.turnIdx];
-        if (this.s.players[pid]) await this.turn(epoch, pid);
-        // редкий бонус: после хода можно сходить ещё раз
-        while (this.s.players[pid] && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
+        if (this.s.players[pid]?.busy) await this.busyTurn(epoch, this.s.players[pid]);
+        else if (this.s.players[pid]) {
+          await this.turn(epoch, pid);
+          // редкий бонус: после хода можно сходить ещё раз (если не остался на круг)
+          while (this.s.players[pid] && !this.s.players[pid].busy && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
+        }
         this.s.turnIdx++;
         this.snapshot();
       }
@@ -545,6 +559,42 @@ export class GameEngine {
       await this.gate(epoch);
       await this.groupGame(epoch, to, game);
     }
+
+    // пачинко, призовая машина, онсэн — в самом конце хода, уже после групповой игры
+    await this.offerStay(epoch, p, to);
+  }
+
+  // ───────── остаться на круг ─────────
+
+  /** предложить остаться здесь на целый круг: пропуск хода и викторин, но групповые игры и дуэли — как обычно */
+  private async offerStay(epoch: number, p: Player, code: number | null, kinds = busyKindsAt(this.s.settings, code)) {
+    if (!kinds.length || !this.s.players[p.id]) return;
+    await this.gate(epoch);
+    const ms = STAY_MS;
+    this.setStage({ t: 'stay', pid: p.id, deadline: this.now + ms, kinds });
+    const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'stay' && m.pid === p.id ? (kinds.includes(m.value) ? (m.value as BusyKind) : null) : undefined), p.online || p.bot ? ms + 400 : 3000);
+    if (!v || !this.s.players[p.id]) return;
+    p.busy = v;
+    let sub = 'Пропускает следующий ход';
+    if (v === 'onsen') {
+      const healed = p.maxHp - p.hp;
+      p.hp = p.maxHp;
+      if (healed > 0) sub += ` · +${healed} HP`;
+    }
+    this.log(`${p.name} ${BUSY_INFO[v].doing}`);
+    this.io.fx?.('stay', { pid: p.id, kind: v });
+    this.setStage({ t: 'banner', text: `${p.name} ${BUSY_INFO[v].doing}`, sub, big: true });
+    await this.sleep(epoch, 2500);
+  }
+
+  /** ход игрока, который остался на круг: пропускается, дальше он снова ходит как обычно */
+  private async busyTurn(epoch: number, p: Player) {
+    const kind = p.busy!;
+    this.setStage({ t: 'banner', text: `${p.name} ${BUSY_INFO[kind].doing}`, sub: 'Ход пропущен — круг закончился, дальше снова в путь' });
+    await this.sleep(epoch, 2500);
+    p.busy = null;
+    this.log(`${p.name} возвращается в игру`);
+    this.emit();
   }
 
   /** вопрос префектуры, куда пришёл (или высадился) игрок p: отвечают все, у p награда больше */
@@ -556,7 +606,8 @@ export class GameEngine {
       this.pickQuestion((x) => x.topic === 'general' && !x.pref && !x.special) ??
       this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
     if (q) {
-      const pids = this.s.joinOrder.filter((id) => this.s.players[id]);
+      // кто остался на круг (пачинко, онсэн…), на викторины не отвечает
+      const pids = this.s.joinOrder.filter((id) => this.s.players[id] && (id === pid || !this.s.players[id].busy));
       const removed = await this.bonusPhase(epoch, pids, false, q);
       const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, removed, to);
       const results: Record<string, string> = {};
@@ -1280,7 +1331,7 @@ export class GameEngine {
         return reply(true);
       }
       case 'pachiBuy': {
-        if (!st.pachinkoPrefs.includes(p.pref!)) return reply(false, null, 'Здесь нет пачинко');
+        if (p.busy !== 'pachinko') return reply(false, null, 'Пачинко — только если остался здесь на круг');
         const packs = Math.max(1, Math.min(10, Math.floor(a.packs ?? 1)));
         const balls = packs * st.pachinko.pack;
         const cost = balls * st.pachinko.yenPerBall;
@@ -1294,17 +1345,12 @@ export class GameEngine {
         const balls = Math.max(0, Math.min(20000, Math.floor(a.balls ?? 0)));
         const yen = balls * st.pachinko.yenPerBall;
         p.yen += yen;
-        if (a.exit) p.busy = null;
         if (yen > 0) this.log(`${p.name} обменял ${balls} шариков на ¥${yen}`);
         this.emit();
         return reply(true, { yen });
       }
-      case 'busy':
-        p.busy = a.busy ?? null;
-        this.emit();
-        return reply(true);
       case 'ringStart': {
-        if (!st.ringPrefs.includes(p.pref!)) return reply(false, null, 'Здесь нет призовой машины');
+        if (p.busy !== 'ring') return reply(false, null, 'Призовая машина — только если остался здесь на круг');
         if (!pay({ yen: st.ring.cost, stars: 0 })) return reply(false, null, 'Не хватает йен');
         const seed = randInt(1e9);
         const t0 = this.now + 1200;
@@ -1325,7 +1371,6 @@ export class GameEngine {
         at = Math.max(at, r.t0);
         const { cell } = ringCellAt(r.t0, at, st.ring.cellMs);
         const res = ringResult(ringLayout(r.seed, st.ring.physicalPrize), cell);
-        p.busy = null;
         if (res === 'green') { p.yen += st.ring.prizeYen; this.log(`${p.name} выиграл в призовой машине ¥${st.ring.prizeYen}!`); }
         if (res === 'gold') {
           const name = st.prizeNames[randInt(st.prizeNames.length)] ?? 'Приз';
@@ -1384,6 +1429,9 @@ export class GameEngine {
     }
     if (st.t === 'extraTurn' && isBot(st.pid)) {
       this.botLater('extra', 1200, () => this.handle({ t: 'pick', pid: st.pid, kind: 'extra', value: Math.random() < 0.7 }));
+    }
+    if (st.t === 'stay' && isBot(st.pid)) {
+      this.botLater('stay', 1500, () => this.handle({ t: 'pick', pid: st.pid, kind: 'stay', value: Math.random() < 0.4 ? pick(st.kinds) : null }));
     }
     if (st.t === 'duelPick' && isBot(st.pid)) {
       this.botLater('duel', 1500, () => {

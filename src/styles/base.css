@@ -135,3 +135,19 @@ img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: 
 .inv-slot.empty img { opacity: 0.3; filter: grayscale(1); }
 .inv-n { position: absolute; right: -6px; bottom: -6px; min-width: 20px; padding: 0 3px; text-align: center; background: var(--yellow, #ffd23f); color: #111; border: 2px solid #111; font-size: 14px; line-height: 16px; }
 .inv-slot.empty .inv-n { background: #555; color: #ccc; }
+
+/* онсэн: панорама «из глаз»; позицию взгляда задаёт background-position */
+.onsen-view { position: relative; overflow: hidden; background-repeat: no-repeat; background-color: #9fb3c4; }
+.onsen-view.smooth { transition: background-position 0.55s linear; }
+.onsen-steam { position: absolute; inset: 0; pointer-events: none; }
+.onsen-steam i { position: absolute; bottom: -30%; width: 45%; height: 60%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0)); animation: onsen-steam 9s linear infinite; opacity: 0; }
+.onsen-steam i:nth-child(1) { left: -5%; animation-delay: 0s; }
+.onsen-steam i:nth-child(2) { left: 25%; animation-delay: 1.8s; animation-duration: 11s; }
+.onsen-steam i:nth-child(3) { left: 55%; animation-delay: 3.6s; }
+.onsen-steam i:nth-child(4) { left: 10%; animation-delay: 5.4s; animation-duration: 10s; }
+.onsen-steam i:nth-child(5) { left: 65%; animation-delay: 7.2s; animation-duration: 12s; }
+@keyframes onsen-steam {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translate(8%, -120%) scale(1.4); opacity: 0; }
+}

@@ -152,3 +152,18 @@
 .iai-pad-round { font-size: 18px; color: var(--yellow); }
 .iai-pad-big { font-size: 34vw; line-height: 1; text-shadow: 6px 6px 0 #000; }
 .iai-pad-text { font-size: 22px; }
+
+/* онсэн на телефоне */
+.onsen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.onsen-frame { position: relative; flex: 1; min-height: 0; touch-action: none; cursor: grab; }
+.onsen-frame .onsen-view { position: absolute; inset: 0; }
+.onsen-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(17, 20, 43, 0.8); padding: 6px 12px; border: 2px solid #fff; white-space: nowrap; pointer-events: none; animation: onsen-hint 1.6s ease-in-out infinite alternate; }
+@keyframes onsen-hint { from { transform: translateX(-60%); } to { transform: translateX(-40%); } }
+.onsen-bar { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; background: #11142b; }
+.onsen-title { font-size: 0.9em; }
+
+/* предложение остаться на круг */
+.stay-icons { display: flex; gap: 12px; justify-content: center; }
+.stay-icons img { image-rendering: pixelated; }
+.stay-rules { margin: 0; padding: 10px 12px; list-style: none; background: #11142b; border: 2px solid #ffffff55; display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; text-align: left; }
+.stay-btn { display: flex; align-items: center; gap: 10px; }

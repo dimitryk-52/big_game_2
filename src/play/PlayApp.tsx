@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
-import type { GameState, Player, PublicQuestion } from '../shared/types';
+import type { BusyKind, GameState, Player, PublicQuestion } from '../shared/types';
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
-import { BONUS_INFO, HATS, PLAYER_COLORS } from '../shared/settings';
+import { BONUS_INFO, BUSY_INFO, HATS, PLAYER_COLORS, STAY_MS } from '../shared/settings';
 import { PREF, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
 import { RhythmBoard } from '../games/RhythmBoard';
 import { Pachinko } from './Pachinko';
 import { RingGame } from './RingGame';
+import { Onsen } from './Onsen';
 import { Shop } from './Shop';
 import { GroupGame } from './GroupGame';
 import { unlockAudio } from '../shared/sound';
@@ -126,7 +127,7 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 // ───────── игра ─────────
 
-type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'extraTurn' | null;
+type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'extraTurn' | 'stay' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -138,38 +139,36 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'rhythm' && s.rhythm?.players.includes(me.id)) return 'rhythm';
   if (st.t === 'shop' && st.pid === me.id) return 'shop';
   if (st.t === 'extraTurn' && st.pid === me.id) return 'extraTurn';
+  if (st.t === 'stay' && st.pid === me.id) return 'stay';
   if (st.t === 'group' && s.g?.players.includes(me.id)) return 'group';
   return null;
 }
 
 function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const att = attention(s, me);
-  const [tab, setTab] = useState<'home' | 'map' | 'pachinko' | 'ring'>('home');
+  const [tab, setTab] = useState<'home' | 'map' | BusyKind>('home');
   const lastAtt = useRef<Attention>(null);
   useEffect(() => {
     if (att && att !== lastAtt.current) vibrate([60, 40, 60]);
     lastAtt.current = att;
   }, [att]);
-  const hasPachinko = me.pref != null && s.settings.pachinkoPrefs.includes(me.pref);
-  const hasRing = me.pref != null && s.settings.ringPrefs.includes(me.pref);
+  // пачинко, призовая машина и онсэн — только пока игрок остался на круг
+  const hasPachinko = me.busy === 'pachinko';
+  const hasRing = me.busy === 'ring';
+  const hasOnsen = me.busy === 'onsen';
   const ballsKey = `bg_balls_${client.room}_${me.id}`;
   const hasBalls = Number(localStorage.getItem(ballsKey) ?? 0) > 0;
   useEffect(() => {
-    if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || (tab === 'ring' && !hasRing)) setTab('home');
-  }, [hasPachinko, hasRing, tab]);
+    if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || (tab === 'ring' && !hasRing) || (tab === 'onsen' && !hasOnsen)) setTab('home');
+  }, [hasPachinko, hasRing, hasOnsen, tab]);
+  // остался на круг — сразу открываем, чем занят
+  useEffect(() => { if (me.busy) setTab(me.busy); }, [me.busy]);
 
   const [debug, setDebug] = useState(phoneDebugEnabled);
   const [debugOpen, setDebugOpen] = useState(false);
-  // отладка: перенос к автомату — вкладку открываем, когда хост подтвердит новую префектуру
-  const [pendingTab, setPendingTab] = useState<'pachinko' | 'ring' | null>(null);
-  useEffect(() => {
-    if ((pendingTab === 'pachinko' && hasPachinko) || (pendingTab === 'ring' && hasRing)) { setTab(pendingTab); setPendingTab(null); }
-  }, [pendingTab, hasPachinko, hasRing]);
-  const onGame = (game: 'pachinko' | 'ring', pid: string) => {
-    const prefs = game === 'pachinko' ? s.settings.pachinkoPrefs : s.settings.ringPrefs;
-    if (!prefs.length) return alert('В настройках нет префектур с этим автоматом');
-    if (pid === me.id && me.pref != null && prefs.includes(me.pref)) setTab(game);
-    else { client.send({ t: 'ctl', cmd: 'teleport', args: { pid: me.id, pref: prefs[0] } }); setPendingTab(game); }
+  // отладка: сразу занять себя делом на круг — вкладка откроется, когда хост подтвердит
+  const onGame = (game: BusyKind) => {
+    client.send({ t: 'ctl', cmd: 'setBusy', args: { pid: me.id, busy: game } });
     setDebugOpen(false);
   };
   const toggleDebug = () => { setPhoneDebug(!debug); setDebug(!debug); setDebugOpen(!debug); };
@@ -197,6 +196,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'duelPick' && <DuelPick client={client} s={s} me={me} />}
         {att === 'shop' && <Shop client={client} s={s} me={me} />}
         {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
+        {att === 'stay' && <StayOffer client={client} s={s} me={me} />}
         {att === 'group' && <GroupGame client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
           <div class="rhythm-wrap">
@@ -206,6 +206,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
         {!att && tab === 'ring' && hasRing && <RingGame client={client} s={s} me={me} onExit={() => setTab('home')} />}
+        {!att && tab === 'onsen' && hasOnsen && <Onsen client={client} s={s} me={me} />}
       </div>
       {!att && s.stage.t !== 'prefIntro' && (
         <nav class="tabbar">
@@ -213,6 +214,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
           <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>🗾<span>Карта</span></button>
           {(hasPachinko || hasBalls) && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}>🎰<span>Пачинко</span></button>}
           {hasRing && <button class={tab === 'ring' ? 'on' : ''} onClick={() => setTab('ring')}>🎡<span>Приз</span></button>}
+          {hasOnsen && <button class={tab === 'onsen' ? 'on' : ''} onClick={() => setTab('onsen')}>♨️<span>Онсэн</span></button>}
         </nav>
       )}
     </div>
@@ -263,6 +265,7 @@ function stageText(s: GameState, me: Player): string {
     case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине 🛒`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
     case 'extraTurn': return `${n(st.pid)} решает, ходить ли ещё раз`;
+    case 'stay': return `${n(st.pid)} решает, остаться ли здесь на круг`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
     case 'duelResult': return 'Итоги дуэли';
@@ -399,6 +402,35 @@ function ExtraTurn({ client, s, me }: { client: GameClient; s: GameState; me: Pl
   );
 }
 
+/** конец хода: остаться здесь на целый круг (пачинко, призовая машина, онсэн) */
+function StayOffer({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
+  const st = s.stage;
+  const [sent, setSent] = useState(false);
+  if (st.t !== 'stay') return null;
+  const send = (v: BusyKind | null) => { if (sent) return; setSent(true); client.pick('stay', v); vibrate(30); };
+  return (
+    <div class="scroll pad col center-screen">
+      <div class="stay-icons pop">{st.kinds.map((k) => <PixIcon id={k} size={72} />)}</div>
+      <h2>Остаться здесь на круг?</h2>
+      <ul class="stay-rules">
+        <li>⏭ Пропустишь следующий ход — целый круг</li>
+        <li>🚫 Не сможешь отвечать на викторины</li>
+        <li>🎉 В групповые игры играешь, как обычно</li>
+        <li>⚔️ Тебя могут атаковать</li>
+        <li>🔁 Чтобы вернуться сюда снова, нужно уйти и прийти обратно</li>
+      </ul>
+      <TimerBar start={st.deadline - STAY_MS} end={st.deadline} now={() => client.hostNow()} />
+      {st.kinds.map((k) => (
+        <button class="btn yellow big-btn stay-btn" disabled={sent} onClick={() => send(k)}>
+          <PixIcon id={k} size={32} />
+          <span class="grow col" style={{ textAlign: 'left', gap: 0 }}><b>{BUSY_INFO[k].name}</b><span class="small-text">{BUSY_INFO[k].perk}</span></span>
+        </button>
+      ))}
+      <button class="btn big-btn" disabled={sent} onClick={() => send(null)}>Нет, иду дальше</button>
+    </div>
+  );
+}
+
 function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const [sent, setSent] = useState(false);
   const st = s.stage;
@@ -463,7 +495,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       selected: sel,
       arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
       activePid: me.id,
-      machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+      machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs, onsen: s.settings.onsenPrefs ?? [] },
       shops: s.settings.shopPrefs,
     });
   };
@@ -516,7 +548,7 @@ function FreeMap({ s, me }: { s: GameState; me: Player }) {
     prefs: s.prefs,
     players: s.joinOrder.map((id) => s.players[id]).filter(Boolean),
     activePid: me.id,
-    machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs },
+    machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs, onsen: s.settings.onsenPrefs ?? [] },
       shops: s.settings.shopPrefs,
   });
   useEffect(upd, [s.v]);

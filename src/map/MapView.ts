@@ -21,7 +21,7 @@ export interface MapUpdate {
   blocked?: number[];
   selected?: number | null;
   activePid?: string | null;
-  machines?: { pachinko: number[]; ring: number[] };
+  machines?: { pachinko: number[]; ring: number[]; onsen?: number[] };
   /** магазины: плашка видна всегда, даже под туманом */
   shops?: number[];
   showRewards?: boolean;
@@ -264,7 +264,7 @@ export class MapView {
     };
     const occupied = new Set(u.players.map((p) => p.pref));
     const shown = (c: number) => !!u.prefs[c]?.rev && !occupied.has(c);
-    const machines: [string, number[]][] = [['pachinko', u.machines?.pachinko ?? []], ['ring', u.machines?.ring ?? []]];
+    const machines: [string, number[]][] = [['pachinko', u.machines?.pachinko ?? []], ['ring', u.machines?.ring ?? []], ['onsen', u.machines?.onsen ?? []]];
     for (const [icon, codes] of machines) for (const c of codes) if (shown(c)) add(c, { id: icon, kind: 'machine' });
     for (const c of u.shops ?? []) if (!occupied.has(c)) add(c, { id: 'shop', kind: 'machine' });
     for (const c of PREF_CODES) {

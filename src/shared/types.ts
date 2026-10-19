@@ -4,6 +4,8 @@
 export type TopicId = string;
 export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
+/** чем можно заняться на целый круг: пачинко, призовая машина, онсэн */
+export type BusyKind = 'pachinko' | 'ring' | 'onsen';
 
 export interface Topic {
   id: TopicId;
@@ -55,8 +57,9 @@ export interface Player {
   specials: number;
   prizes: string[];
   online: boolean;
-  /** чем игрок занят на телефоне (пнп на ТВ) */
-  busy: null | 'pachinko' | 'ring';
+  /** игрок остался на круг (пачинко, призовая машина, онсэн): пропускает ход и викторины,
+   *  но играет в групповые игры и может быть атакован; на ТВ — его «вид из глаз» */
+  busy: null | BusyKind;
   bot?: boolean;
 }
 
@@ -199,6 +202,8 @@ export type Stage =
   | { t: 'group' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
   | { t: 'extraTurn'; pid: string; deadline: number }
+  /** в конце хода (после групповой игры): остаться здесь на целый круг */
+  | { t: 'stay'; pid: string; deadline: number; kinds: BusyKind[] }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
@@ -269,6 +274,8 @@ export interface Settings {
     prizes: { yen: number; stars: number }[];
   };
   ringPrefs: number[];
+  /** префектуры с онсэном: отдых на круг лечит */
+  onsenPrefs: number[];
   pachinko: { yenPerBall: number; pack: number };
   ring: { cost: number; prizeYen: number; physicalPrize: boolean; cellMs: number };
   /** задержка звука ТВ (саундбар/Bluetooth), мс — для ритм-игры */
@@ -310,7 +317,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'stay';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

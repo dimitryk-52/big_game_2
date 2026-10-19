@@ -260,7 +260,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
       <div class="note">Награда за правильный ответ ходящего игрока. «Авто» — случайно при старте игры. Приз — физический подарок, выдаётся один раз, потом префектура даёт йены. Магазин открывается игроку после вопроса префектуры. Групповая игра — при первом приходе в префектуру: ходящий отвечает на вопрос, ход заканчивается, и играют все. На магазин и групповую игру нельзя высадиться.</div>
       <div class="row"><button class="btn primary small" onClick={async () => { await onSave(s); setSaved(true); setTimeout(() => setSaved(false), 1500); }}>{saved ? '✔ Сохранено' : 'Сохранить'}</button></div>
       <table class="qtable">
-        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th>🎰 Пачинко</th><th>🎡 Призовая машина</th><th>🛒 Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
+        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th><PixIcon id="pachinko" size={16} /> Пачинко</th><th><PixIcon id="ring" size={16} /> Призовая машина</th><th><PixIcon id="onsen" size={16} /> Онсэн</th><th><PixIcon id="shop" size={16} /> Магазин</th><th>Групповая игра</th><th>Своих вопросов</th></tr></thead>
         <tbody>
           {PREFS.map((p) => (
             <tr>
@@ -279,6 +279,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
               </td>
               <td><input type="checkbox" checked={s.pachinkoPrefs.includes(p.code)} onChange={() => setS({ ...s, pachinkoPrefs: toggle(s.pachinkoPrefs, p.code) })} /></td>
               <td><input type="checkbox" checked={s.ringPrefs.includes(p.code)} onChange={() => setS({ ...s, ringPrefs: toggle(s.ringPrefs, p.code) })} /></td>
+              <td><input type="checkbox" checked={(s.onsenPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, onsenPrefs: toggle(s.onsenPrefs ?? [], p.code) })} /></td>
               <td><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></td>
               <td>
                 <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {

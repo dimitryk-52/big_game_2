@@ -1,8 +1,10 @@
-// «Картинка в картинке» на ТВ: что происходит у игроков в пачинко и призовой машине.
-// Телефон присылает только разовые события (запуски шариков, старт/стоп кольца),
-// а ТВ сам воспроизводит анимацию детерминированно.
+// «Картинка в картинке» на ТВ: «вид из глаз» тех, кто остался на круг — в пачинко,
+// призовой машине или онсэне. Телефон присылает только разовые события (запуски шариков,
+// старт/стоп кольца, куда смотрит в онсэне), а ТВ сам воспроизводит анимацию.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { GameState } from '../shared/types';
+import type { BusyKind, GameState } from '../shared/types';
+import { PixIcon } from '../ui/common';
+import { OnsenView, type OnsenLook } from './OnsenView';
 import { PachinkoSim, drawPachinko } from './pachinko';
 import { PACHI, ringCellAt, ringLayout, type RingLayout } from './logic';
 import { drawRing } from './ring';
@@ -34,26 +36,43 @@ class Bus {
 }
 export const pnpBus = new Bus();
 
-export function PnPLayer({ s }: { s: GameState }) {
+export function PnPLayer({ s, hidden }: { s: GameState; hidden?: boolean }) {
   const [, force] = useState(0);
   useEffect(() => {
     const off = pnpBus.onAny(() => force((x) => x + 1));
     const t = setInterval(() => force((x) => x + 1), 3000);
     return () => { off(); clearInterval(t); };
   }, []);
-  const active = Object.values(s.players).filter((p) => p.busy || pnpBus.recent(p.id, 8000));
+  // занятые на круг + те, кто только что закончил (досмотреть шарики/кольцо)
+  const active = s.joinOrder.map((id) => s.players[id]).filter((p) => p && (p.busy || pnpBus.recent(p.id, 8000)));
   if (!active.length) return null;
   return (
-    <div class="pnp-layer">
-      {active.map((p) => (
-        <div class="pnp" key={p.id} style={{ borderColor: p.color }}>
-          <div class="pnp-head">{p.name} {p.busy === 'ring' ? '🎡' : '🎰'}</div>
-          {p.busy === 'ring' || (!p.busy && pnpBus.recent(p.id, 8000) && lastKind.get(p.id) === 'ring') ? <RingPnP pid={p.id} /> : <PachiPnP pid={p.id} />}
-        </div>
-      ))}
+    <div class="pnp-layer" style={hidden ? { display: 'none' } : undefined}>
+      {active.map((p) => {
+        const kind: BusyKind = p.busy ?? (lastKind.get(p.id) as BusyKind) ?? 'pachinko';
+        return (
+          <div class={'pnp pnp-' + kind} key={p.id + kind} style={{ borderColor: p.color }}>
+            <div class="pnp-head"><PixIcon id={kind} size={16} /> {p.name}</div>
+            {kind === 'ring' ? <RingPnP pid={p.id} /> : kind === 'onsen' ? <OnsenPnP pid={p.id} /> : <PachiPnP pid={p.id} />}
+          </div>
+        );
+      })}
     </div>
   );
 }
+
+/** онсэн: смотрим туда же, куда игрок на телефоне; CSS-переход сглаживает редкие обновления */
+function OnsenPnP({ pid }: { pid: string }) {
+  const [look, setLook] = useState<OnsenLook>(() => lastLook.get(pid) ?? { x: 0.5, y: 0.5 });
+  useEffect(() => pnpBus.on(pid, (ev) => {
+    if (ev.k !== 'onsen') return;
+    const l = { x: Math.max(0, Math.min(1, +ev.x || 0)), y: Math.max(0, Math.min(1, +ev.y || 0)) };
+    lastLook.set(pid, l);
+    setLook(l);
+  }), [pid]);
+  return <OnsenView look={look} smooth class="pnp-onsen-view" />;
+}
+const lastLook = new Map<string, OnsenLook>();
 
 const lastKind = new Map<string, string>();
 
@@ -65,7 +84,7 @@ function PachiPnP({ pid }: { pid: string }) {
     sim.onSpinEnd = (sp) => { if (sp.jackpot) sfx.jackpot(); };
     const off = pnpBus.on(pid, (ev) => {
       if (ev.k !== 'pachi') return;
-      lastKind.set(pid, 'pachi');
+      lastKind.set(pid, 'pachinko');
       if (typeof ev.b === 'number') setBalls(ev.b);
       // запуски из пачки воспроизводим с теми же интервалами
       const t0 = ev.l?.[0]?.t ?? 0;

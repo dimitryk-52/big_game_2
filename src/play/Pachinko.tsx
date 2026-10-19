@@ -24,7 +24,8 @@ export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient
   const [busy, setBusy] = useState(false);
   const [win, setWin] = useState<string | null>(null);
   const batch = useRef<{ s: number; p: number; t: number }[]>([]);
-  const here = me.pref != null && s.settings.pachinkoPrefs.includes(me.pref);
+  // покупать шарики можно, пока игрок остался у автомата на круг
+  const here = me.busy === 'pachinko';
   const st = s.settings.pachinko;
 
   const setBalls = (fn: (b: number) => number) => {
@@ -139,7 +140,7 @@ export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient
         <button class="btn small" disabled={busy || !balls} onClick={() => cash(false)}>Обменять на ¥</button>
         <button class="btn small" disabled={busy} onClick={() => cash(true)}>Выйти</button>
       </div>
-      {!here && <div class="muted small-text pad-x">Ты ушёл от автомата — можно только обменять оставшиеся шарики.</div>}
+      {!here && <div class="muted small-text pad-x">Круг закончился — можно только обменять оставшиеся шарики.</div>}
     </div>
   );
 }

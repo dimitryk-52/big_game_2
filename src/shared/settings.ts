@@ -1,4 +1,4 @@
-import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
+import type { BonusId, BusyKind, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -77,6 +77,7 @@ export const DEFAULT_SETTINGS: Settings = {
     prizes: [{ yen: 1000, stars: 3 }, { yen: 700, stars: 2 }, { yen: 500, stars: 1 }, { yen: 350, stars: 0 }, { yen: 250, stars: 0 }, { yen: 150, stars: 0 }, { yen: 100, stars: 0 }],
   },
   ringPrefs: [14, 40, 4],
+  onsenPrefs: [20],
   pachinko: { yenPerBall: 4, pack: 25 },
   ring: { cost: 200, prizeYen: 1500, physicalPrize: true, cellMs: 70 },
   audioLatencyMs: 0,
@@ -106,6 +107,23 @@ export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: st
   move2: { name: 'Ход на 2 префектуры', short: '×2 ход', icon: '👟' },
   turn2: { name: 'Дополнительный ход', short: 'доп. ход', icon: '🔁' },
 };
+
+/** занятия на целый круг: предлагаются в конце хода, после групповой игры */
+export const BUSY_INFO: Record<BusyKind, { name: string; emoji: string; doing: string; perk: string }> = {
+  pachinko: { name: 'Пачинко', emoji: '🎰', doing: 'играет в пачинко', perk: 'Весь круг играешь в пачинко на свои йены' },
+  ring: { name: 'Призовая машина', emoji: '🎡', doing: 'крутит призовую машину', perk: 'Весь круг пытаешь удачу в призовой машине' },
+  onsen: { name: 'Онсэн', emoji: '♨️', doing: 'отдыхает в онсэне', perk: 'Восстановишь всё здоровье' },
+};
+/** сколько думать над предложением остаться, мс */
+export const STAY_MS = 20000;
+export const BUSY_KINDS = Object.keys(BUSY_INFO) as BusyKind[];
+
+/** чем можно заняться в префектуре */
+export function busyKindsAt(st: Pick<Settings, 'pachinkoPrefs' | 'ringPrefs' | 'onsenPrefs'>, code: number | null | undefined): BusyKind[] {
+  if (code == null) return [];
+  const lists: Record<BusyKind, number[] | undefined> = { pachinko: st.pachinkoPrefs, ring: st.ringPrefs, onsen: st.onsenPrefs };
+  return BUSY_KINDS.filter((k) => lists[k]?.includes(code));
+}
 
 export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   money: { name: 'Йены', icon: '💴' },

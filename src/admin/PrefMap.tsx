@@ -4,6 +4,7 @@ import type { GroupGameId, PrefState, Question, RewardType, Settings } from '../
 import { PREF, PREF_CODES } from '../map/mapData';
 import { MapView } from '../map/MapView';
 import { GROUP_GAMES, REWARD_INFO, isSpecialQ } from '../shared/settings';
+import { PixIcon } from '../ui/common';
 
 /** состояние карты из настроек: всё открыто, значок награды — только у заданных вручную */
 function mapPrefs(s: Settings): Record<number, PrefState> {
@@ -40,7 +41,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
       selected: sel,
       marked: Object.keys(s.groupPrefs).map(Number),
       groupGames: s.groupPrefs,
-      machines: { pachinko: s.pachinkoPrefs, ring: s.ringPrefs },
+      machines: { pachinko: s.pachinkoPrefs, ring: s.ringPrefs, onsen: s.onsenPrefs ?? [] },
       shops: s.shopPrefs,
     });
   }, [view, s, sel]);
@@ -57,7 +58,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
           {dirty && !saved && <span class="muted small">есть несохранённые изменения</span>}
         </div>
         {!p ? (
-          <div class="note">Нажми на префектуру на карте. Значки: награда (если задана вручную), 🎰 пачинко, 🎡 призовая машина, 🛒 магазин; розовые выноска и заливка — групповая игра. Колесо мыши — зум, перетаскивание — сдвиг.</div>
+          <div class="note">Нажми на префектуру на карте. Значки: награда (если задана вручную), пачинко, призовая машина, онсэн, магазин; розовые выноска и заливка — групповая игра. Колесо мыши — зум, перетаскивание — сдвиг.</div>
         ) : (
           <>
             <h3 style={{ margin: 0 }}>{p.ru} <span class="muted">{p.ja}</span> <span class="muted small">#{p.code}</span></h3>
@@ -72,9 +73,11 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
                 {(Object.keys(REWARD_INFO) as RewardType[]).map((r) => <option value={r}>{REWARD_INFO[r].icon} {REWARD_INFO[r].name}</option>)}
               </select>
             </label>
-            <label class="set-row"><span>🎰 Пачинко</span><input type="checkbox" checked={s.pachinkoPrefs.includes(p.code)} onChange={() => setS({ ...s, pachinkoPrefs: toggle(s.pachinkoPrefs, p.code) })} /></label>
-            <label class="set-row"><span>🎡 Призовая машина</span><input type="checkbox" checked={s.ringPrefs.includes(p.code)} onChange={() => setS({ ...s, ringPrefs: toggle(s.ringPrefs, p.code) })} /></label>
-            <label class="set-row"><span>🛒 Магазин</span><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></label>
+            <label class="set-row"><span><PixIcon id="pachinko" size={20} /> Пачинко</span><input type="checkbox" checked={s.pachinkoPrefs.includes(p.code)} onChange={() => setS({ ...s, pachinkoPrefs: toggle(s.pachinkoPrefs, p.code) })} /></label>
+            <label class="set-row"><span><PixIcon id="ring" size={20} /> Призовая машина</span><input type="checkbox" checked={s.ringPrefs.includes(p.code)} onChange={() => setS({ ...s, ringPrefs: toggle(s.ringPrefs, p.code) })} /></label>
+            <label class="set-row"><span><PixIcon id="onsen" size={20} /> Онсэн (отдых на круг лечит)</span><input type="checkbox" checked={(s.onsenPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, onsenPrefs: toggle(s.onsenPrefs ?? [], p.code) })} /></label>
+            <div class="muted small">Пачинко, машина и онсэн предлагаются в конце хода: игрок остаётся на круг — пропускает ход и викторины, но играет в групповые игры и может быть атакован.</div>
+            <label class="set-row"><span><PixIcon id="shop" size={20} /> Магазин</span><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></label>
             <label class="set-row"><span>Групповая игра</span>
               <select value={s.groupPrefs[p.code] ?? ''} onChange={(e) => {
                 const v = (e.target as HTMLSelectElement).value as GroupGameId | '';

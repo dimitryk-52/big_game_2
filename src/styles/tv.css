@@ -149,9 +149,10 @@
 .rhythm-pad:active { filter: brightness(1.5); transform: translateY(2px); }
 
 /* PnP */
-.pnp-layer { position: absolute; right: calc(clamp(240px, 18vw, 340px) + 24px); bottom: 12px; display: flex; gap: 10px; z-index: 35; align-items: flex-end; }
+.pnp-layer { position: absolute; left: 12px; right: calc(clamp(240px, 18vw, 340px) + 24px); bottom: 12px; display: flex; flex-wrap: wrap-reverse; justify-content: flex-end; gap: 10px; z-index: 35; align-items: flex-end; pointer-events: none; }
 .pnp { background: #11142b; border: 3px solid #fff; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; }
-.pnp-head { font-size: 0.75em; padding: 2px 6px; background: #232850; }
+.pnp-head { font-size: 0.75em; padding: 2px 6px; background: #232850; display: flex; align-items: center; gap: 4px; }
+.pnp-onsen-view { width: clamp(220px, 17vw, 320px); aspect-ratio: 16 / 9; }
 .pnp-cv { display: block; image-rendering: pixelated; }
 .pnp-foot { font-size: 0.7em; padding: 2px 6px; }
 
