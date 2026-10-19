@@ -49,7 +49,7 @@ export function GroupTv({ s, imgs }: { s: GameState; imgs: Record<string, string
       {(g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
-          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️' }[g.game]}</div>
+          <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', dragon: '🐉' }[g.game]}</div>
           <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />

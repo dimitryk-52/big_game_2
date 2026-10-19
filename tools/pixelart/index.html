@@ -58,6 +58,7 @@
   .ctrls select, .ctrls input { padding: 5px 6px; font-size: 13px; }
   .actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .actions button { font-size: 13px; padding: 6px 10px; }
+  .actions button.game { border-color: var(--ok); color: var(--ok); }
   .actions .msg { font-size: 12px; color: var(--ok); align-self: center; }
   .spin { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; }
   @keyframes s { to { transform: rotate(360deg); } }
@@ -71,6 +72,12 @@
 </header>
 <main>
   <aside>
+    <div>
+      <label class="h" for="preset">Готовые задания для игры</label>
+      <select id="preset"><option value="">— свой рисунок —</option></select>
+      <div class="hint" id="presetHint"></div>
+    </div>
+
     <div>
       <label class="h" for="prompt">Что нарисовать</label>
       <textarea id="prompt" placeholder="например: самурай-кот с катаной, вид сбоку, стоит"></textarea>
@@ -170,12 +177,54 @@ const BGS = {
   'Белый':     'on a plain flat white background',
   'Без указания': '',
 };
+// Готовые задания: картинки, которые игра ищет в src/img/. Кнопка «В игру» кладёт результат туда (в 1×).
+const DRAGON = 'the festival dragon puppet from the Nagasaki Kunchi ja-odori dance (carried on poles by performers)';
+const PRESETS = [
+  {
+    id: 'dragon-street', name: 'Джа-одори · улица (street.png)', target: 'dragon/street.png',
+    kind: 'Фон / сцена', bg: 'Без указания', aspect: '21:9', grid: 420,
+    hint: 'Фон танца дракона. Приложи как референс src/img/bgs/bg_nagasaki.png — будет в том же стиле. Проверь, что края сходятся: картинка повторяется по горизонтали.',
+    prompt: 'Side-scrolling 2D game background: a festive night street in Nagasaki during the Nagasaki Kunchi festival, Shinchi Chinatown style. Strict side view like a 2D platformer, no perspective. A row of two-storey wooden and stucco shop houses with dark tiled roofs, red Chinese lanterns strung across the street, warm glowing windows, distant hills and a starry night sky at the top. The bottom tenth of the image is an empty flat stone-paved road running across the whole width, with nothing standing on it: no people, no dragon, no poles. The image must tile horizontally: the left and right edges continue each other seamlessly',
+  },
+  {
+    id: 'dragon-head', name: 'Джа-одори · голова (head.png)', target: 'dragon/head.png',
+    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '1:1', grid: 48,
+    hint: 'Сначала голова: потом нажми «Как референс» на удачном варианте и рисуй туловище и хвост — будут одного дракона.',
+    prompt: `The head of ${DRAGON}, side view facing right, open mouth with white fangs, big round eye, golden antlers, flowing red mane and long whiskers, jade-green scales with a golden yellow jaw. Only the head and a short neck; the neck is cut straight at the left edge`,
+  },
+  {
+    id: 'dragon-body', name: 'Джа-одори · кусок туловища (body.png)', target: 'dragon/body.png',
+    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '4:3', grid: 32,
+    hint: 'Кусок повторяется много раз вдоль волны, поэтому оба конца должны быть срезаны ровно. Приложи голову как референс.',
+    prompt: `One straight body segment of ${DRAGON}, side view, horizontal: a thick cylinder of jade-green scales with a golden yellow belly stripe along the bottom and a row of small red fins along the top. The segment fills the whole width edge to edge, both ends cut perfectly straight, so copies placed side by side form one continuous body. No head, no tail, no poles`,
+  },
+  {
+    id: 'dragon-tail', name: 'Джа-одори · хвост (tail.png)', target: 'dragon/tail.png',
+    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '4:3', grid: 40,
+    hint: 'Хвост тянется влево, справа ровный срез — туда пристыкуется туловище. Приложи голову или туловище как референс.',
+    prompt: `The tail end of ${DRAGON}, side view: the body comes in from the right edge, cut perfectly straight there, and tapers to the left into a flame-like red tail fin. Jade-green scales, golden yellow belly stripe, small red fins on top. No poles`,
+  },
+  {
+    id: 'dragon-pearl', name: 'Джа-одори · жемчужина (pearl.png)', target: 'dragon/pearl.png',
+    kind: 'Предмет', bg: 'Пурпурный (вырезать)', aspect: '1:1', grid: 16,
+    hint: 'Жемчужина летит перед головой дракона.',
+    prompt: 'A glowing golden magic pearl (tama) that a Chinese festival dragon chases: a round shiny orb with a white highlight and a few small red flame wisps around it',
+  },
+  {
+    id: 'dragon-sky', name: 'Джа-одори · дальний план (sky.png, по желанию)', target: 'dragon/sky.png',
+    kind: 'Фон / сцена', bg: 'Без указания', aspect: '21:9', grid: 420,
+    hint: 'Необязательно. Если есть sky.png, он едет медленнее улицы (параллакс). Тогда у street.png небо над крышами должно быть вырезано (пурпурный фон и «Убрать фон»).',
+    prompt: 'Side-scrolling 2D game far background: the night sky over Nagasaki harbour, stars, a big moon, dark green hills with scattered house lights, the silhouette of Oura church on a hill, calm sea at the bottom. Strict side view, no foreground buildings, no people. The image must tile horizontally: the left and right edges continue each other seamlessly',
+  },
+];
+
 const DEFAULT_STYLE = 'Pixel art, 16-bit retro game style, limited color palette, crisp hard-edged square pixels, no anti-aliasing, no blur, no gradients, no dithering noise, clean dark outline, consistent large pixel grid.';
 
 const state = {
   kind: localStorage.getItem('pa.kind') || 'Персонаж',
   bg: localStorage.getItem('pa.bg') || 'Пурпурный (вырезать)',
   refs: [],   // {mimeType, data, url}
+  preset: null,
 };
 
 function chips(el, map, key) {
@@ -210,6 +259,25 @@ function applyKindPreset(prev, next) {
 chips($('#kinds'), KINDS, 'kind');
 chips($('#bgs'), BGS, 'bg');
 
+// ---------- готовые задания ----------
+const presetEl = $('#preset');
+for (const p of PRESETS) presetEl.add(new Option(p.name, p.id));
+function applyPreset(id, fill) {
+  const p = PRESETS.find(x => x.id === id) || null;
+  state.preset = p;
+  presetEl.value = p ? p.id : '';
+  localStorage.setItem('pa.preset', p ? p.id : '');
+  $('#presetHint').textContent = p ? p.hint + ' Готовое — кнопка «В игру» на карточке → src/img/' + p.target : '';
+  if (!p || !fill) return;
+  state.kind = p.kind; localStorage.setItem('pa.kind', p.kind); chips($('#kinds'), KINDS, 'kind');
+  setBg(p.bg);
+  setField('aspect', p.aspect);
+  setField('grid', p.grid);
+  setField('prompt', p.prompt);
+  updateFinal();
+}
+presetEl.onchange = () => applyPreset(presetEl.value, true);
+
 const styleEl = $('#style');
 styleEl.value = localStorage.getItem('pa.style') ?? DEFAULT_STYLE;
 styleEl.oninput = () => { localStorage.setItem('pa.style', styleEl.value); updateFinal(); };
@@ -223,6 +291,7 @@ const syncSizeRow = () => { $('#sizeRow').hidden = !$('#model').value.startsWith
 $('#model').addEventListener('change', syncSizeRow);
 syncSizeRow();
 $('#prompt').value = localStorage.getItem('pa.prompt') || '';
+applyPreset(localStorage.getItem('pa.preset') || '', false);
 $('#prompt').oninput = () => { localStorage.setItem('pa.prompt', $('#prompt').value); updateFinal(); };
 
 function buildPrompt() {
@@ -291,6 +360,7 @@ async function generate() {
   const go = $('#go');
   go.disabled = true;
   const n = +$('#count').value;
+  const preset = state.preset;
   const body = {
     prompt,
     model: $('#model').value,
@@ -310,7 +380,7 @@ async function generate() {
         .then(res => {
           if (res.error) throw new Error(res.error);
           const img = res.images[0];
-          renderResult(card, `data:${img.mimeType};base64,${img.data}`, $('#prompt').value.trim(), res.text);
+          renderResult(card, `data:${img.mimeType};base64,${img.data}`, preset ? preset.target.replace(/^.*\/|\.png$/g, '') : $('#prompt').value.trim(), res.text, preset);
         })
         .catch(err => { card.className = 'card error'; card.textContent = 'Ошибка: ' + err.message; })
     );
@@ -320,7 +390,7 @@ async function generate() {
 }
 
 // ---------- карточка результата ----------
-function renderResult(card, srcUrl, name, text) {
+function renderResult(card, srcUrl, name, text, preset) {
   card.className = 'card';
   card.innerHTML = `
     <div class="p"></div>
@@ -345,6 +415,7 @@ function renderResult(card, srcUrl, name, text) {
     <div class="actions">
       <button data-a="dl">Скачать PNG</button>
       <button data-a="save">Сохранить в проект</button>
+      ${preset ? '<button data-a="game" class="game">В игру → src/img/' + preset.target + '</button>' : ''}
       <button data-a="ref">Как референс</button>
       <button data-a="orig">Скачать оригинал</button>
       <span class="msg"></span>
@@ -378,6 +449,13 @@ function renderResult(card, srcUrl, name, text) {
   card.querySelector('[data-a=dl]').onclick = () => download(exportUrl(), fileName());
   card.querySelector('[data-a=orig]').onclick = () => download(srcUrl, (ctl('name').value.trim() || 'pixel') + '_orig.png');
   card.querySelector('[data-a=ref]').onclick = () => { addRefDataUrl(srcUrl); flash('добавлено в референсы'); };
+  const game = card.querySelector('[data-a=game]');
+  if (game) game.onclick = async () => {
+    if (!confirm('Заменить src/img/' + preset.target + ' этой картинкой?')) return;
+    const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: preset.target, dataUrl: scaled(canvas, 1).toDataURL('image/png') }) }).then(r => r.json());
+    flash(r.error ? 'Ошибка: ' + r.error : 'в игре: ' + r.file);
+  };
   card.querySelector('[data-a=save]').onclick = async () => {
     const r = await fetch('/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: ctl('name').value, dataUrl: exportUrl() }) }).then(r => r.json());

@@ -206,3 +206,27 @@
 .poem-lines { position: absolute; inset: 9% 8% 18%; display: flex; flex-direction: column; justify-content: center; gap: 0.5em; color: #2a1d14; font-size: 8.5cqw; line-height: 1.15; text-align: left; }
 .poem-lines .poem-mine { color: #b3141c; font-size: 1.15em; margin-left: 1.2em; }
 .sheet.poem .hanko { font-size: 10cqw; }
+
+/* ───── джа-одори ───── */
+.tv.dragon-on .plist { opacity: 0; pointer-events: none; }
+.dragon-tv { position: absolute; inset: 0; z-index: 24; overflow: hidden; background: #0d0f2b; }
+.dragon-cv { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.dragon-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 1.2em; align-items: center; background: rgba(20, 23, 48, 0.9); border: 3px solid #fff; padding: 6px 18px; box-shadow: 5px 5px 0 var(--shadow); font-size: 1.3em; white-space: nowrap; }
+.dragon-hud-title { color: var(--yellow); }
+.dragon-hud .jp, .dragon-card .jp, .dragon-count .jp, .dragon-big .jp { color: var(--pink); }
+.dragon-live { color: var(--green); }
+.dragon-count { position: absolute; top: 22%; left: 0; right: 0; text-align: center; font-size: 9em; line-height: 1; text-shadow: 8px 8px 0 #000; animation: pop 0.3s ease-out both; display: flex; flex-direction: column; align-items: center; }
+.dragon-count .jp { font-size: 0.35em; }
+.dragon-big { position: absolute; top: 18%; left: 0; right: 0; text-align: center; font-size: 4.5em; color: var(--yellow); text-shadow: 6px 6px 0 #000; pointer-events: none; }
+.dragon-foot { position: absolute; top: 76px; left: 50%; font-size: 2.6em; color: #fff; text-shadow: 4px 4px 0 #000; transform-origin: center; white-space: nowrap; }
+.dragon-outs { position: absolute; top: 80px; right: 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.dragon-out { background: rgba(60, 12, 24, 0.95); border: 3px solid var(--pink); padding: 6px 14px; font-size: 1.3em; box-shadow: 4px 4px 0 var(--shadow); display: flex; align-items: center; gap: 8px; }
+.dragon-center { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.dragon-center.side { justify-items: end; padding-right: 3%; }
+.dragon-card { background: rgba(27, 31, 58, 0.96); border: 4px solid #fff; box-shadow: 8px 8px 0 var(--shadow); padding: 1em 1.6em; display: flex; flex-direction: column; align-items: center; gap: 0.5em; min-width: min(820px, 90vw); max-height: 86vh; overflow: hidden; }
+.dragon-rules { display: flex; flex-direction: column; gap: 0.35em; font-size: 1.35em; text-align: center; max-width: 900px; }
+.dragon-results { gap: 0.25em; min-width: 0; width: min(620px, 50vw); }
+.dragon-results .group-title { font-size: 2em; }
+.dragon-row { display: grid; grid-template-columns: 1.6em auto 1fr auto auto; gap: 0.6em; align-items: center; font-size: 1.15em; width: 100%; padding: 1px 8px; }
+.dragon-row.place1 { background: rgba(255, 210, 63, 0.18); }
+.dragon-award { color: var(--yellow); }

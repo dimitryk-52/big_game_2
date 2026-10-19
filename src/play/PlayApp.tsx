@@ -14,6 +14,7 @@ import { Pachinko } from './Pachinko';
 import { RingGame } from './RingGame';
 import { Shop } from './Shop';
 import { GroupGame } from './GroupGame';
+import { DragonPad } from './DragonPad';
 import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
@@ -126,7 +127,7 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 // ───────── игра ─────────
 
-type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'extraTurn' | null;
+type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -139,6 +140,7 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'shop' && st.pid === me.id) return 'shop';
   if (st.t === 'extraTurn' && st.pid === me.id) return 'extraTurn';
   if (st.t === 'group' && s.g?.players.includes(me.id)) return 'group';
+  if (st.t === 'dragon' && s.dr?.players.includes(me.id)) return 'dragon';
   return null;
 }
 
@@ -198,6 +200,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'shop' && <Shop client={client} s={s} me={me} />}
         {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
         {att === 'group' && <GroupGame client={client} s={s} me={me} />}
+        {att === 'dragon' && <DragonPad key={s.dr!.id} client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
           <div class="rhythm-wrap">
             <RhythmBoard key={s.rhythm.id} r={s.rhythm} now={() => client.hostNow()} onDone={(score, hits, total) => client.send({ t: 'rhythm', pid: me.id, id: s.rhythm!.id, score, hits, total })} />
@@ -262,6 +265,7 @@ function stageText(s: GameState, me: Player): string {
     case 'reward': return `${n(st.pid)}: ${st.text}`;
     case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине 🛒`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
+    case 'dragon': return '🐉 Джа-одори — смотри на ТВ!';
     case 'extraTurn': return `${n(st.pid)} решает, ходить ли ещё раз`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';

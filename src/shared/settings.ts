@@ -1,4 +1,4 @@
-import type { BonusId, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
+import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -47,7 +47,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // 4 внутри страны, остальные на побережье там, где без этого не обойтись
   shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
   shopTime: 45,
-  groupPrefs: { 26: 'calligraphy' },
+  groupPrefs: { 26: 'calligraphy', 42: 'dragon' },
   groupTasks: [
     { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人' },
     { id: 'cal2', game: 'calligraphy', text: 'Нарисуйте кандзи «гора» 山' },
@@ -70,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
     voteTime: 20,
     showMs: 4000,
     prizes: [{ yen: 1000, stars: 3 }, { yen: 600, stars: 2 }, { yen: 300, stars: 1 }],
+    dragon: { bpm: 90, accel: 8, maxBpm: 220, warm: 8, steps: 160, tapLag: 30 },
   },
   ringPrefs: [14, 40, 4],
   pachinko: { yenPerBall: 4, pack: 25 },
@@ -84,6 +85,11 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   if (!saved) return d;
   const out: any = { ...d, ...saved };
   for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
+  // джа-одори появилась позже сохранённых настроек: один раз закрепляем её за Нагасаки, если там свободно.
+  // После сохранения в админке group.dragon уже есть — дальше решает ведущий
+  if (!saved.group?.dragon && saved.groupPrefs && !Object.values(saved.groupPrefs).includes('dragon') && !saved.groupPrefs[42]) {
+    out.groupPrefs = { ...saved.groupPrefs, 42: 'dragon' };
+  }
   return out;
 }
 
@@ -113,10 +119,17 @@ export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji:
   calligraphy: { name: 'Каллиграфия', ja: '書道', kanji: '書', how: 'У всех на телефонах — холст и кисть', doing: 'Рисуют…' },
   fukuwarai: { name: 'Фукуварай', ja: '福笑い', kanji: '福', how: 'Собираем лицо вслепую: положенные детали сразу исчезают', doing: 'Собирают лица вслепую…' },
   senryu: { name: 'Сэнрю', ja: '川柳', kanji: '句', how: 'Допишите последнюю строку стиха (5 слогов)', doing: 'Сочиняют…' },
+  dragon: { name: 'Джа-одори', ja: '蛇踊り', kanji: '龍', how: 'Несём дракона: жмите ЛЕВУЮ и ПРАВУЮ по очереди в такт барабану. Сбился — выбыл', doing: 'Шагают…' },
 };
+
+/** настройки джа-одори (в старых сохранённых настройках их нет) */
+export function dragonSettings(st: Settings): DragonSettings {
+  return { ...DEFAULT_SETTINGS.group.dragon!, ...(st.group.dragon ?? {}) };
+}
 
 /** время на работу в групповой игре, сек */
 export function groupTime(st: Settings, game: GroupGameId) {
+  if (game === 'dragon') return 0;
   return game === 'calligraphy' ? st.group.drawTime : st.group.times?.[game] ?? DEFAULT_SETTINGS.group.times![game]!;
 }
 
