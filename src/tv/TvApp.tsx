@@ -5,7 +5,7 @@ import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
 import { Avatar, BonusIcon, BONUS_IDS, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
-import { BONUS_INFO, BUSY_INFO, REWARD_INFO, STAY_MS } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
@@ -60,6 +60,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'pnp': pnpBus.emit(d.pid, d.ev); break;
         case 'ring': pnpBus.emit(d.pid, { k: 'ring', ...d }); break;
         case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;
+        case 'chohan': pnpBus.emit(d.pid, { k: 'chohan', ...d }); break;
+        case 'chop': sfx.chop(); break;
+        case 'sudoku': pnpBus.emit(d.pid, { k: 'sudokuWin', ...d }); break;
       }
     });
     return () => { off(); clearTimeout(raf); };
@@ -104,7 +107,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       blocked: st.t === 'landing' ? st.blocked : undefined,
       arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
-      machines: { pachinko: s.settings.pachinkoPrefs, ring: s.settings.ringPrefs, onsen: s.settings.onsenPrefs ?? [] },
+      machines: machinesOf(s.settings),
       shops: s.settings.shopPrefs,
     });
     const key = st.t + ':' + ('pid' in st ? (st as any).pid : '') + ':' + (st.t === 'moving' ? st.to : '');
@@ -222,19 +225,12 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           <div class="prompt-timer"><TimerBar start={st.deadline - 15000} end={st.deadline} now={now} /></div>
         </Prompt>
       )}
-      {st.t === 'stay' && (
-        <Prompt>
-          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> думает, остаться ли здесь на круг {st.kinds.map((k) => <PixIcon id={k} size={32} />)}
-          <div class="muted" style={{ fontSize: '0.65em' }}>Кто остаётся — пропускает ход и викторины, но играет в групповые игры и может быть атакован</div>
-          <div class="prompt-timer"><TimerBar start={st.deadline - STAY_MS} end={st.deadline} now={now} /></div>
-        </Prompt>
-      )}
       {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} iaiSignal={host.engine.iaiSignal} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
       {st.t === 'end' && <EndScreen s={s} />}
       {s.paused && <div class="paused">ПАУЗА</div>}
-      {/* «вид из глаз» тех, кто остался на круг — только поверх карты; скрываем, а не убираем, чтобы не сбить анимацию */}
+      {/* «вид из глаз» тех, кто играет в соло-игры — только поверх карты; скрываем, а не убираем, чтобы не сбить анимацию */}
       <PnPLayer s={s} hidden={!!sceneBg.src || ['question', 'rhythm', 'end', 'lobby'].includes(st.t)} />
       {panel && <HostPanel s={s} host={host} onNewGame={onNewGame} onDebug={() => setDebug((x) => !x)} />}
       {debug && <DebugMenu s={host.state} send={(cmd, args) => host.ctl(cmd, args)} onClose={() => setDebug(false)} fx />}
@@ -306,7 +302,7 @@ function PlayerList({ s }: { s: GameState }) {
                 <div class="pc-name">
                   <span class="pname">{p.name}</span>
                   {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
-                  {p.busy && <span class="pc-busy" title={BUSY_INFO[p.busy].doing}><PixIcon id={p.busy} size={20} /></span>}
+                  {p.busy && <span class="pc-busy" title={SOLO_GAMES[p.busy]?.doing}><PixIcon id={p.busy} size={20} /></span>}
                   <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
                 </div>
                 <HpBar hp={p.hp} max={p.maxHp} />

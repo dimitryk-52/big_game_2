@@ -10,7 +10,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const GYRO_SPAN_X = 160;
 const GYRO_SPAN_Y = 50;
 
-export function Onsen({ client }: { client: GameClient; s: GameState; me: Player }) {
+export function Onsen({ client, paused }: { client: GameClient; s: GameState; me: Player; paused?: boolean }) {
   const [look, setLook] = useState<OnsenLook>({ x: 0.5, y: 0.5 });
   const lookRef = useRef(look);
   const el = useRef<HTMLDivElement>(null);
@@ -23,8 +23,16 @@ export function Onsen({ client }: { client: GameClient; s: GameState; me: Player
     setLook(lookRef.current);
   };
 
+  // пока онсэн открыт (не на паузе), ТВ показывает «вид из глаз»; первый заход в префектуре лечит
+  useEffect(() => {
+    if (paused) return;
+    void client.req('busy', { busy: 'onsen' }).catch(() => {});
+    return () => { void client.req('busy', { busy: null }).catch(() => {}); };
+  }, [paused]);
+
   // взгляд на ТВ: не чаще раза в 0,5 c и только если заметно сдвинулся (лимиты Supabase)
   useEffect(() => {
+    if (paused) return;
     let sent = { x: -1, y: -1 };
     const iv = setInterval(() => {
       const l = lookRef.current;
@@ -33,7 +41,7 @@ export function Onsen({ client }: { client: GameClient; s: GameState; me: Player
       client.pnp({ k: 'onsen', x: +l.x.toFixed(3), y: +l.y.toFixed(3) });
     }, 500);
     return () => clearInterval(iv);
-  }, []);
+  }, [paused]);
 
   // гироскоп: запоминаем начальное положение телефона, дальше смотрим относительно него
   useEffect(() => {
@@ -86,7 +94,7 @@ export function Onsen({ client }: { client: GameClient; s: GameState; me: Player
         {hint && gyro !== 'on' && <div class="onsen-hint">👆 Води пальцем — осмотрись</div>}
       </div>
       <div class="onsen-bar">
-        <div class="onsen-title">♨️ Онсэн · отдыхаешь до своего хода</div>
+        <div class="onsen-title">♨️ Онсэн · здоровье восстановлено</div>
         <button class={'btn small' + (gyro === 'on' ? ' on' : '')} onClick={toggleGyro}>
           {gyro === 'on' ? '📱 Поворот телефона: вкл' : gyro === 'denied' ? '📱 Поворот недоступен' : '📱 Смотреть, поворачивая телефон'}
         </button>

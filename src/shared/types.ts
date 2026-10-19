@@ -4,8 +4,6 @@
 export type TopicId = string;
 export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
-/** чем можно заняться на целый круг: пачинко, призовая машина, онсэн */
-export type BusyKind = 'pachinko' | 'ring' | 'onsen';
 
 export interface Topic {
   id: TopicId;
@@ -57,9 +55,8 @@ export interface Player {
   specials: number;
   prizes: string[];
   online: boolean;
-  /** игрок остался на круг (пачинко, призовая машина, онсэн): пропускает ход и викторины,
-   *  но играет в групповые игры и может быть атакован; на ТВ — его «вид из глаз» */
-  busy: null | BusyKind;
+  /** чем игрок занят на телефоне (пнп на ТВ) */
+  busy: null | SoloGameId;
   bot?: boolean;
 }
 
@@ -74,8 +71,13 @@ export interface PrefState {
   groupDone?: boolean;
 }
 
+/** соло-игры: доступны, пока игрок стоит в префектуре с ними (можно возвращаться) */
+export type SoloGameId = 'pachinko' | 'ring' | 'onsen' | 'chohan' | 'sudoku';
+
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi';
+/** что режем в «Сашими» */
+export type FishId = 'tuna' | 'salmon' | 'crab' | 'squid';
 /** лицо для фукуварай */
 export type FaceId = 'okame' | 'daruma' | 'oni';
 
@@ -86,6 +88,8 @@ export interface GroupTask {
   text: string;
   /** фукуварай: какое лицо собирать */
   face?: FaceId;
+  /** сашими: что режем; задания со своей рыбой выбираются в её префектурах */
+  fish?: FishId;
 }
 
 /** публичная часть групповой игры; сами рисунки в состояние не попадают (их видит только ТВ) */
@@ -94,6 +98,10 @@ export interface GroupPublic {
   game: GroupGameId;
   prompt: string;
   face?: FaceId;
+  /** сашими: что режем, вес целиком и сколько нужно отрезать, г */
+  fish?: FishId;
+  total?: number;
+  target?: number;
   pref: number;
   phase: 'intro' | 'draw' | 'show' | 'vote' | 'results';
   players: string[];
@@ -114,6 +122,9 @@ export interface GroupPublic {
   iai?: IaiRound;
   /** иайдо: лучшее время каждого игрока, мс */
   best?: Record<string, number>;
+  /** сашими (после сдачи): место разреза 0..1 и вес куска, г */
+  cuts?: Record<string, number>;
+  grams?: Record<string, number>;
 }
 
 /** раунд иайдо: ready — ждём сигнала, done — итог раунда */
@@ -202,8 +213,6 @@ export type Stage =
   | { t: 'group' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
   | { t: 'extraTurn'; pid: string; deadline: number }
-  /** в конце хода (после групповой игры): остаться здесь на целый круг */
-  | { t: 'stay'; pid: string; deadline: number; kinds: BusyKind[] }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
@@ -274,8 +283,14 @@ export interface Settings {
     prizes: { yen: number; stars: number }[];
   };
   ringPrefs: number[];
-  /** префектуры с онсэном: отдых на круг лечит */
+  /** префектуры с онсэном: отдых лечит */
   onsenPrefs: number[];
+  /** чо-хан: кости под стаканом, чёт или нечет */
+  chohanPrefs: number[];
+  chohan: { bets: number[] };
+  /** судоку: 4×4 → 6×6 → 9×9, прогресс у игрока сохраняется */
+  sudokuPrefs: number[];
+  sudoku: { rewards: { yen: number; stars: number }[]; givens9: number };
   pachinko: { yenPerBall: number; pack: number };
   ring: { cost: number; prizeYen: number; physicalPrize: boolean; cellMs: number };
   /** задержка звука ТВ (саундбар/Bluetooth), мс — для ритм-игры */
@@ -317,7 +332,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'stay';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

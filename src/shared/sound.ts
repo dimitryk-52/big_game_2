@@ -77,6 +77,10 @@ export const sfx = {
   pachi: () => tone(1500 + Math.random() * 600, 0.02, 'square', 0.05),
   slash: () => { noise(0.25, 0.45, 0, 2500); tone(900, 0.2, 'sawtooth', 0.15, 0, -700); },
   early: () => { tone(160, 0.3, 'square', 0.2); },
+  /** кости в стакане: дробь щелчков и удар стакана о сукно */
+  rattle: () => { for (let i = 0; i < 14; i++) noise(0.025, 0.12, i * 0.08 + Math.random() * 0.03, 3000); noise(0.12, 0.35, 1.2, 500); },
+  /** нож по рыбе */
+  chop: () => { noise(0.06, 0.3, 0, 2500); tone(180, 0.1, 'square', 0.25, 0.03, -60); },
   jackpot: () => { for (let i = 0; i < 12; i++) tone(600 + i * 80, 0.08, 'square', 0.18, i * 0.06); },
 };
 
