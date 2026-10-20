@@ -70,6 +70,13 @@ function preview(id: string, cfg: SoundCfg | undefined) {
   SOUND_EVENTS[id]?.synth?.();
 }
 
+/** где ещё стоит файл (кроме события except) — названия событий */
+function usedBy(map: SoundMap, file: string | undefined, except?: string) {
+  if (!file) return [];
+  return Object.entries(map).filter(([k, c]) => k !== except && c.file === file && !c.mute).map(([k]) => soundLabel(k));
+}
+const usedShort = (u: string[]) => u.slice(0, 2).join(', ') + (u.length > 2 ? ` и ещё ${u.length - 2}` : '');
+
 function NoServer({ files }: { files: string[] | null | undefined }) {
   if (files !== null) return null;
   return <div class="warn">Список звуков недоступен: админка открыта не с локального сервера. Запусти «Запустить админку.bat» (или npm run dev) — звуки хранятся в папке sounds/ на этом компьютере.</div>;
@@ -118,7 +125,10 @@ function Picker({ id, snd, synth, onPlay, label, none }: { id: string; snd: Snd;
         {(synth || none) && <option value="__mute">🔇 выключить</option>}
         {cfg.file && !files.includes(cfg.file) && <option value={cfg.file}>⚠ {cfg.file} (нет в папке)</option>}
         {folders(files).map(([dir, fs]) => (
-          <optgroup label={folderName(dir)}>{fs.map((f) => <option value={f}>{f.split('/').pop()}</option>)}</optgroup>
+          <optgroup label={folderName(dir)}>{fs.map((f) => {
+            const u = usedBy(snd.map, f, id);
+            return <option value={f}>{f.split('/').pop()}{u.length ? `  ● уже: ${usedShort(u)}` : ''}</option>;
+          })}</optgroup>
         ))}
       </select>
       <button class="btn small" title="Открыть библиотеку: все звуки из папки sounds/ с прослушиванием" onClick={() => setLib(true)}>🎵 Библиотека</button>
@@ -172,7 +182,7 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
     const src = await playFile(f);
     src?.addEventListener('ended', () => setNow((x) => (x === f ? null : x)));
   };
-  const used = (f: string) => Object.entries(snd.map).filter(([, c]) => c.file === f).map(([k]) => soundLabel(k));
+  const used = (f: string) => usedBy(snd.map, f);
   const files = (snd.files ?? []).filter((f) => !q || f.toLowerCase().includes(q.toLowerCase().replace(/ /g, '_')) || f.toLowerCase().includes(q.toLowerCase()));
   return (
     <div class="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -192,7 +202,7 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
                 <div class={'snd-lib-row' + (f === current ? ' cur' : '') + (f === now ? ' play' : '')}>
                   <button class="btn small" title="Прослушать" onClick={() => void listen(f)}>{f === now ? '■' : '▶'}</button>
                   <span class="snd-lib-name">{f.split('/').pop()}</span>
-                  {u.length > 0 && <span class="muted small" title={u.join(', ')}>уже: {u.slice(0, 2).join(', ')}{u.length > 2 ? ` и ещё ${u.length - 2}` : ''}</span>}
+                  {u.length > 0 && <span class="muted small" title={u.join(', ')}>уже: {usedShort(u)}</span>}
                   {f === current ? <span class="snd-badge own">выбран</span> : <button class="btn small primary" onClick={() => onPick(f)}>Выбрать</button>}
                 </div>
               );
@@ -386,11 +396,14 @@ export function IntrosTab({ settings }: { settings: Settings }) {
             <div class="intros-sec">
               <h3>{sec.name} <span class="muted small">{done} / {total.length}</span></h3>
               {items.map((x) => {
-                const has = !!snd.map[introId(x.kind, x.id)]?.file;
+                const xid = introId(x.kind, x.id);
+                const has = !!snd.map[xid]?.file;
+                const dup = usedBy(snd.map, snd.map[xid]?.file, xid);
                 return (
                   <button class={'intros-item' + (x === sel ? ' on' : '')} onClick={() => pick(x)}
+                    title={dup.length ? 'Этот же звук стоит ещё: ' + dup.join(', ') : undefined}
                     ref={(el) => { if (el && x === sel) el.scrollIntoView({ block: 'nearest' }); }}>
-                    <span class={'dot' + (has ? ' ok' : '')} />
+                    <span class={'dot' + (dup.length ? ' dup' : has ? ' ok' : '')} />
                     {x.kind === 'pref' && <span class="muted small num">{x.id}</span>}
                     {x.kind === 'solo' && <PixIcon id={x.id} size={16} />}
                     <span>{x.name}</span> <span class="muted small">{x.sub}</span>
@@ -424,6 +437,7 @@ export function IntrosTab({ settings }: { settings: Settings }) {
           <Picker id={sid} snd={snd} synth={false} onPlay={(c) => play(true, c)} label={'Интро: ' + sel.name} />
           <span class="muted small">{snd.status}</span>
         </div>
+        {usedBy(snd.map, snd.map[sid]?.file, sid).length > 0 && <div class="snd-dup small">● Этот же файл стоит ещё: {usedBy(snd.map, snd.map[sid]?.file, sid).join(', ')}</div>}
         <div class="muted small">Совет: перетащи файл прямо на строку «Звук» — он скопируется в папку sounds/ и сразу проиграется вместе с анимацией.</div>
       </main>
     </div>
