@@ -20,6 +20,8 @@ export interface HostIO {
   save(data: any): void;
   /** события для ТВ: звуки, эффекты, пнп */
   fx?(kind: string, data?: any): void;
+  /** длина своего звука события, мс (0 — нет файла); иайдо ждёт, пока доиграет «нагнетание» */
+  soundMs?(id: string): number;
 }
 
 class Aborted extends Error {}
@@ -1007,9 +1009,13 @@ export class GameEngine {
       g.iai = iai;
       g.startAt = this.now + LEAD + 1500; // «приготовились»
       g.deadline = 0; // момент сигнала телефонам не сообщаем
-      const at = g.startAt + 2000 + randInt(5000);
+      // своё «нагнетание» (вкладка «Звуки») звучит с начала раунда; «!» — только когда оно доиграет
+      const tension = this.io.soundMs?.('iaiTension') ?? 0;
+      const calm = tension ? g.startAt + tension : g.startAt; // раньше этого момента сигнала не будет
+      const at = tension ? calm + 1000 + randInt(4000) : g.startAt + 2000 + randInt(5000);
       // со второго раунда — иногда ложная тревога (серый «?»): кто дёрнулся — выбыл
-      const decoyAt = r > 1 && Math.random() < 0.6 ? g.startAt + 900 + Math.random() * (at - g.startAt - 1700) : undefined;
+      const decoyFrom = tension ? calm + 400 : g.startAt + 900;
+      const decoyAt = r > 1 && at - decoyFrom > 1400 && Math.random() < 0.6 ? decoyFrom + Math.random() * (at - decoyFrom - 800) : undefined;
       this.iaiSignal = { round: r, at, decoyAt };
       this.emit();
       this.botIaido(g, iai, at);

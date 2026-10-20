@@ -27,6 +27,7 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
     queued.current = k;
     // свои файлы ведущего (вкладка «Звуки») ставим на то же время; без них — встроенные
     const own = { signal: hasCustom('iaiSignal'), decoy: hasCustom('iaiDecoy') };
+    playSound('iaiTension', g.startAt); // движок уже отсчитал его длину: «!» будет после него
     if (own.signal) playSound('iaiSignal', sig.at);
     if (own.decoy && sig.decoyAt != null && sig.decoyAt < sig.at) playSound('iaiDecoy', sig.decoyAt);
     iaiSounds(sig.at, sig.decoyAt, { signal: !own.signal, decoy: !own.decoy });

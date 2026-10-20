@@ -4,6 +4,7 @@ import { createTransport, type Transport } from '../shared/net';
 import { getStore } from '../shared/store';
 import type { GameState, InputMsg } from '../shared/types';
 import { now } from '../shared/util';
+import { soundMs } from '../shared/sounds';
 
 export type FxHandler = (kind: string, data?: any) => void;
 
@@ -36,6 +37,7 @@ export class Host {
         broadcast: (m) => this.net.send('game', m),
         save: (d) => this.save(d),
         fx: (k, d) => this.fxSubs.forEach((c) => c(k, d)),
+        soundMs,
       },
       this.room,
       settings,

@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Settings } from '../shared/types';
 import {
-  INTRO_LIST, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundLabel, soundMap, stopAllSounds, uploadSound,
+  INTRO_LIST, MUSIC_LIST, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundLabel, soundMap, soundUrl, stopAllSounds, uploadSound,
   type IntroKind, type SoundCfg, type SoundMap,
 } from '../shared/sounds';
 import { unlockAudio } from '../shared/sound';
@@ -40,10 +40,31 @@ function useSounds() {
 }
 type Snd = ReturnType<typeof useSounds>;
 
+/** предпросмотр фоновой музыки — обычным <audio>, чтобы не декодировать весь трек */
+let musicEl: HTMLAudioElement | null = null;
+function stopMusic() {
+  musicEl?.pause();
+  musicEl = null;
+}
+function previewMusic(cfg: SoundCfg | undefined, dflt?: string) {
+  stopAllSounds();
+  stopMusic();
+  if (cfg?.mute) return;
+  const url = cfg?.file ? soundUrl(cfg.file) : dflt;
+  if (!url) return;
+  musicEl = new Audio(url);
+  musicEl.volume = Math.min(1, 0.6 * (cfg?.file ? cfg.vol ?? 1 : 1));
+  void musicEl.play().catch(() => {});
+}
+function stopAll() {
+  stopAllSounds();
+  stopMusic();
+}
+
 /** сыграть то, что сейчас стоит на событии */
 function preview(id: string, cfg: SoundCfg | undefined) {
   unlockAudio();
-  stopAllSounds();
+  stopAll();
   if (cfg?.mute) return;
   if (cfg?.file) return void playFile(cfg.file, cfg.vol ?? 1);
   SOUND_EVENTS[id]?.synth?.();
@@ -55,7 +76,7 @@ function NoServer({ files }: { files: string[] | null | undefined }) {
 }
 
 /** выбор звука для одного события: файл из папки / загрузить / встроенный / тишина + громкость */
-function Picker({ id, snd, synth, onPlay, label }: { id: string; snd: Snd; synth: boolean; onPlay?: (cfg: SoundCfg) => void; label?: string }) {
+function Picker({ id, snd, synth, onPlay, label, none }: { id: string; snd: Snd; synth: boolean; onPlay?: (cfg: SoundCfg) => void; label?: string; none?: string }) {
   const cfg = snd.map[id] ?? {};
   const inp = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -93,21 +114,27 @@ function Picker({ id, snd, synth, onPlay, label }: { id: string; snd: Snd; synth
         if (onPlay) onPlay(next);
         else preview(id, next);
       }}>
-        <option value="">{synth ? '8-бит (встроенный)' : '— нет звука —'}</option>
-        {synth && <option value="__mute">🔇 выключить</option>}
+        <option value="">{none ?? (synth ? '8-бит (встроенный)' : '— нет звука —')}</option>
+        {(synth || none) && <option value="__mute">🔇 выключить</option>}
         {cfg.file && !files.includes(cfg.file) && <option value={cfg.file}>⚠ {cfg.file} (нет в папке)</option>}
         {folders(files).map(([dir, fs]) => (
           <optgroup label={folderName(dir)}>{fs.map((f) => <option value={f}>{f.split('/').pop()}</option>)}</optgroup>
         ))}
       </select>
       <button class="btn small" title="Открыть библиотеку: все звуки из папки sounds/ с прослушиванием" onClick={() => setLib(true)}>🎵 Библиотека</button>
-      {lib && <Library snd={snd} current={cfg.file} title={label ?? soundLabel(id)} onPick={(f) => { setLib(false); choose(f); }} onClose={() => { stopAllSounds(); setLib(false); }} />}
+      {lib && <Library snd={snd} current={cfg.file} title={label ?? soundLabel(id)} onPick={(f) => { setLib(false); choose(f); }} onClose={() => { stopAll(); setLib(false); }} />}
       <button class="btn small ghost" disabled={busy} title="Выбрать файл на компьютере — он скопируется в папку sounds/. Можно и перетащить файл сюда." onClick={() => inp.current?.click()}>{busy ? '…' : '📁 Файл'}</button>
       <input ref={inp} type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.opus,.flac" hidden onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = ''; void take(f); }} />
       {cfg.file && (
         <label class="snd-vol" title="Громкость">
           🔊<input type="range" min={0} max={1.5} step={0.05} value={cfg.vol ?? 1}
-            onChange={(e) => { const vol = +(e.target as HTMLInputElement).value; void snd.set(id, { ...cfg, vol }); stopAllSounds(); void playFile(cfg.file!, vol); }} />
+            onChange={(e) => {
+              const vol = +(e.target as HTMLInputElement).value;
+              const next = { ...cfg, vol };
+              void snd.set(id, next);
+              if (onPlay) onPlay(next);
+              else { stopAll(); void playFile(cfg.file!, vol); }
+            }} />
           <span>{Math.round((cfg.vol ?? 1) * 100)}%</span>
         </label>
       )}
@@ -139,7 +166,7 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
   }, []);
   const listen = async (f: string) => {
     unlockAudio();
-    stopAllSounds();
+    stopAll();
     if (now === f) return setNow(null);
     setNow(f);
     const src = await playFile(f);
@@ -185,6 +212,36 @@ function badge(cfg: SoundCfg | undefined, synth: boolean) {
 
 // ───────── вкладка «Звуки» ─────────
 
+/** фоновая музыка ТВ: карта, дуэль, обычные вопросы и каждая групповая игра */
+function MusicSection({ snd }: { snd: Snd }) {
+  useEffect(() => stopMusic, []);
+  return (
+    <section class="snd-group">
+      <h3>🎵 Фоновая музыка</h3>
+      <div class="muted small">
+        Играет по кругу на ТВ, между треками — плавный переход. У вопросов и групповых игр без своего файла — как раньше (тишина);
+        у карты и дуэли без своего файла — <code>music/map.mp3</code> и <code>music/duel.mp3</code>. В вопросах с аудио/видео и в ритм-батле музыки нет.
+      </div>
+      <table class="qtable snd-table">
+        <tbody>
+          {MUSIC_LIST.map((m) => {
+            const cfg = snd.map[m.id];
+            return (
+              <tr>
+                <td class="snd-name">
+                  <b>{m.name}</b> {cfg?.mute ? <span class="snd-badge off">тишина</span> : cfg?.file ? <span class="snd-badge own">свой</span> : m.dflt ? <span class="snd-badge synth">стандартная</span> : <span class="snd-badge none">тишина</span>}
+                  <div class="muted small">{m.when}</div>
+                </td>
+                <td><Picker id={m.id} snd={snd} synth={false} label={'Музыка: ' + m.name} none={m.dflt ? `стандартная (${m.dflt})` : undefined} onPlay={(c) => { unlockAudio(); previewMusic(c, m.dflt); }} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export function SoundsTab() {
   const snd = useSounds();
   const [onlyTodo, setOnlyTodo] = useState(false);
@@ -196,14 +253,15 @@ export function SoundsTab() {
         Здесь — звуки событий игры. Все они играют <b>только на ТВ</b>, поэтому файлы никуда не загружаются: кнопка «📁 Файл» (или перетаскивание файла на строку)
         копирует его в папку <code>sounds/</code> проекта, а «🎵 Библиотека» показывает все звуки оттуда (стоковые — в <code>sounds/stock/</code>) с прослушиванием; а выбор сохраняется в <code>sounds/sounds.json</code>. Нет своего файла — играет встроенный 8-битный звук,
         а у событий с пометкой «молчит» звука пока нет вовсе — им можно его дать. Открытый ТВ подхватывает изменения сам (за ~10 c).
-        Интро префектур и игр — на вкладке «Интро». Музыка карты и дуэли — это <code>music/map.mp3</code> и <code>music/duel.mp3</code>.
+        Интро префектур и игр — на вкладке «Интро».
       </div>
       <NoServer files={snd.files} />
+      <MusicSection snd={snd} />
       <div class="row wrap">
         <b>Своих звуков: {own} из {all.length}</b>
         <label><input type="checkbox" checked={onlyTodo} onChange={(e) => setOnlyTodo((e.target as HTMLInputElement).checked)} /> только без своего файла</label>
         <button class="btn small ghost" onClick={() => void snd.refreshFiles()} title="Если положил файлы в папку sounds/ вручную">↻ Обновить список файлов ({snd.files?.length ?? 0})</button>
-        <button class="btn small ghost" onClick={() => stopAllSounds()}>■ Стоп</button>
+        <button class="btn small ghost" onClick={() => stopAll()}>■ Стоп</button>
         <span class="muted small">{snd.status}</span>
       </div>
       {SOUND_GROUPS.map((g) => {

@@ -70,6 +70,7 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'groupGo', name: 'Старт работы', when: 'Свиток свернулся — все начали рисовать / сочинять / резать' },
       { id: 'groupShow', name: 'Показ работы', when: 'Каждая следующая работа на экране (каллиграфия, фукуварай, сэнрю)' },
       { id: 'groupVote', name: 'Голосование', when: 'Галерея работ — все голосуют' },
+      { id: 'iaiTension', name: 'Иайдо: нагнетание', when: 'Один раз в начале каждого раунда (например, кабуки). «!» не вспыхнет, пока файл не доиграет до конца, потом — через случайные 1–5 c. Нет файла — как раньше: сигнал через 2–7 c' },
       { id: 'iaiSignal', name: 'Иайдо: сигнал «!»', when: 'Вспыхнул сигнал — пора рубить. Свой файл тоже звучит точно в момент сигнала (без своего — встроенный «кин!»)' },
       { id: 'iaiDecoy', name: 'Иайдо: ложный «?»', when: 'Ложная тревога (без своего файла — встроенный стук бамбука)' },
       { id: 'iaiCut', name: 'Иайдо: удар', when: 'Кто-то первым срубил', synth: sfx.slash },
@@ -102,6 +103,19 @@ export const INTRO_LIST: { kind: IntroKind; id: string; name: string; sub: strin
   ...(Object.keys(SOLO_GAMES) as SoloGameId[]).map((g) => ({ kind: 'solo' as const, id: g, name: SOLO_GAMES[g].name, sub: '' })),
 ];
 
+/** фоновая музыка ТВ (идёт по кругу, переключается плавно). У карты и дуэли без своего файла —
+ *  music/map.mp3 и music/duel.mp3; у остальных без файла — тишина (как раньше) */
+export const musicId = (k: string) => `music:${k}`;
+export const MUSIC_LIST: { id: string; name: string; when: string; dflt?: string }[] = [
+  { id: musicId('map'), name: 'Карта', when: 'Всю игру, пока видна карта', dflt: 'music/map.mp3' },
+  { id: musicId('duel'), name: 'Дуэль', when: 'Вся дуэль: выбор темы, вопросы, итог', dflt: 'music/duel.mp3' },
+  { id: musicId('question'), name: 'Обычные вопросы', when: 'Вопросы префектур, калибровки, Окинавы (кроме вопросов с аудио/видео)' },
+  ...(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => ({
+    id: musicId('group:' + g), name: GROUP_GAMES[g].name,
+    when: g === 'iaido' ? 'После свитка; во время ожидания сигнала — тишина' : g === 'dragon' ? 'Правила и итоги; во время шествия — тишина (свои барабаны)' : 'После свитка — пока работают, смотрят и голосуют',
+  })),
+];
+
 // ───────── назначения ─────────
 
 let map: SoundMap = {};
@@ -124,7 +138,7 @@ export async function loadSounds() {
     map = r.ok ? await r.json() : {};
   } catch { map = {}; }
   loaded = true;
-  for (const c of map ? Object.values(map) : []) if (c.file) void buffer(c.file);
+  for (const [k, c] of map ? Object.entries(map) : []) if (c.file && !k.startsWith('music:')) void buffer(c.file); // музыку играет <audio>, не декодируем
   subs.forEach((c) => c());
 }
 
@@ -155,8 +169,12 @@ export async function uploadSound(f: File): Promise<string> {
 
 // ───────── проигрывание ─────────
 
+/** адрес файла из sounds/ — для <audio> */
+export const soundUrl = (file: string) => 'sounds/' + file.split('/').map(encodeURIComponent).join('/');
+
 const buffers = new Map<string, Promise<AudioBuffer | null>>();
-const soundUrl = (file: string) => 'sounds/' + file.split('/').map(encodeURIComponent).join('/');
+/** длины уже загруженных файлов, мс */
+const durations = new Map<string, number>();
 
 function buffer(file: string) {
   let b = buffers.get(file);
@@ -164,6 +182,7 @@ function buffer(file: string) {
     b = fetch(soundUrl(file))
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
       .then((ab) => audio().decodeAudioData(ab))
+      .then((d) => { durations.set(file, d.duration * 1000); return d; })
       .catch(() => { buffers.delete(file); return null; });
     buffers.set(file, b);
   }
@@ -199,6 +218,8 @@ export async function playFile(file: string, vol = 1, at?: number): Promise<Audi
 /** подпись события или интро по id — для «где уже стоит этот файл» */
 export function soundLabel(id: string) {
   if (SOUND_EVENTS[id]) return SOUND_EVENTS[id].name;
+  const mu = MUSIC_LIST.find((m) => m.id === id);
+  if (mu) return `Музыка: ${mu.name}`;
   const [k, x] = id.split(':');
   const it = INTRO_LIST.find((i) => i.kind === k && i.id === x);
   return it ? `Интро: ${it.name}` : id;
@@ -208,6 +229,12 @@ export function soundLabel(id: string) {
 export function hasCustom(id: string) {
   const c = map[id];
   return !!(c?.file || c?.mute);
+}
+
+/** длина своего файла события, мс; 0 — файла нет (или он ещё не загрузился) */
+export function soundMs(id: string) {
+  const c = map[id];
+  return c?.file && !c.mute ? Math.round(durations.get(c.file) ?? 0) : 0;
 }
 
 /** звук события: свой файл → встроенный 8-битный → тишина */

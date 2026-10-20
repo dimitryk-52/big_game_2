@@ -17,7 +17,7 @@ import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
 import { DragonTv } from './DragonTv';
-import { refreshMusic, setMusic } from './bgMusic';
+import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
@@ -172,8 +172,15 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const iaiQuiet = st.t === 'group' && s.g?.game === 'iaido' && s.g.phase === 'draw';
   // музыка карты — только пока видна карта: интро префектуры, её вопрос и групповые игры идут в тишине
   const mapHidden = !!bgCode || st.t === 'prefIntro' || st.t === 'group' || st.t === 'dragon';
-  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null : s.duel ? 'duel' : mapHidden ? null : 'map';
-  useEffect(() => { setMusic(track, st.t === 'question'); }, [track, st.t]);
+  // своя музыка (вкладка «Звуки» → «Фоновая музыка»): у обычных вопросов и у каждой групповой игры
+  const ownTrack = s.duel ? null
+    : (st.t === 'question' || st.t === 'bonus') && hasMusic('question') ? 'question'
+    : st.t === 'group' && s.g && s.g.phase !== 'intro' ? 'group:' + s.g.game
+    : st.t === 'dragon' && s.dr ? 'group:dragon'
+    : null;
+  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null
+    : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
+  useEffect(() => { setMusic(track, st.t === 'question' && (track === 'map' || track === 'duel')); }, [track, st.t]);
 
   return (
     <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '') + (st.t === 'dragon' && s.dr ? ' dragon-on' : '')}>
