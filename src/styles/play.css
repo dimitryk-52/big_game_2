@@ -282,7 +282,7 @@
 .shelf-icon img { image-rendering: pixelated; }
 /* доска полки: светлая кромка, тень снизу */
 .shelf-plank { position: absolute; left: 0; right: 0; bottom: 30px; z-index: 0; height: 16px; background: #a8703e; border-top: 4px solid #d79c5a; border-bottom: 4px solid #5a3417; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35); }
-.shelf-plank.art { left: 9%; right: 9%; background: none no-repeat top / 100% auto; border: 0; height: auto; aspect-ratio: 1243 / 142; bottom: 22px; box-shadow: none; image-rendering: pixelated; }
+.shelf-plank.art { left: 9%; right: 9%; background: none no-repeat top / 100% auto; border: 0; height: auto; aspect-ratio: 1244 / 142; bottom: 22px; box-shadow: none; image-rendering: pixelated; }
 /* ценник: бумажка на гвоздике, висит под полкой */
 .price-tag { position: relative; z-index: 2; order: 3; display: flex; gap: 6px; justify-content: center; align-items: center; min-width: 74%; margin-top: 30px; padding: 2px 6px;
   background: #fff6dc; color: #2a1a00; border: 2px solid #1a0d06; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4); font-size: 16px; text-shadow: none; }

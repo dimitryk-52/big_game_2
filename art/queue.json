@@ -434,7 +434,7 @@
       "id": "shop-shelf",
       "game": "Магазин",
       "name": "Доска полки",
-      "target": "shop/shop_shelf.png",
+      "target": "shop/shelf.png",
       "kind": "Предмет",
       "bg": "Пурпурный (вырезать)",
       "aspect": "21:9",
@@ -445,7 +445,7 @@
         "art/reference/shop_draft.jpg"
       ],
       "wired": true,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "ring-bg",

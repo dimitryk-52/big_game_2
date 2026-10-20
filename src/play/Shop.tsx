@@ -1,6 +1,6 @@
 // Магазин: полки с товарами. На полке стоит значок товара, над ним — короткая подпись, под ним — ценник.
 // Тап по товару — окошко покупки: описание, выбор темы (для силы и спецвопроса), кнопка «Купить».
-// Картинки из src/img/shop/ (Nano Banana): shop_bg.png — стена лавки, shop_shelf.png — доска полки.
+// Картинки из src/img/shop/ (Nano Banana): shop_bg.png — стена лавки, shelf.png — доска полки.
 // Пока их нет, стену и полки рисует CSS.
 import { useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
@@ -15,7 +15,7 @@ type Item = keyof Settings['shop'];
 const art = import.meta.glob<string>('../img/shop/*.png', { eager: true, import: 'default', query: '?url' });
 const artUrl = (name: string) => Object.entries(art).find(([p]) => p.endsWith('/' + name))?.[1];
 const BG = artUrl('shop_bg.png');
-const SHELF = artUrl('shop_shelf.png') ?? artUrl('shelf.png');
+const SHELF = artUrl('shelf.png');
 
 /** порядок на полках: по три товара */
 const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2']];
