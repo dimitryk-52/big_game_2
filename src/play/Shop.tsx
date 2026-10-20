@@ -79,12 +79,14 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
       {/* верх — на занавесе-норэн; полки начинаются под ним */}
       <div class="shop-top">
         <div class="shop-head">
-          <div class="shop-sign">店 Магазин</div>
+          {!BG && <div class="shop-sign">店 Магазин</div>}
           <span class="shop-wallet">{fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
         </div>
-        <div class="pad-x">{timer}</div>
-        {msg && <div class="status-card pop shop-msg">{msg}</div>}
+        {/* на картинке — надпись прямо на занавесе, будто выкрашена на ткани */}
+        {BG && <div class="shop-noren"><span>店</span>МАГАЗИН</div>}
       </div>
+      <div class="pad-x">{timer}</div>
+      {msg && <div class="status-card pop shop-msg">{msg}</div>}
       {SHELVES.map((row) => (
         <div class="shelf">
           <div class="shelf-items">

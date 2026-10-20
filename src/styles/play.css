@@ -262,7 +262,12 @@
 .shop.has-art { background: #2e1a10 no-repeat center top / 100% auto; image-rendering: pixelated; }
 .shop-top { display: flex; flex-direction: column; gap: 10px; }
 /* занавес на картинке кончается на 124 из 270 пикселей ширины: верх ровно до его края */
-.shop.has-art .shop-top { aspect-ratio: 270 / 124; margin-bottom: 4px; }
+.shop.has-art .shop-top { position: relative; aspect-ratio: 270 / 124; margin-bottom: -6px; }
+.shop.has-art .shop-head { justify-content: flex-end; }
+/* надпись на норэн: нижняя часть ткани (58–90% высоты верха), между краями занавеса */
+.shop-noren { position: absolute; left: 16%; right: 16%; top: 57%; height: 32%; display: flex; align-items: center; justify-content: center; gap: 0.3em;
+  font-size: clamp(18px, 7.2vw, 34px); letter-spacing: 0.18em; color: #f1e4c4; text-shadow: 2px 2px 0 #120f22; opacity: 0.92; pointer-events: none; }
+.shop-noren span { font-size: 1.2em; color: #e8584f; letter-spacing: 0; }
 .shop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 0; }
 .shop-sign { background: #8c1f2b; color: #ffe9b0; border: 3px solid #1a0d06; box-shadow: inset 0 0 0 2px #d9a441, 3px 3px 0 #1a0d06; padding: 4px 12px; font-size: 22px; letter-spacing: 0.05em; }
 .shop-wallet { background: rgba(16, 12, 8, 0.75); padding: 4px 8px; border: 2px solid #1a0d06; }
