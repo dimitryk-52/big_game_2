@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GroupPublic, Player } from '../shared/types';
 import { FACES, FACE_H, FACE_W, partThumb, renderFace, type Placement } from '../games/faces';
-import { TimerBar } from '../ui/common';
+import { PixIcon, TimerBar } from '../ui/common';
 import { senryuLines, syllables } from '../shared/settings';
 import { shuffle, vibrate } from '../shared/util';
 import { useSubmit } from './GroupGame';
@@ -102,7 +102,7 @@ export function FacePad({ client, g, me }: { client: GameClient; g: GroupPublic;
         <div class="drawpad-task">{g.prompt}</div>
         {g.phase === 'draw' && !sent && <TimerBar start={g.startAt} end={g.deadline} now={() => client.hostNow()} />}
         {g.phase === 'intro' && <div class="muted small-text">Детали появятся по сигналу</div>}
-        {sent && <div class="muted small-text">✔ Лицо собрано — раскроем на ТВ!</div>}
+        {sent && <div class="muted small-text"><PixIcon id="ui_check" size={14} /> Лицо собрано — раскроем на ТВ!</div>}
       </div>
       <div class="drawpad-area" ref={area}>
         <img ref={faceEl} class={'face-blank' + (drag ? ' target' : '')} src={blank} style={{ width: box.w, height: box.h }} alt="" draggable={false} />
@@ -155,11 +155,11 @@ export function SenryuPad({ client, g, me }: { client: GameClient; g: GroupPubli
           <input class="inp" maxLength={60} placeholder="Последняя строка…" value={text} disabled={!live}
             onInput={(e) => setText((e.target as HTMLInputElement).value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) submit(); }} />
-          <div class={'syl' + (n === 5 ? ' ok' : '')}>Слогов: <b>{n}</b> из 5{n === 5 ? ' ✔' : ''}</div>
+          <div class={'syl' + (n === 5 ? ' ok' : '')}>Слогов: <b>{n}</b> из 5{n === 5 && <> <PixIcon id="ui_check" size={16} /></>}</div>
           <button class="btn primary big-btn" disabled={!live || !text.trim()} onClick={submit}>Готово</button>
         </>
       )}
-      {sent && <div class="center muted">✔ Стих на ТВ!</div>}
+      {sent && <div class="center muted"><PixIcon id="ui_check" /> Стих на ТВ!</div>}
     </div>
   );
 }
@@ -248,13 +248,13 @@ export function SashimiPad({ client, g, me }: { client: GameClient; g: GroupPubl
         <>
           <div class="muted small-text center">Води пальцем по доске — нож двигается. Кнопки — по миллиметру.</div>
           <div class="row sashimi-ctrl">
-            <button class="btn" disabled={!live} onClick={() => move(-0.5)}>◀</button>
-            <button class="btn primary big-btn" disabled={!live} onClick={cut}>🔪 Резать</button>
-            <button class="btn" disabled={!live} onClick={() => move(0.5)}>▶</button>
+            <button class="btn" disabled={!live} onClick={() => move(-0.5)}><PixIcon id="ui_left" size={20} /></button>
+            <button class="btn primary big-btn" disabled={!live} onClick={cut}><PixIcon id="group_sashimi" size={26} /> Резать</button>
+            <button class="btn" disabled={!live} onClick={() => move(0.5)}><PixIcon id="ui_right" size={20} /></button>
           </div>
         </>
       )}
-      {sent && <div class="center muted">✔ Отрезано! Взвешиваем на ТВ…</div>}
+      {sent && <div class="center muted"><PixIcon id="ui_check" /> Отрезано! Взвешиваем на ТВ…</div>}
     </div>
   );
 }

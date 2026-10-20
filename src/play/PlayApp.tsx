@@ -4,9 +4,9 @@ import type { GameState, Player, PublicQuestion, SoloGameId } from '../shared/ty
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
-import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
+import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
 import { BONUS_INFO, HATS, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt } from '../shared/settings';
-import { PREF, path as prefPath, prefName } from '../map/mapData';
+import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
 import { RhythmBoard } from '../games/RhythmBoard';
@@ -155,6 +155,9 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
     if (att && att !== lastAtt.current) vibrate([60, 40, 60]);
     lastAtt.current = att;
   }, [att]);
+  // фон префектуры грузим заранее, пока фишка идёт — к интро он уже в кеше
+  const goingTo = s.stage.t === 'moving' ? s.stage.to : null;
+  useEffect(() => { const u = prefBgUrl(goingTo); if (u) new Image().src = u; }, [goingTo]);
   const solo = soloAt(s.settings, me.pref);
   const hasPachinko = solo.includes('pachinko');
   const hasRing = solo.includes('ring');
@@ -193,7 +196,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   return (
     <div class="phone game">
       <Header client={client} s={s} me={me} onSecret={toggleDebug} />
-      {debug && <button class="debug-fab" onClick={() => setDebugOpen((x) => !x)}>🐞</button>}
+      {debug && <button class="debug-fab" onClick={() => setDebugOpen((x) => !x)}><PixIcon id="ui_bug" size={22} /></button>}
       {debug && debugOpen && client.s && (
         <div class="debug-sheet"><DebugMenu s={client.s} send={(cmd, args) => client.send({ t: 'ctl', cmd, args })} onClose={() => setDebugOpen(false)} onGame={onGame} /></div>
       )}
@@ -204,9 +207,9 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
             <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
-        {/* интро префектуры идёт на ТВ; на телефоне — только её фон, вопрос потом появится поверх */}
+        {/* интро префектуры — как на ТВ, но без анимации; вопрос потом появится поверх */}
         {s.stage.t === 'prefIntro' && (
-          <div class="phone-intro">{prefBgUrl(s.stage.code) && <img class="q-bg" src={prefBgUrl(s.stage.code)!} alt="" draggable={false} />}</div>
+          <div class="phone-intro"><PrefIntro code={s.stage.code} who={s.players[s.stage.pid]} still reward={s.prefs[s.stage.code]?.taken ? undefined : s.prefs[s.stage.code]?.reward} /></div>
         )}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
@@ -230,13 +233,13 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
       </div>
       {!att && s.stage.t !== 'prefIntro' && (
         <nav class="tabbar">
-          <button class={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}>🏠<span>Игра</span></button>
-          <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}>🗾<span>Карта</span></button>
-          {(hasPachinko || hasBalls) && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}>🎰<span>Пачинко</span></button>}
-          {hasRing && <button class={tab === 'ring' ? 'on' : ''} onClick={() => setTab('ring')}>🎡<span>Приз</span></button>}
-          {solo.includes('onsen') && <button class={tab === 'onsen' ? 'on' : ''} onClick={() => setTab('onsen')}>♨️<span>Онсэн</span></button>}
-          {solo.includes('chohan') && <button class={tab === 'chohan' ? 'on' : ''} onClick={() => setTab('chohan')}>🎲<span>Чо-хан</span></button>}
-          {solo.includes('sudoku') && <button class={tab === 'sudoku' ? 'on' : ''} onClick={() => setTab('sudoku')}>🔢<span>Судоку</span></button>}
+          <button class={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}><PixIcon id="ui_home" size={22} /><span>Игра</span></button>
+          <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}><PixIcon id="ui_map" size={22} /><span>Карта</span></button>
+          {(hasPachinko || hasBalls) && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}><PixIcon id="pachinko" size={22} /><span>Пачинко</span></button>}
+          {hasRing && <button class={tab === 'ring' ? 'on' : ''} onClick={() => setTab('ring')}><PixIcon id="ring" size={22} /><span>Приз</span></button>}
+          {solo.includes('onsen') && <button class={tab === 'onsen' ? 'on' : ''} onClick={() => setTab('onsen')}><PixIcon id="onsen" size={22} /><span>Онсэн</span></button>}
+          {solo.includes('chohan') && <button class={tab === 'chohan' ? 'on' : ''} onClick={() => setTab('chohan')}><PixIcon id="chohan" size={22} /><span>Чо-хан</span></button>}
+          {solo.includes('sudoku') && <button class={tab === 'sudoku' ? 'on' : ''} onClick={() => setTab('sudoku')}><PixIcon id="sudoku" size={22} /><span>Судоку</span></button>}
         </nav>
       )}
     </div>
@@ -279,14 +282,14 @@ function stageText(s: GameState, me: Player): string {
     case 'landing': return `${n(st.pid)} выбирает место высадки`;
     case 'turnStart': return st.pid === me.id ? 'Твой ход!' : `Ход: ${n(st.pid)}`;
     case 'move': return `${n(st.pid)} выбирает, куда идти`;
-    case 'moving': return `${n(st.pid)} идёт в ${PREF[st.to].ru}`;
+    case 'moving': return s.prefs[st.to]?.rev ? `${n(st.pid)} идёт в ${PREF[st.to].ru}` : `${n(st.pid)} идёт в неизведанные земли`;
     case 'bonus': return 'Игроки выбирают бонусы…';
     case 'question': return s.q ? 'Вопрос на ТВ: ' + s.q.title : 'Вопрос';
     case 'prefIntro': return PREF[st.code]?.ru ?? '';
     case 'reward': return `${n(st.pid)}: ${st.text}`;
-    case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине 🛒`;
+    case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине {ico:shop}`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
-    case 'dragon': return '🐉 Джа-одори — смотри на ТВ!';
+    case 'dragon': return '{ico:group_dragon} Джа-одори — смотри на ТВ!';
     case 'extraTurn': return `${n(st.pid)} решает, ходить ли ещё раз`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
@@ -300,14 +303,14 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   const topics = s.settings.topics.filter((t) => t.combat);
   return (
     <div class="scroll pad col">
-      <div class="status-card slide-up" key={s.stage.t}>{stageText(s, me)}</div>
+      <div class="status-card slide-up" key={s.stage.t}><ResText text={stageText(s, me)} /></div>
       <div class="panel col">
         <div class="row"><span class="muted">Где ты:</span> <b>{me.pref ? `${PREF[me.pref].ru} ${PREF[me.pref].ja}` : '—'}</b></div>
         <div class="muted">Сила</div>
         <SkillChips topics={topics} stats={me.stats} size={26} grid />
         <div class="muted">Инвентарь</div>
         <Inventory p={me} size={36} all />
-        {me.prizes.length > 0 && <div class="prizes">🏆 Призы: {me.prizes.join(', ')}</div>}
+        {me.prizes.length > 0 && <div class="prizes"><PixIcon id="prize" /> Призы: {me.prizes.join(', ')}</div>}
       </div>
       <div class="panel col small-text">
         <div>Твой PIN для входа с другого устройства: <b class="pin">{client.pin ?? '—'}</b></div>
@@ -318,7 +321,7 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {s.joinOrder.filter((id) => id !== me.id).map((id) => s.players[id]).filter(Boolean).map((p) => (
           <div class="row">
             <Avatar p={p} size={22} /> <span class="grow">{p.name}</span>
-            <SkillChips topics={topics} stats={p.stats} size={14} /> <span>❤{p.hp}</span>
+            <SkillChips topics={topics} stats={p.stats} size={14} /> <span><PixIcon id="ui_heart" size={14} />{p.hp}</span>
           </div>
         ))}
       </div>
@@ -347,6 +350,12 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     client.answer(q.n, i);
     vibrate(30);
   };
+  const [usingBonus, setUsingBonus] = useState(false);
+  const applyBonus = async (b: 'fifty1' | 'fifty2') => {
+    setUsingBonus(true);
+    try { await client.req('qBonus', { n: q.n, b }); vibrate(30); } catch { /* время вышло или уже использован */ }
+    setUsingBonus(false);
+  };
   const ok = q.revealed && q.correct === (choice ?? q.choices?.[me.id]);
   const imgs = q.answerImages;
   const bg = prefBgUrl(q.pref);
@@ -357,8 +366,8 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
       <div class="q-title">{q.title}{q.special ? <> · <PixIcon id="special" size={18} /></> : ''}</div>
       {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
-      {q.media?.type === 'audio' && <div class="q-tv">🎵 Слушай на ТВ</div>}
-      {q.media?.type === 'video' && <div class="q-tv">🎬 Смотри на ТВ</div>}
+      {q.media?.type === 'audio' && <div class="q-tv"><PixIcon id="ui_note" /> Слушай на ТВ</div>}
+      {q.media?.type === 'video' && <div class="q-tv"><PixIcon id="ui_film" /> Смотри на ТВ</div>}
       <div class="q-text">{q.text}</div>
       {q.reading && <div class="center muted">Слушайте вопрос — варианты появятся следом</div>}
       {!q.reading && <div class={imgs ? 'q-grid' : 'q-list'}>
@@ -378,11 +387,18 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           );
         })}
       </div>}
+      {!q.reading && !q.revealed && choice === null && !expired && !removed.length && (['fifty1', 'fifty2'] as const).some((b) => me.bonuses[b] > 0) && (
+        <div class="q-bonuses">
+          {(['fifty1', 'fifty2'] as const).filter((b) => me.bonuses[b] > 0).map((b) => (
+            <button class="btn small yellow" disabled={usingBonus} onClick={() => applyBonus(b)}><BonusIcon b={b} size={22} /> {BONUS_INFO[b].name} ×{me.bonuses[b]}</button>
+          ))}
+        </div>
+      )}
       {!q.revealed && choice !== null && <div class="center muted">Ответ принят. Ждём остальных…</div>}
       {!q.revealed && choice === null && expired && <div class="center muted">Время вышло</div>}
       {q.revealed && (
         <div class="q-result pop">
-          {ok ? '✔ Верно!' : choice === null ? '⏱ Без ответа' : '✘ Неверно'}
+          {ok ? <><PixIcon id="ui_check" size={28} /> Верно!</> : choice === null ? <><PixIcon id="ui_timer" size={28} /> Без ответа</> : <><PixIcon id="ui_cross" size={28} /> Неверно</>}
           {q.results?.[me.id] && <div class="q-res-sub"><ResText text={q.results[me.id]} topics={s.settings.topics} size={24} /></div>}
         </div>
       )}
@@ -434,7 +450,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
   return (
     <div class="pad col center-screen">
       <h2>Дуэль! Твой вопрос</h2>
-      <div class="muted">Противник: {foe?.name} (❤ {foe?.hp}). Выбери тему — урон зависит от силы того, кто ответит правильно.</div>
+      <div class="muted">Противник: {foe?.name} (<PixIcon id="ui_heart" size={16} /> {foe?.hp}). Выбери тему — урон зависит от силы того, кто ответит правильно.</div>
       <TimerBar start={st.deadline - s.settings.pickTime * 1000} end={st.deadline} now={() => client.hostNow()} />
       {st.topics.map((id) => {
         const t = s.settings.topics.find((x) => x.id === id)!;
@@ -444,8 +460,17 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
           </button>
         );
       })}
-      {st.canSpecial && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· осталось {me.specials}</span></button>}
-      {st.canRhythm && <button class="btn yellow big-btn" disabled={sent} onClick={() => send('rhythm')}>🥁 Ритм-баттл (сила музыки)</button>}
+      {st.canSpecial && [...new Set(me.specialTopics ?? [])].map((id) => {
+        const t = s.settings.topics.find((x) => x.id === id);
+        const n = (me.specialTopics ?? []).filter((x) => x === id).length;
+        return (
+          <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special:' + id)}>
+            <SkillIcon t={t ?? SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос: {t?.name ?? id}</span> <b>сила {s.settings.specialPower}</b>{n > 1 && <span class="muted"> ×{n}</span>}
+          </button>
+        );
+      })}
+      {st.canSpecial && me.specials > (me.specialTopics?.length ?? 0) && <button class="btn big-btn rainbow" disabled={sent} onClick={() => send('special')}><SkillIcon t={SPECIAL_TOPIC} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос (любая спецтема)</span> <b>сила {s.settings.specialPower}</b> <span class="muted">· {me.specials - (me.specialTopics?.length ?? 0)}</span></button>}
+      {st.canRhythm && <button class="btn yellow big-btn" disabled={sent} onClick={() => send('rhythm')}><PixIcon id="ui_drum" size={24} /> Ритм-баттл (сила музыки)</button>}
     </div>
   );
 }
@@ -488,12 +513,17 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       selected: sel,
       arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
       activePid: me.id,
-      machines: machinesOf(s.settings),
-      shops: s.settings.shopPrefs,
+      // при высадке значки магазинов и автоматов не нужны — только место
+      machines: mode === 'move' ? machinesOf(s.settings) : undefined,
+      shops: mode === 'move' ? s.settings.shopPrefs : undefined,
+      showRewards: mode === 'move',
     });
   };
   useEffect(refresh, [sel, s.v]);
+  // под туманом имя префектуры не показываем — только направление
+  const optName = (c: number) => (s.prefs[c]?.rev ? PREF[c].ru : me.pref ? `? ${dirName(me.pref, c)}` : '?');
 
+  useEffect(() => { const u = prefBgUrl(sel); if (u) new Image().src = u; }, [sel]);
   const confirm = () => {
     if (!sel || sent) return;
     setSent(true);
@@ -510,14 +540,14 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       <div class="mappick-foot">
         {st.t === 'move' && (
           <div class="opt-list">
-            {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{PREF[c].ru}</button>)}
-            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {PREF[c].ru}</button>)}
+            {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{optName(c)}</button>)}
+            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {optName(c)}</button>)}
           </div>
         )}
         {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text"><BonusIcon b="move2" size={16} /> — ход на 2 префектуры (потратит сапог)</div>}
-        {st.t === 'landing' && <div class="muted small-text">Тёмные префектуры заняты или рядом с соперниками. Тапни по карте.</div>}
+        {st.t === 'landing' && <div class="muted small-text">Высадка — только на побережье. Тёмные префектуры заняты, рядом с соперниками или без выхода к морю. Тапни по карте.</div>}
         <button class="btn primary big-btn" disabled={!sel || sent} onClick={confirm}>
-          {!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться: ${PREF[sel].ru}`}
+          <ResText text={!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться${s.prefs[sel]?.rev ? ': ' + PREF[sel].ru : ' сюда'}`} size={22} />
         </button>
       </div>
     </div>

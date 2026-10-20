@@ -2,21 +2,6 @@
   "about": "Очередь картинок для Nano Banana. Задания сюда добавляет Claude, прогоняет их человек на закладке «Очередь» в генераторе (npm run pixelart → http://localhost:4180). target — куда кнопка «В игру» кладёт картинку (относительно src/img). refs — референсы: путь в проекте или @id другого задания (тогда берётся его готовая картинка). wired: false — игра эту картинку пока не подхватывает, после рисования её подключит код. status: todo / done.",
   "tasks": [
     {
-      "id": "iaido-bg",
-      "game": "Иайдо",
-      "name": "Ночная сакура (фон)",
-      "target": "iaido/bg.png",
-      "kind": "Фон / сцена",
-      "bg": "Без указания",
-      "aspect": "16:9",
-      "grid": 480,
-      "hint": "ТВ во весь экран и фон телефона. Без людей: самурай отдельным слоем. Луна правее центра (на телефоне кадр режется по ней).",
-      "prompt": "Pixel art, 16:9 wide landscape, night in feudal Japan. A huge full moon slightly right of center with a soft glow, silhouette of Mount Fuji beneath it, a blooming sakura tree on the left edge with branches reaching over the top, another sakura branch entering from the top right corner, a dark grassy field in the foreground with fallen petals. Deep indigo-to-violet sky with stars, pink blossoms, very atmospheric and calm. Empty center-bottom area for a character. No people, no text",
-      "refs": [],
-      "wired": true,
-      "status": "todo"
-    },
-    {
       "id": "iaido-samurai",
       "game": "Иайдо",
       "name": "Самурай в стойке",
@@ -28,10 +13,10 @@
       "hint": "Пока ждут сигнала. Ноги у нижнего края — потом самурай с мечом должен стоять в тех же пикселях.",
       "prompt": "A lone ronin samurai in solid dark silhouette seen from behind at three-quarters, low iaido stance, right hand resting on the katana hilt, sword sheathed at the left hip, topknot, wide hakama trousers. Full body, feet at the bottom edge",
       "refs": [
-        "@iaido-bg"
+        "@iaido-bg-dawn"
       ],
       "wired": true,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "iaido-samurai-cut",
@@ -48,7 +33,7 @@
         "@iaido-samurai"
       ],
       "wired": true,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "iaido-petal",
@@ -78,7 +63,7 @@
       "prompt": "A Japanese katana standing perfectly vertical, hilt at the top: white wrapped tsuka with black diamond pattern, gold kashira, gold tsuba (guard) at one quarter of the height, then a long polished steel blade with a subtle hamon down to the tip at the bottom. Straight, centered, no perspective",
       "refs": [],
       "wired": true,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "iaido-saya",
@@ -95,7 +80,52 @@
         "@iaido-katana"
       ],
       "wired": true,
-      "status": "todo"
+      "status": "done"
+    },
+    {
+      "id": "iaido-bg-dawn",
+      "name": "Рассвет у стен замка (фон, iai1)",
+      "target": "iaido/bg_dawn.png",
+      "prompt": "Pixel art, 16:9 wide landscape, dawn in feudal Japan. A rising sun slightly right of center glowing soft gold and pink through morning mist, a massive dark Japanese castle (Kumamoto style, black walls, curved stone base) on the left side, high curved stone castle walls along the background, a few pines, a dewy grassy courtyard in the foreground. Cool blue shadows and warm golden light, calm tense morning duel atmosphere. Empty center-bottom area for a character. No people, no text",
+      "game": "Иайдо",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "16:9",
+      "grid": 480,
+      "refs": [],
+      "wired": false,
+      "status": "done",
+      "hint": "Ещё один фон дуэли, без людей, пустой центр-низ под самурая, главный ориентир (солнце/луна) правее центра — на телефоне кадр режется по нему. Фон для задания iai1 (settings.ts). Подключить по заданию — после рисования."
+    },
+    {
+      "id": "iaido-bg-bridge",
+      "name": "Мост ночью (фон, iai3)",
+      "target": "iaido/bg_bridge.png",
+      "prompt": "Pixel art, 16:9 wide landscape, night in old Edo Japan. A full moon slightly right of center reflected in a wide dark river, an arched wooden bridge spanning across the middle background, wooden houses and glowing paper lanterns along the riverbank on the left, a willow tree hanging from the top left, the wooden planks of a bridge deck in the foreground. Deep blue and warm lantern orange palette, tense and quiet. Empty center-bottom area for a character. No people, no text",
+      "game": "Иайдо",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "16:9",
+      "grid": 480,
+      "refs": [],
+      "wired": false,
+      "status": "done",
+      "hint": "Ещё один фон дуэли, без людей, пустой центр-низ под самурая, главный ориентир (солнце/луна) правее центра — на телефоне кадр режется по нему. Фон для задания iai3 (settings.ts). Подключить по заданию — после рисования."
+    },
+    {
+      "id": "iaido-bg-bamboo",
+      "name": "Бамбук под дождём (фон, iai2)",
+      "target": "iaido/bg_bamboo.png",
+      "prompt": "Pixel art, 16:9 wide landscape, rainy bamboo forest clearing in feudal Japan at dusk. Tall green bamboo stalks framing both sides, a pale misty light slightly right of center, diagonal rain streaks, puddles reflecting light on the dark ground in the foreground. Green and teal palette, moody and atmospheric. Empty center-bottom area for a character. No people, no text",
+      "game": "Иайдо",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "16:9",
+      "grid": 480,
+      "refs": [],
+      "wired": false,
+      "status": "done",
+      "hint": "Ещё один фон дуэли, без людей, пустой центр-низ под самурая, главный ориентир (солнце/луна) правее центра — на телефоне кадр режется по нему. Фон для задания iai2 (settings.ts). Подключить по заданию — после рисования."
     },
     {
       "id": "dragon-head",
@@ -177,7 +207,7 @@
         "src/img/bgs/bg_nagasaki.png"
       ],
       "wired": true,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "dragon-sky",
@@ -211,7 +241,7 @@
         "art/reference/sashimi_scene_tuna.png"
       ],
       "wired": false,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "sashimi-tuna",
@@ -329,7 +359,7 @@
         "art/reference/chohan_scene_closed.png"
       ],
       "wired": false,
-      "status": "todo"
+      "status": "done"
     },
     {
       "id": "chohan-cup",
@@ -381,6 +411,91 @@
         "@chohan-dice"
       ],
       "wired": false,
+      "status": "todo"
+    },
+    {
+      "id": "shop-bg",
+      "game": "Магазин",
+      "name": "Стена лавки",
+      "target": "shop/shop_bg.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "9:16",
+      "grid": 270,
+      "hint": "Фон экрана магазина на телефоне. Полки, товары и ценники рисует код поверх — на картинке их быть не должно. Середина спокойная и тёмная, чтобы иконки читались.",
+      "prompt": "Interior back wall of a small cozy Japanese shop (dagashi-ya) at evening, dark wooden planks, a noren curtain and paper lanterns at the very top, a few hanging tags and posters near the edges, the middle area plain dark wood with nothing on it, warm lantern light, vertical composition, no shelves, no items, no text",
+      "refs": [
+        "art/reference/shop_draft.jpg"
+      ],
+      "wired": true,
+      "status": "done"
+    },
+    {
+      "id": "shop-shelf",
+      "game": "Магазин",
+      "name": "Доска полки",
+      "target": "shop/shop_shelf.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "21:9",
+      "grid": 160,
+      "hint": "Одна длинная горизонтальная доска полки на всю ширину, вид спереди, тонкая. Код растягивает её на ширину экрана и высоту ~22 px — пусть доска занимает почти весь кадр по ширине и не имеет перспективы.",
+      "prompt": "A single long horizontal wooden shelf board seen straight from the front, thin, light warm wood with a brighter top edge and a dark shadow line underneath, two small metal brackets near the ends, filling the full width of the image, no perspective, no items on it",
+      "refs": [
+        "art/reference/shop_draft.jpg"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "ring-bg",
+      "game": "Призовое кольцо",
+      "name": "Фон кольца",
+      "target": "ring/ring_bg.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "1:1",
+      "grid": 200,
+      "hint": "Квадрат за колесом. Колесо с секторами и подсветку рисует код поверх по центру (занимает ~95% ширины) — видны будут в основном углы. Яркий праздничный фон.",
+      "prompt": "Festive Japanese summer matsuri background for a prize wheel game, purple night sky with radiating sunburst rays from the center, gold confetti, paper lanterns and small fireworks in the four corners, the center left empty for a large wheel, square composition, no text",
+      "refs": [
+        "art/reference/ring_draft.png"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "pachinko-bg",
+      "game": "Пачинко",
+      "name": "Доска пачинко",
+      "target": "pachinko/pachinko_bg.png",
+      "kind": "Фон / сцена",
+      "bg": "Без указания",
+      "aspect": "9:16",
+      "grid": 300,
+      "hint": "Задник игрового поля (код растягивает в 5:8). Штырьки, хромовую дугу, окно барабанов в центре и карманы код рисует сам поверх — на картинке их не нужно. Ничего важного у краёв.",
+      "prompt": "Backboard art of a retro Japanese pachinko machine playfield, glossy illustrated panel with a night sky, a golden dragon and cherry blossoms swirling around an empty dark rectangle in the upper middle, neon pink and gold accents, vertical composition, no pins, no balls, no text",
+      "refs": [
+        "art/reference/pachinko_draft.png"
+      ],
+      "wired": true,
+      "status": "todo"
+    },
+    {
+      "id": "pachinko-ball",
+      "game": "Пачинко",
+      "name": "Шарик",
+      "target": "pachinko/ball.png",
+      "kind": "Предмет",
+      "bg": "Пурпурный (вырезать)",
+      "aspect": "1:1",
+      "grid": 12,
+      "hint": "Стальной шарик пачинко, на экране 9×9 пикселей: блик слева сверху, тёмный обод.",
+      "prompt": "A single shiny steel pachinko ball, chrome silver sphere, bright highlight at the top left, dark rim, centered",
+      "refs": [
+        "art/reference/pachinko_draft.png"
+      ],
+      "wired": true,
       "status": "todo"
     }
   ]

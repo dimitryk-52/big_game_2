@@ -8,9 +8,9 @@ import type {
 import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
-import { PREF, PREF_CODES, atDistance, neighbors, path, prefName } from '../map/mapData';
+import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
-import { RHYTHM_LEAD_BEATS, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
+import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 
@@ -189,6 +189,14 @@ export class GameEngine {
       case 'settings':
         if (args) { this.s.settings = args; this.emit(); }
         break;
+      case 'auto': {
+        // галочки пульта: интро → вопрос и вопрос → ответы без «Далее»
+        const st = this.s.settings;
+        if (typeof args?.autoIntro === 'boolean') st.autoIntro = args.autoIntro;
+        if (typeof args?.autoReading === 'boolean') st.autoReading = args.autoReading;
+        this.emit();
+        break;
+      }
       case 'questions':
         if (Array.isArray(args)) this.questions = args;
         break;
@@ -444,27 +452,20 @@ export class GameEngine {
       const pid = order[i];
       const p = this.s.players[pid];
       if (!p || p.pref) continue;
+      // высадка — с моря: только на побережье, не на занятые префектуры и не рядом с соперниками
       const occupied = Object.values(this.s.players).map((x) => x.pref).filter((x): x is number => !!x);
-      let blocked = new Set<number>(occupied);
+      const coast = PREF_CODES.filter(isCoastal);
+      let blocked = new Set<number>([...occupied, ...PREF_CODES.filter((c) => !isCoastal(c))]);
       occupied.forEach((o) => neighbors(o).forEach((n) => blocked.add(n)));
-      if (blocked.size >= PREF_CODES.length) blocked = new Set(occupied);
-      // на магазин и групповую игру не высаживаются — туда нужно прийти
-      const special = [...(this.s.settings.shopPrefs ?? []), ...Object.keys(this.s.settings.groupPrefs ?? {}).map(Number)];
-      if (PREF_CODES.some((c) => !blocked.has(c) && !special.includes(c))) special.forEach((c) => blocked.add(c));
+      if (coast.every((c) => blocked.has(c))) blocked = new Set([...occupied, ...PREF_CODES.filter((c) => !isCoastal(c))]);
       const allowed = PREF_CODES.filter((c) => !blocked.has(c));
       const ms = this.s.settings.landingTime * 1000;
       this.setStage({ t: 'landing', pid, deadline: this.now + ms, blocked: [...blocked] });
       const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'landing' && m.pid === pid && allowed.includes(m.value) ? (m.value as number) : undefined), ms + 500);
       const code = v ?? pick(allowed);
-      p.pref = code;
-      this.s.prefs[code].rev = true;
       this.log(`${p.name} высаживается: ${prefName(code)}`);
-      this.io.fx?.('land', { pid, code });
-      this.setStage({ t: 'prefIntro', code, pid });
-      await this.sleep(epoch, this.hostPaced ? 36e5 : PREF_INTRO_MS);
-      // первый вопрос — сразу на месте высадки
-      await this.gate(epoch);
-      await this.prefQuestion(epoch, p, code);
+      // высадка — полноценный ход: интро, вопрос, магазин, групповая игра
+      await this.arrive(epoch, p, code, true);
       this.sec.landingIdx = i + 1;
       this.snapshot();
     }
@@ -526,18 +527,30 @@ export class GameEngine {
     }
     this.setStage({ t: 'moving', pid, from, to, path: options.includes(to) ? [from, to] : path(from, to) });
     await this.sleep(epoch, 1500);
+    await this.arrive(epoch, p, to);
+  }
+
+  /** сколько держать интро префектуры: по «Далее» ведущего или само (галочка на пульте) */
+  private get introWait() {
+    return this.hostPaced && !this.s.settings.autoIntro ? 36e5 : PREF_INTRO_MS;
+  }
+
+  /** игрок пришёл или высадился в префектуру: интро при первом входе, затем всё, что в ней есть */
+  private async arrive(epoch: number, p: Player, to: number, landing = false) {
+    const st = this.s.settings;
+    const pid = p.id;
     p.pref = to;
     if (this.sec.onsen) delete this.sec.onsen[pid];
     const ps = this.s.prefs[to];
     const firstVisit = !ps.rev;
     ps.rev = true;
     ps.visits++;
-    this.io.fx?.('arrive', { pid, code: to, firstVisit });
+    this.io.fx?.(landing ? 'land' : 'arrive', { pid, code: to, firstVisit });
     this.emit();
     if (firstVisit) {
       await this.sleep(epoch, 700);
       this.setStage({ t: 'prefIntro', code: to, pid });
-      await this.sleep(epoch, this.hostPaced ? 36e5 : PREF_INTRO_MS);
+      await this.sleep(epoch, this.introWait);
     }
     await this.gate(epoch);
 
@@ -568,8 +581,8 @@ export class GameEngine {
       this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
     if (q) {
       const pids = this.s.joinOrder.filter((id) => this.s.players[id]);
-      const removed = await this.bonusPhase(epoch, pids, false, q);
-      const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, removed, to);
+      // бонусы «убрать неверные» — кнопками под ответами, прямо во время вопроса
+      const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, {}, to);
       const results: Record<string, string> = {};
       const moverOk = res[pid] === q.correct;
       for (const id of pids) {
@@ -672,7 +685,9 @@ export class GameEngine {
         this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel });
         const choice = await this.waitInput(epoch, (m) => {
           if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== asker.id) return undefined;
-          if (m.value === 'special' && asker.specials > 0) return 'special';
+          // спецвопрос: 'special' — из любой спецтемы, 'special:<тема>' — купленный на эту тему
+          if (m.value === 'special' && asker.specials > (asker.specialTopics?.length ?? 0)) return 'special';
+          if (typeof m.value === 'string' && m.value.startsWith('special:') && asker.specialTopics?.includes(m.value.slice(8))) return m.value;
           if (m.value === 'rhythm' && st.rhythmInDuel) return 'rhythm';
           return topics.includes(m.value) ? (m.value as string) : undefined;
         }, ms + 400);
@@ -698,21 +713,21 @@ export class GameEngine {
 
         d.mode = 'quiz';
         let q: Question | null;
-        if (pickV === 'special') {
+        if (pickV === 'special' || pickV.startsWith('special:')) {
           asker.specials--;
           d.special = true;
-          // любой вопрос из спецтем; если их нет — обычный боевой
-          q = this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
+          const sTopic = pickV.startsWith('special:') ? pickV.slice(8) : null;
+          if (sTopic) asker.specialTopics!.splice(asker.specialTopics!.indexOf(sTopic), 1);
+          // вопрос купленной спецтемы (или любой спецтемы); если их нет — обычный боевой
+          q = (sTopic ? this.pickQuestion((x) => x.topic === sTopic) : null) ?? this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         } else {
           q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         }
         if (!q) continue;
         d.topic = q.topic;
         this.emit();
-        // бонусы: сначала атакующий дуэли, потом защитник
-        const removed = await this.bonusPhase(epoch, [att.id, def.id], true, q);
         const topicName = this.s.settings.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
-        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? (st.topics.find((t) => t.id === q!.topic)?.special ? topicName : 'Спецвопрос') : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, removed, def.pref);
+        const res = await this.ask(epoch, q, 'duel', `Дуэль · раунд ${r} · ${d.special ? (st.topics.find((t) => t.id === q!.topic)?.special ? topicName : 'Спецвопрос') : topicName} · спрашивает ${asker.name}`, [asker.id, target.id], q.time ?? st.duelTime, {}, def.pref);
         const okA = res[asker.id] === q.correct, okT = res[target.id] === q.correct;
         const results: Record<string, string> = {};
         if (okA !== okT) {
@@ -849,6 +864,7 @@ export class GameEngine {
     const g: GroupPublic = {
       id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), game, prompt: task?.text ?? 'Нарисуйте любой кандзи', pref: code,
       ...(game === 'fukuwarai' ? { face: task?.face ?? 'okame' } : {}),
+      ...(game === 'iaido' && task?.scene ? { scene: task.scene } : {}),
       ...(game === 'sashimi' ? (() => { const fish = task?.fish && FISH[task.fish] ? task.fish : 'tuna'; return { fish, total: FISH[fish].total, target: randomTarget(fish) }; })() : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
       voteRounds: game === 'iaido' ? 0 : Math.min(3, players.length - 1), voted: [],
@@ -1204,43 +1220,6 @@ export class GameEngine {
     for (const n of m.miss.slice(0, 50)) if (Number.isInteger(n) && n >= from) set.add(n);
   }
 
-  // ───────── бонусы ─────────
-
-  private async bonusPhase(epoch: number, pids: string[], sequential: boolean, q: Question): Promise<Record<string, number[]>> {
-    const removed: Record<string, number[]> = {};
-    const st = this.s.settings;
-    const offersFor = (id: string): BonusId[] => {
-      const p = this.s.players[id];
-      return p ? (['fifty1', 'fifty2'] as BonusId[]).filter((b) => p.bonuses[b] > 0) : [];
-    };
-    const groups = sequential ? pids.map((p) => [p]) : [pids];
-    for (const g of groups) {
-      const who = g.filter((id) => offersFor(id).length);
-      if (!who.length) continue;
-      const offers = Object.fromEntries(who.map((id) => [id, offersFor(id)]));
-      const ms = st.bonusTime * 1000;
-      const stage: Stage = { t: 'bonus', pids: who, deadline: this.now + ms, offers, picked: {} };
-      this.setStage(stage);
-      const end = this.now + ms + 300;
-      while (who.some((id) => !(id in stage.picked)) && this.now < end) {
-        const m = await this.waitInput(epoch, (x) => (x.t === 'pick' && x.kind === 'bonus' && who.includes(x.pid) && !(x.pid in stage.picked) ? x : undefined), end - this.now);
-        if (!m) break;
-        const b = m.value as BonusId | null;
-        stage.picked[m.pid] = b && offers[m.pid].includes(b) ? b : 'none';
-        this.emit();
-      }
-      for (const id of who) {
-        const b = stage.picked[id];
-        if (b && b !== 'none') {
-          this.s.players[id].bonuses[b]--;
-          const wrong = shuffle([0, 1, 2, 3].filter((i) => i !== q.correct));
-          removed[id] = wrong.slice(0, b === 'fifty2' ? 2 : 1);
-        }
-      }
-    }
-    return removed;
-  }
-
   // ───────── вопросы ─────────
 
   private pickQuestion(f: (q: Question) => boolean): Question | null {
@@ -1272,7 +1251,7 @@ export class GameEngine {
     this.io.fx?.('question', pq);
     // ведущий читает вопрос вслух; ответы и таймер — по «Далее»
     if (reading) {
-      await this.sleep(epoch, 36e5);
+      await this.sleep(epoch, this.s.settings.autoReading ? readingMs(q) : 36e5);
       delete pq.reading;
     }
     pq.startAt = this.now + LEAD;
@@ -1418,14 +1397,32 @@ export class GameEngine {
         const cost = st.shop[item];
         if (!cost) return reply(false, null, 'Нет такого товара');
         if (item === 'stat' && !(a.topic in p.stats)) return reply(false, null, 'Выбери тему');
+        const sTopics = st.topics.filter((t) => t.special).map((t) => t.id);
+        if (item === 'special' && sTopics.length && !sTopics.includes(a.topic)) return reply(false, null, 'Выбери тему спецвопроса');
         if (!pay(cost)) return reply(false, null, 'Не хватает денег');
-        if (item === 'special') p.specials++;
+        if (item === 'special') { p.specials++; if (a.topic) (p.specialTopics ??= []).push(a.topic); }
         else if (item === 'hp') { p.maxHp += st.shop.hp.amount; p.hp += st.shop.hp.amount; }
         else if (item === 'stat') p.stats[a.topic]++;
         else p.bonuses[item as BonusId]++;
         this.log(`${p.name} купил: ${shopName(item, st, a.topic)}`);
         this.emit();
         return reply(true);
+      }
+      case 'qBonus': {
+        // «убрать 1/2 неверных» во время вопроса: один бонус на вопрос, пока игрок не ответил
+        const q = this.s.q;
+        const b = a.b as BonusId;
+        if (!q || q.n !== a.n || q.revealed || q.reading || !q.participants.includes(p.id) || p.id in this.choices) return reply(false, null, 'Сейчас нельзя');
+        if (b !== 'fifty1' && b !== 'fifty2') return reply(false, null, 'Нет такого бонуса');
+        if (q.removed[p.id]?.length) return reply(false, null, 'Бонус уже использован');
+        if (!(p.bonuses[b] > 0)) return reply(false, null, 'Нет бонуса');
+        if (this.now > q.deadline) return reply(false, null, 'Время вышло');
+        p.bonuses[b]--;
+        const wrong = shuffle([0, 1, 2, 3].filter((i) => i !== this.curCorrect));
+        q.removed = { ...q.removed, [p.id]: wrong.slice(0, b === 'fifty2' ? 2 : 1) };
+        this.io.fx?.('bonusUsed', { pid: p.id, b });
+        this.emit();
+        return reply(true, { removed: q.removed[p.id] });
       }
       case 'pachiBuy': {
         if (!soloAt(st, p.pref).includes('pachinko')) return reply(false, null, 'Здесь нет пачинко');
@@ -1469,8 +1466,8 @@ export class GameEngine {
         this.sec.ring[p.id] = { seed, t0 };
         p.busy = 'ring';
         this.emit();
-        this.io.fx?.('ring', { pid: p.id, seed, t0, cellMs: st.ring.cellMs, physical: st.ring.physicalPrize });
-        return reply(true, { seed, t0, cellMs: st.ring.cellMs, physical: st.ring.physicalPrize });
+        this.io.fx?.('ring', { pid: p.id, seed, t0, cellMs: st.ring.cellMs });
+        return reply(true, { seed, t0, cellMs: st.ring.cellMs });
       }
       case 'ringStop': {
         const r = this.sec.ring[p.id];
@@ -1482,15 +1479,15 @@ export class GameEngine {
         if (!isFinite(at) || at > t + 50 || at < t - 3000) at = t;
         at = Math.max(at, r.t0);
         const { cell } = ringCellAt(r.t0, at, st.ring.cellMs);
-        const res = ringResult(ringLayout(r.seed, st.ring.physicalPrize), cell);
+        const res = ringResult(ringLayout(r.seed), cell);
+        const info = RING_PRIZE_INFO[res];
         p.busy = null;
-        if (res === 'green') { p.yen += st.ring.prizeYen; this.log(`${p.name} выиграл в призовой машине ¥${st.ring.prizeYen}!`); }
-        if (res === 'gold') {
-          const name = st.prizeNames[randInt(st.prizeNames.length)] ?? 'Приз';
-          p.prizes.push(name);
-          this.log(`🏆 ${p.name} выиграл ПРИЗ в призовой машине: ${name}`);
-          this.io.fx?.('prize', { pid: p.id });
-        }
+        p.yen += info.yen ?? 0;
+        p.stars += info.stars ?? 0;
+        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
+        if (res === 'special') p.specials++;
+        if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
+        if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
         this.emit();
         this.io.fx?.('ringStop', { pid: p.id, cell, res, at });
         return reply(true, { cell, res, at });
@@ -1587,17 +1584,14 @@ export class GameEngine {
     if (st.t === 'move' && isBot(st.pid)) {
       this.botLater('move', 1500, () => this.handle({ t: 'pick', pid: st.pid, kind: 'move', value: pick([...st.options, ...st.options2]) }));
     }
-    if (st.t === 'bonus') {
-      for (const id of st.pids) if (isBot(id)) this.botLater('bonus' + id, 800 + randInt(1500), () =>
-        this.handle({ t: 'pick', pid: id, kind: 'bonus', value: Math.random() < 0.5 ? st.offers[id][0] : null }));
-    }
     if (st.t === 'extraTurn' && isBot(st.pid)) {
       this.botLater('extra', 1200, () => this.handle({ t: 'pick', pid: st.pid, kind: 'extra', value: Math.random() < 0.7 }));
     }
     if (st.t === 'duelPick' && isBot(st.pid)) {
       this.botLater('duel', 1500, () => {
         const opts: string[] = [...st.topics];
-        if (st.canSpecial) opts.push('special');
+        const bp = this.s.players[st.pid];
+        if (st.canSpecial) opts.push(bp.specialTopics?.length ? 'special:' + bp.specialTopics[0] : 'special');
         if (st.canRhythm) opts.push('rhythm');
         this.handle({ t: 'pick', pid: st.pid, kind: 'duel', value: pick(opts) });
       });
@@ -1606,6 +1600,8 @@ export class GameEngine {
     if (st.t === 'question' && q && !q.revealed && !q.reading) {
       for (const id of q.participants) if (isBot(id)) {
         const n = q.n;
+        const fifty = (['fifty1', 'fifty2'] as BonusId[]).find((b) => this.s.players[id].bonuses[b] > 0);
+        if (fifty && Math.random() < 0.4) this.botLater('fifty' + id + n, Math.max(0, q.startAt - this.now) + 600, () => this.handle({ t: 'req', pid: id, rid: 0, op: 'qBonus', args: { n, b: fifty } }));
         this.botLater('ans' + id + n, Math.max(0, q.startAt - this.now) + 1500 + randInt(7000), () => {
           const removed = q.removed[id] ?? [];
           const opts = [0, 1, 2, 3].filter((i) => !removed.includes(i));
@@ -1637,9 +1633,14 @@ export class GameEngine {
   }
 }
 
+/** сколько ведущему читать вопрос вслух, прежде чем сами покажутся ответы: по длине текста (~13 знаков/с) */
+export function readingMs(q: Pick<Question, 'text' | 'media'>) {
+  return Math.round(Math.max(3000, Math.min(20000, 1500 + q.text.length * 75)) + (q.media?.type === 'image' ? 1500 : 0));
+}
+
 export function shopName(item: string, st: Settings, topic?: string) {
   switch (item) {
-    case 'special': return 'Спецвопрос';
+    case 'special': return topic ? `Спецвопрос «${st.topics.find((t) => t.id === topic)?.name ?? topic}»` : 'Спецвопрос';
     case 'hp': return `+${st.shop.hp.amount} к макс. HP`;
     case 'stat': return `+1 к силе «${st.topics.find((t) => t.id === topic)?.name ?? topic}»`;
     default: return BONUS_INFO[item as BonusId]?.name ?? item;

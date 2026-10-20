@@ -22,6 +22,10 @@ export const PREFS: PrefInfo[] = raw.prefs as any;
 export const PREF: Record<number, PrefInfo> = Object.fromEntries(PREFS.map((p) => [p.code, p]));
 export const PREF_CODES = PREFS.map((p) => p.code);
 
+/** префектуры без выхода к морю: на них не высаживаются */
+export const INLAND = [9, 10, 11, 19, 20, 21, 25, 29];
+export const isCoastal = (code: number) => !INLAND.includes(code);
+
 export function neighbors(code: number) {
   return PREF[code]?.adj ?? [];
 }
@@ -56,4 +60,13 @@ export function path(from: number, to: number): number[] {
 
 export function prefName(code: number | null | undefined) {
   return code ? PREF[code]?.ru ?? '?' : '—';
+}
+
+const DIRS = ['восток', 'юго-восток', 'юг', 'юго-запад', 'запад', 'северо-запад', 'север', 'северо-восток'];
+/** куда идти от одной префектуры к другой — для префектур под туманом, чьё имя не показываем */
+export function dirName(from: number, to: number) {
+  const a = PREF[from]?.anchor, b = PREF[to]?.anchor;
+  if (!a || !b) return '';
+  const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+  return DIRS[((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8];
 }

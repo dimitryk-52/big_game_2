@@ -61,7 +61,7 @@ function App() {
           {tab === 'settings' && <SettingsEditor settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
           {tab === 'sounds' && <SoundsTab />}
           {tab === 'intros' && <IntrosTab settings={settings} />}
-          {tab === 'remote' && <Remote />}
+          {tab === 'remote' && <Remote settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
         </>
       )}
     </div>
@@ -340,7 +340,6 @@ const NUM_FIELDS: [string, string][] = [
   ['pachinko.yenPerBall', 'Пачинко: ¥ за шарик'],
   ['pachinko.pack', 'Пачинко: шариков в пачке'],
   ['ring.cost', 'Призовая машина: цена, ¥'],
-  ['ring.prizeYen', 'Призовая машина: выигрыш, ¥'],
   ['ring.cellMs', 'Призовая машина: мс на ячейку (меньше — быстрее)'],
   ['sudoku.rewards.0.yen', 'Судоку 4×4: награда, ¥'],
   ['sudoku.rewards.0.stars', 'Судоку 4×4: награда, ★'],
@@ -379,7 +378,6 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
         <label class="set-row"><span>Авто-переход после показа ответа</span><input type="checkbox" checked={s.autoAdvance} onChange={(e) => upd((c) => (c.autoAdvance = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Ритм-баттл в дуэлях</span><input type="checkbox" checked={s.rhythmInDuel} onChange={(e) => upd((c) => (c.rhythmInDuel = (e.target as HTMLInputElement).checked))} /></label>
         <label class="set-row"><span>Чо-хан: ставки, ¥ (через запятую)</span><input class="inp-s" value={(s.chohan?.bets ?? []).join(', ')} onChange={(e) => upd((c) => (c.chohan = { ...c.chohan, bets: (e.target as HTMLInputElement).value.split(/[,\s]+/).map(Number).filter((x) => x > 0) }))} /></label>
-        <label class="set-row"><span>Золотая ячейка (настоящий приз) в призовой машине</span><input type="checkbox" checked={s.ring.physicalPrize} onChange={(e) => upd((c) => (c.ring.physicalPrize = (e.target as HTMLInputElement).checked))} /></label>
       </div>
       <div class="note">Темы и спецтемы игроков — на вкладке «Темы».</div>
       <h3>Названия призов</h3>
@@ -391,7 +389,7 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
 
 // ───────── пульт ─────────
 
-function Remote() {
+function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings) => Promise<void> }) {
   const [room, setRoom] = useState(() => localStorage.getItem('bg_tv_room') ?? localStorage.getItem('bg_admin_room') ?? '');
   const [net, setNet] = useState<Transport | null>(null);
   const [s, setS] = useState<GameState | null>(null);
@@ -433,6 +431,23 @@ function Remote() {
         {s?.phase === 'lobby' && <button class="btn" onClick={() => ctl('addBot')}>+ бот</button>}
         <button class="btn" onClick={() => ctl('reload')}>🔄 Обновить вопросы и настройки в игре</button>
         <button class="btn" onClick={() => { if (confirm('Завершить игру?')) ctl('end'); }}>🏁 Завершить</button>
+      </div>
+      <div class="col remote-auto">
+        {([
+          ['autoIntro', 'Само: интро префектуры → вопрос (через 5 с)'],
+          ['autoReading', 'Само: вопрос → варианты ответов (когда ведущий успел прочитать, по длине текста)'],
+        ] as const).map(([k, label]) => {
+          const on = !!(s?.settings ?? settings)[k];
+          return (
+            <label class="set-row"><span>{label}</span><input type="checkbox" checked={on} onChange={(e) => {
+              const v = (e.target as HTMLInputElement).checked;
+              // сразу в игру и в сохранённые настройки — чтобы «Обновить настройки» не сбросило галочку
+              ctl('auto', { [k]: v });
+              void onSave({ ...settings, [k]: v });
+            }} /></label>
+          );
+        })}
+        {settings.hostPaced === false && <div class="muted small">Ведущий не управляет вопросами (галочка в «Настройках» снята) — всё и так идёт само.</div>}
       </div>
       {s && (
         <table class="qtable">

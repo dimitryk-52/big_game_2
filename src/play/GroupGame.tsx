@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, GroupPublic, Player } from '../shared/types';
 import { InkBrush, washiCanvas } from '../games/brush';
-import { TimerBar } from '../ui/common';
+import { PixIcon, ResText, TimerBar } from '../ui/common';
 import { vibrate } from '../shared/util';
 import { GROUP_GAMES } from '../shared/settings';
 import { FacePad, SenryuPad, SashimiPad, MyWork } from './GroupPads';
@@ -194,7 +194,7 @@ function DrawPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Pl
         <div class="drawpad-task">{g.prompt}</div>
         {g.phase === 'draw' && !done && <TimerBar start={g.startAt} end={g.deadline} now={() => client.hostNow()} />}
         {g.phase === 'intro' && <div class="muted small-text">Слушай задание — холст откроется по сигналу</div>}
-        {done && <div class="muted small-text">{submitted ? '✔ Работа на ТВ' : 'Отправляем…'}</div>}
+        {done && <div class="muted small-text">{submitted ? <><PixIcon id="ui_check" size={14} /> Работа на ТВ</> : 'Отправляем…'}</div>}
       </div>
       <div class="drawpad-area" ref={wrap}>
         <div class={'drawpad-paper' + (live && !done ? '' : ' locked')} style={{ width: box.w, height: box.h, backgroundImage: `url(${paper})` }}>
@@ -209,9 +209,9 @@ function DrawPad({ client, g, me }: { client: GameClient; g: GroupPublic; me: Pl
             <span>{x.label}</span>
           </button>
         ))}
-        <button class="btn small" disabled={!canUndo || done || !live} onClick={doUndo}>↶</button>
-        <button class="btn small" disabled={done || !live} onClick={clear}>🗑</button>
-        <button class="btn small primary" disabled={done || !live} onClick={submit}>✔</button>
+        <button class="btn small" disabled={!canUndo || done || !live} onClick={doUndo}><PixIcon id="ui_undo" size={20} /></button>
+        <button class="btn small" disabled={done || !live} onClick={clear}><PixIcon id="ui_trash" size={20} /></button>
+        <button class="btn small primary" disabled={done || !live} onClick={submit}><PixIcon id="ui_check" size={20} /></button>
       </div>
     </div>
   );
@@ -308,7 +308,7 @@ function Results({ g, me }: { g: GroupPublic; me: Player }) {
       {g.game === 'sashimi'
         ? <div class="muted">{g.grams?.[me.id] != null ? <>Твой кусок: <b>{g.grams[me.id]} г</b> из {g.target} г (промах {g.points?.[me.id]} г)</> : 'Ты не успел отрезать'}</div>
         : <div class="muted">Твои очки: <b>{g.points?.[me.id] ?? 0}</b></div>}
-      {g.awards?.[me.id] && <div class="q-result pop">{g.awards[me.id]}</div>}
+      {g.awards?.[me.id] && <div class="q-result pop"><ResText text={g.awards[me.id]} size={28} /></div>}
       {g.game !== 'sashimi' && <MyNumber g={g} me={me} />}
     </div>
   );

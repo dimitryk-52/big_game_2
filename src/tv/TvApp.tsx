@@ -170,7 +170,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const qMedia = st.t === 'question' && (s.q?.media?.type === 'audio' || s.q?.media?.type === 'video');
   // иайдо — в тишине, чтобы был слышен «кин!»; джа-одори — под свои барабаны
   const iaiQuiet = st.t === 'group' && s.g?.game === 'iaido' && s.g.phase === 'draw';
-  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null : s.duel ? 'duel' : 'map';
+  // музыка карты — только пока видна карта: интро префектуры, её вопрос и групповые игры идут в тишине
+  const mapHidden = !!bgCode || st.t === 'prefIntro' || st.t === 'group' || st.t === 'dragon';
+  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null : s.duel ? 'duel' : mapHidden ? null : 'map';
   useEffect(() => { setMusic(track, st.t === 'question'); }, [track, st.t]);
 
   return (
@@ -195,13 +197,13 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         <Prompt>
           <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> выбирает, куда идти
           <div class="prompt-opts">
-            {st.options.map((c) => <span class="chip">{PREF[c].ru}</span>)}
-            {st.options2.map((c) => <span class="chip two"><BonusIcon b="move2" size={18} /> {PREF[c].ru}</span>)}
+            {st.options.map((c) => <span class="chip">{s.prefs[c]?.rev ? PREF[c].ru : '?'}</span>)}
+            {st.options2.map((c) => <span class="chip two"><BonusIcon b="move2" size={18} /> {s.prefs[c]?.rev ? PREF[c].ru : '?'}</span>)}
           </div>
           {!s.players[st.pid]?.online && <div class="muted" style={{ fontSize: '0.7em' }}>Игрок не на связи — случайный ход через 15 c (или Пробел)</div>}
         </Prompt>
       )}
-      {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} → <b>{PREF[st.to].ru} {PREF[st.to].ja}</b></Prompt>}
+      {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} <PixIcon id="ui_right" size={28} /> <b>{s.prefs[st.to]?.rev ? `${PREF[st.to].ru} ${PREF[st.to].ja}` : '???'}</b></Prompt>}
       {inDuel && !(st.t === 'question' && s.q?.context === 'duel') && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
       {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer reward={s.prefs[st.code]?.taken ? undefined : s.prefs[st.code]?.reward} />}
@@ -307,7 +309,7 @@ function PlayerList({ s }: { s: GameState }) {
               <div class="pc-info">
                 <div class="pc-name">
                   <span class="pname">{p.name}</span>
-                  {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check">✔</span>}
+                  {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check"><PixIcon id="ui_check" /></span>}
                   {p.busy && <span class="pc-busy" title={SOLO_GAMES[p.busy]?.doing}><PixIcon id={p.busy} size={20} /></span>}
                   <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
                 </div>
@@ -316,7 +318,7 @@ function PlayerList({ s }: { s: GameState }) {
                   <span>{fmtYen(p.yen)}</span>
                   <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
                   {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
-                  {p.prizes.length > 0 && <span>🏆{p.prizes.length}</span>}
+                  {p.prizes.length > 0 && <span><PixIcon id="prize" />{p.prizes.length}</span>}
                   {BONUS_IDS.map((b) => (p.bonuses[b] ?? 0) > 0 && <span class="pc-stars"><BonusIcon b={b} size={16} />{p.bonuses[b]}</span>)}
                 </div>
               </div>
@@ -344,7 +346,7 @@ function Lobby({ s, host }: { s: GameState; host: Host }) {
         <div class="url">{url}</div>
         {local && /localhost|127.0.0.1/.test(url) && (
           <div class="warn">
-            ⚠ QR ведёт на localhost — телефоны не смогут открыть его.{' '}
+            <PixIcon id="ui_warn" /> QR ведёт на localhost — телефоны не смогут открыть его.{' '}
             {host.net.mode === 'supabase' ? 'Добавь VITE_PUBLIC_URL (адрес GitHub Pages) в .env и перезапусти.' : 'Открой эту страницу по сетевому адресу (см. вывод npm run dev).'}
           </div>
         )}
@@ -361,7 +363,7 @@ function Lobby({ s, host }: { s: GameState; host: Host }) {
           {!players.length && <div class="muted">Сканируйте QR-код телефоном…</div>}
         </div>
         <div class="row" style={{ marginTop: 24, gap: 16 }}>
-          <button class="btn primary" disabled={!players.length} onClick={() => host.ctl('start')}>▶ Начать игру</button>
+          <button class="btn primary" disabled={!players.length} onClick={() => host.ctl('start')}><PixIcon id="ui_play" /> Начать игру</button>
           <button class="btn small" onClick={() => host.ctl('addBot')}>+ бот</button>
         </div>
       </div>
@@ -374,8 +376,8 @@ function Banner({ text, sub, big, avatar }: { text: string; sub?: string; big?: 
     <div class={'banner' + (big ? ' big' : '')}>
       <div class="banner-inner pop">
         {avatar && <Avatar p={avatar} size={80} />}
-        <div class="banner-text">{text}</div>
-        {sub && <div class="banner-sub">{sub}</div>}
+        <div class="banner-text"><ResText text={text} size={48} /></div>
+        {sub && <div class="banner-sub"><ResText text={sub} size={32} /></div>}
       </div>
     </div>
   );
@@ -544,7 +546,7 @@ function DuelResult({ s }: { s: GameState }) {
     <div class="banner">
       <div class="banner-inner pop">
         {d.over ? (
-          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+¥{s.settings.reward.duelWinYen} · +{s.settings.reward.duelWinStars} ★</div></>
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+¥{s.settings.reward.duelWinYen} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div></>
             : <div class="banner-text">Дуэль окончена</div>
         ) : d.mode === 'rhythm' && s.rhythm ? (
           <>
@@ -566,7 +568,7 @@ function RewardPopup({ s }: { s: GameState }) {
       <div class="banner-inner reward pop">
         <div class="reward-icon"><PixIcon id={st.reward} size={96} /></div>
         <div class="banner-text">{p?.name}</div>
-        <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: {st.text}</div>
+        <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: <ResText text={st.text} size={32} /></div>
       </div>
     </div>
   );
@@ -579,11 +581,11 @@ function PrizePopup({ s }: { s: GameState }) {
   return (
     <div class="banner prize">
       <div class="banner-inner pop">
-        <div class="reward-icon spin">🏆</div>
+        <div class="reward-icon spin"><PixIcon id="prize" size={96} /></div>
         <div class="banner-text">ПРИЗ!</div>
         {p && <Avatar p={p} size={96} />}
         <div class="banner-text">{p?.name}</div>
-        <div class="banner-sub">{st.text}</div>
+        <div class="banner-sub"><ResText text={st.text} size={32} /></div>
       </div>
     </div>
   );
@@ -601,8 +603,8 @@ function EndScreen({ s }: { s: GameState }) {
               <tr>
                 <td>{i + 1}</td>
                 <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
-                <td>🏆 {p.prizes.length}</td>
-                <td>⭐ {p.stars}</td>
+                <td><PixIcon id="prize" /> {p.prizes.length}</td>
+                <td><PixIcon id="stars" /> {p.stars}</td>
                 <td>{fmtYen(p.yen)}</td>
               </tr>
             ))}
@@ -618,13 +620,13 @@ function HostPanel({ s, host, onNewGame, onDebug }: { s: GameState; host: Host; 
   const netLabel = useMemo(() => ({ supabase: 'Supabase', ws: 'LAN (dev)', local: 'вкладки' }[host.net.mode]), [host]);
   return (
     <div class="host-panel">
-      <button class="btn small" title="Пробел" onClick={() => host.ctl(s.phase === 'lobby' ? 'start' : 'next')}>▶ Далее</button>
-      <button class="btn small" title="P" onClick={() => host.ctl('pause')}>{s.paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
-      <button class="btn small" title="F" onClick={toggleFullscreen}>⛶</button>
-      <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); refreshMusic(); }}>{snd ? '🔊' : '🔇'}</button>
-      <button class="btn small" onClick={() => { if (confirm('Завершить игру и показать итоги?')) host.ctl('end'); }}>🏁</button>
-      <button class="btn small" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна.')) onNewGame(); }}>🆕</button>
-      <button class="btn small" title="Отладка: любой экран игры" onClick={onDebug}>🐞</button>
+      <button class="btn small" title="Пробел" onClick={() => host.ctl(s.phase === 'lobby' ? 'start' : 'next')}><PixIcon id="ui_play" size={14} /> Далее</button>
+      <button class="btn small" title="P" onClick={() => host.ctl('pause')}>{s.paused ? <><PixIcon id="ui_play" size={14} /> Продолжить</> : <><PixIcon id="ui_pause" size={14} /> Пауза</>}</button>
+      <button class="btn small" title="F" onClick={toggleFullscreen}><PixIcon id="ui_fullscreen" size={16} /></button>
+      <button class="btn small" onClick={() => { setSound(!snd); setSnd(!snd); refreshMusic(); }}><PixIcon id={snd ? 'ui_sound' : 'ui_mute'} size={16} /></button>
+      <button class="btn small" onClick={() => { if (confirm('Завершить игру и показать итоги?')) host.ctl('end'); }}><PixIcon id="ui_flag" size={16} /></button>
+      <button class="btn small" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна.')) onNewGame(); }}><PixIcon id="ui_plus" size={16} /></button>
+      <button class="btn small" title="Отладка: любой экран игры" onClick={onDebug}><PixIcon id="ui_bug" size={16} /></button>
       <MediaBox questions={host.engine.questions} compact />
       <span class="chip" title="Режим сети">{netLabel} · {host.net.status === 'online' ? 'онлайн' : host.net.status}</span>
       <span class="muted" style={{ fontSize: 12 }}>H — скрыть</span>

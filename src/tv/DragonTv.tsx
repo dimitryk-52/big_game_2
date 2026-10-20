@@ -2,7 +2,7 @@
 // Сбившийся падает вместе со своим куском и остаётся позади, остальные смыкаются.
 import { useEffect, useRef } from 'preact/hooks';
 import type { DragonPublic, GameState } from '../shared/types';
-import { Avatar, useFrame } from '../ui/common';
+import { Avatar, PixIcon, useFrame } from '../ui/common';
 import { characterCanvas } from '../shared/sprites';
 import { startDragonDrums } from '../shared/sound';
 import { DRAGON_COUNT, DRAGON_BAR, dragonBpm, dragonFoot, dragonTimes } from '../games/logic';
@@ -10,6 +10,7 @@ import { STREET_GROUND, dragonImg, fallbackStreet } from '../games/dragonArt';
 import { GROUP_GAMES } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { now, uiFont } from '../shared/util';
+import { ScrollBanner } from './GroupTv';
 
 /** насколько уезжает улица за шаг, в пикселях street.png */
 const STRIDE = 5;
@@ -87,18 +88,12 @@ export function DragonTv({ s }: { s: GameState }) {
         </div>
       )}
       {d.phase === 'intro' && (
-        <div class="dragon-center"><div class="dragon-card pop">
-          <div class="group-kanji">{info.kanji}</div>
-          <div class="group-sub">Групповая игра · {PREF[d.pref]?.ru}</div>
-          <div class="group-title">{info.name} <span class="jp">{info.ja}</span></div>
-          <div class="dragon-rules">
-            <div>Танец дракона с фестиваля Нагасаки Кунчи. Все вместе несём дракона на шестах.</div>
-            <div>На телефоне две кнопки: <b>ЛЕВАЯ</b> и <b>ПРАВАЯ</b>. Жмите по очереди в такт барабану.</div>
-            <div>Сначала {d.warm} шагов разминки без зачёта, потом гонг — и зачёт.</div>
-            <div>Каждые {DRAGON_BAR} шагов темп растёт. Сбился — выбыл со своим куском дракона.</div>
-            <div>Кто дольше всех несёт дракона — тот победил!</div>
-          </div>
-        </div></div>
+        <div class="dragon-center">
+          <ScrollBanner game="dragon" pref={d.pref} how={<>
+            Танец дракона с праздника Нагасаки Кунчи. На телефоне — <b>ЛЕВАЯ</b> и <b>ПРАВАЯ</b>: жмите по очереди в такт барабану.
+            Сначала {d.warm} шагов разминки, потом гонг — и зачёт. Каждые {DRAGON_BAR} шагов темп растёт. Сбился — выбыл со своим куском дракона.
+          </>} />
+        </div>
       )}
       {d.phase === 'results' && <div class="dragon-center side"><Results s={s} d={d} /></div>}
     </div>
@@ -106,7 +101,6 @@ export function DragonTv({ s }: { s: GameState }) {
 }
 
 function Results({ s, d }: { s: GameState; d: DragonPublic }) {
-  const medal = ['', '🥇', '🥈', '🥉'];
   const order = [...d.players].filter((id) => s.players[id]).sort((a, b) => (d.out[b] ?? Infinity) - (d.out[a] ?? Infinity));
   return (
     <div class="dragon-card dragon-results pop">
@@ -116,7 +110,7 @@ function Results({ s, d }: { s: GameState; d: DragonPublic }) {
         const out = d.out[id];
         return (
           <div class={'dragon-row' + (pl ? ' place' + pl : '')}>
-            <span class="medal">{pl ? medal[pl] : ''}</span>
+            <span class="medal">{pl && pl <= 3 ? <PixIcon id={'ui_medal' + pl} size={28} /> : ''}</span>
             <Avatar p={s.players[id]} size={30} />
             <b>{s.players[id].name}</b>
             <span class="muted">{out == null ? 'донёс дракона' : `шаг ${out - d.warm + 1}`}</span>

@@ -123,7 +123,8 @@ export class MapView {
     });
     this.mapSprite = new Sprite(new Texture({ source: src }));
     this.mapSprite.scale.set(SCALE);
-    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.iconLayer, this.arrowLayer, this.tokenLayer, this.labelLayer, this.fxLayer);
+    // фишки и их имена — поверх подписей префектур и выносок
+    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.iconLayer, this.arrowLayer, this.labelLayer, this.tokenLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
 
     this.fitAll(false);
@@ -133,7 +134,8 @@ export class MapView {
     const onFonts = (e: FontFaceSetLoadEvent) => { if (e.fontfaces.some((f) => f.family.replace(/["']/g, '') === fam.replace(/["']/g, ''))) this.redrawTexts(); };
     document.fonts.addEventListener('loadingdone', onFonts);
     this.app.renderer.runners.destroy.add({ destroy: () => document.fonts.removeEventListener('loadingdone', onFonts) });
-    new ResizeObserver(() => { if (!this.camTarget && performance.now() - this.userTouchedAt > 4000) this.refocus(); }).observe(el);
+    this.resizeObs = new ResizeObserver(() => { if (!this.camTarget && performance.now() - this.userTouchedAt > 4000) this.refocus(); });
+    this.resizeObs.observe(el);
   }
 
   private redrawTexts() {
@@ -152,7 +154,11 @@ export class MapView {
     if (this.last) { this.updateLabels(this.last); this.updateTokens(this.last); }
   }
 
+  private resizeObs: ResizeObserver | null = null;
+
   destroy() {
+    // иначе наблюдатель дёрнет камеру уже уничтоженного приложения
+    this.resizeObs?.disconnect();
     this.app.destroy(true, { children: true });
   }
 
@@ -234,8 +240,9 @@ export class MapView {
   private updateLabels(u: MapUpdate) {
     const want = new Map<number, 'opt' | 'rev'>();
     for (const c of PREF_CODES) if (u.prefs[c]?.rev) want.set(c, 'rev');
-    for (const c of [...(u.highlight ?? []), ...(u.highlight2 ?? [])]) want.set(c, 'opt');
-    if (u.selected) want.set(u.selected, 'opt');
+    // под туманом подписи нет вовсе: имя появится, когда префектуру откроют
+    for (const c of [...(u.highlight ?? []), ...(u.highlight2 ?? [])]) if (u.prefs[c]?.rev) want.set(c, 'opt');
+    if (u.selected && u.prefs[u.selected]?.rev) want.set(u.selected, 'opt');
     for (const [c, l] of this.labels) if (!want.has(c)) { l.destroy(); this.labels.delete(c); }
     for (const [c, kind] of want) {
       let l = this.labels.get(c);
@@ -337,9 +344,9 @@ export class MapView {
       t.ty = target.y;
       t.body.alpha = p.hp <= 0 ? 0.45 : 1;
       t.ring.clear();
-      if (u.activePid === p.id) {
-        t.ring.ellipse(0, 0, 11, 5).fill({ color: 0xfff27a, alpha: 0.9 });
-      } else t.ring.ellipse(0, 0, 8, 3.5).fill({ color: 0x000000, alpha: 0.35 });
+      // тень/подсветка под ногами — пиксельный овал в размер пикселя персонажа
+      if (u.activePid === p.id) pixelOval(t.ring, 11, 5, 0xfff27a, 0.9);
+      else pixelOval(t.ring, 8, 3.5, 0x000000, 0.35);
     }
     for (const [id, t] of this.tokens) if (!live.has(id)) { t.root.destroy({ children: true }); this.tokens.delete(id); }
   }
@@ -627,6 +634,18 @@ export class MapView {
       if (p.life >= p.max) { p.g.destroy(); this.particles.splice(i, 1); }
     }
   }
+}
+
+/** овал из квадратных «пикселей» персонажа (body.scale = 1.6) — без гладких краёв */
+function pixelOval(g: Graphics, rx: number, ry: number, color: number, alpha: number) {
+  const P = 1.6;
+  const ny = Math.round(ry / P);
+  for (let j = -ny; j < ny; j++) {
+    const y = (j + 0.5) * P;
+    const half = Math.round((rx * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry)))) / P);
+    if (half > 0) g.rect(-half * P, j * P, half * 2 * P, P);
+  }
+  g.fill({ color, alpha });
 }
 
 /** имя над фишкой */

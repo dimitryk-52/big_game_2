@@ -7,6 +7,7 @@ import { PachinkoSim, drawPachinko } from '../games/pachinko';
 import { PACHI } from '../games/logic';
 import { randInt, vibrate } from '../shared/util';
 import { sfx } from '../shared/sound';
+import { PixIcon } from '../ui/common';
 
 export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient; s: GameState; me: Player; paused: boolean; onExit: () => void }) {
   const key = `bg_balls_${client.room}_${me.id}`;
@@ -115,7 +116,7 @@ export function Pachinko({ client, s, me, paused, onExit }: { client: GameClient
       <div class="pachi-board">
         <canvas ref={cv} width={PACHI.W * scale} height={PACHI.H * scale} />
         {win && <div class="pachi-win pop">{win}</div>}
-        {paused && <div class="pachi-paused">⏸ пауза — вопрос!</div>}
+        {paused && <div class="pachi-paused"><span><PixIcon id="ui_pause" size={20} /> пауза — вопрос!</span></div>}
       </div>
       <div class="pachi-ctrl">
         <label class="col" style={{ gap: 2, flex: 1 }}>

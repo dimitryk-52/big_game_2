@@ -12,6 +12,7 @@ const now = () => t0 + (Date.now() - t0) * SPEED;
 
 const settings = structuredClone(DEFAULT_SETTINGS);
 settings.prefRewards = { 13: 'prize', 27: 'prize' };
+settings.hostPaced = false; // ведущего в симуляции нет — всё идёт по таймерам
 let msgs = 0, bytes = 0, lastStage = '';
 const eng = new GameEngine(
   {

@@ -27,6 +27,9 @@ const B = mk('Тануки', '#ff4d6d', 2, { hp: 2 });
 const start = Date.now();
 const now = () => start + ((Date.now() - start) % 15000);
 const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring'];
+const UI_ICONS = ['ui_check', 'ui_cross', 'ui_timer', 'ui_left', 'ui_right', 'ui_up', 'ui_play', 'ui_pause', 'ui_heart', 'ui_medal1', 'ui_medal2', 'ui_medal3',
+  'ui_undo', 'ui_trash', 'ui_backspace', 'ui_dizzy', 'ui_warn', 'ui_note', 'ui_film', 'ui_phone', 'ui_hand', 'ui_home', 'ui_map', 'ui_drum',
+  'ui_fullscreen', 'ui_sound', 'ui_mute', 'ui_flag', 'ui_plus', 'ui_bug'];
 const HAT_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff'];
 
 function Section({ title, note, children }: { title: string; note?: string; children: any }) {
@@ -200,6 +203,11 @@ function Catalog() {
       <Section title="Иконки" note="PNG из src/img/icons — контур и тень добавляет игра.">
         {ICONS.map((id) => <div class="ui-icon"><PixIcon id={id} size={48} /><div class="ui-label">{id}</div></div>)}
         {topics.map((t) => <div class="ui-icon"><SkillIcon t={t} size={44} /><div class="ui-label">topic_{t.id}</div></div>)}
+      </Section>
+
+      <Section title="Значки интерфейса" note="Вместо эмодзи и символов шрифта (src/shared/sprites.ts, UI_ART). В текстах звезду, сердце, галочку, крестик, стрелку и {ico:id} подменяет ResText.">
+        {UI_ICONS.map((id) => <div class="ui-icon"><PixIcon id={id} size={40} /><div class="ui-label">{id.replace('ui_', '')}</div></div>)}
+        <div class="q-result"><ResText text="✔ Верно! +1 ★ ❤ → {ico:ui_timer}" size={28} /></div>
       </Section>
 
       <Section title="Награды на карте" note="Награда — кремовая выноска (покачивается, пропадает, когда забрали). Автомат — голубая, неподвижная, остаётся всегда.">

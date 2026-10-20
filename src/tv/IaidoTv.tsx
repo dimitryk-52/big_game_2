@@ -3,12 +3,12 @@
 // Фон — ночная сакура с самураем и летящими лепестками; на «!» лепестки почти замирают, самурай выхватывает меч.
 import { useEffect, useRef } from 'preact/hooks';
 import type { GameState, GroupPublic } from '../shared/types';
-import { Avatar, useFrame } from '../ui/common';
+import { Avatar, PixIcon, useFrame } from '../ui/common';
 import { iaiSounds } from '../shared/sound';
 import { hasCustom, playSound } from '../shared/sounds';
 import { now } from '../shared/util';
 import { runPetals } from '../games/petals';
-import bgUrl from '../img/iaido/bg.png';
+import { iaiBg } from '../games/iaidoScenes';
 import samuraiUrl from '../img/iaido/samurai.png';
 import samuraiCutUrl from '../img/iaido/samurai_cut.png';
 
@@ -45,7 +45,7 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
 
   return (
     <div class="iai-stage">
-      <IaiArt drawn={go} at={go && s0 ? s0.at : null} />
+      <IaiArt scene={g.scene} drawn={go} at={go && s0 ? s0.at : null} />
       {flash && <div class="iai-flash" />}
       {go && s0 && t - s0.at < 1000 && <div class="iai-slash" key={s0.at} />}
       <div class="iai-top">
@@ -70,7 +70,7 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
           return (
             <div class={'iai-samurai' + (early ? ' out' : '') + (id === winner ? ' win' : '')}>
               <div class="iai-badge">
-                {early ? '✗' : iai.step === 'done' ? (cut ? (place < 3 ? ['斬', '2', '3'][place] : '·') : '—') : cut ? '✔' : ''}
+                {early ? <PixIcon id="ui_cross" size={26} /> : iai.step === 'done' ? (cut ? (place < 3 ? ['斬', '2', '3'][place] : '·') : '—') : cut ? <PixIcon id="ui_check" size={26} /> : ''}
               </div>
               <Avatar p={p} size={56} />
               <div class="iai-name">{p.name}</div>
@@ -86,7 +86,7 @@ export function IaidoTv({ s, g, sig }: { s: GameState; g: GroupPublic; sig: Sign
 }
 
 /** картина: фон, самурай и лепестки. После сигнала время почти замирает и через полторы секунды оживает */
-function IaiArt({ drawn, at }: { drawn: boolean; at: number | null }) {
+function IaiArt({ scene, drawn, at }: { scene: GroupPublic['scene']; drawn: boolean; at: number | null }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const cut = useRef<number | null>(null);
   cut.current = at;
@@ -98,8 +98,8 @@ function IaiArt({ drawn, at }: { drawn: boolean; at: number | null }) {
   }), []);
   return (
     <div class="iai-art">
-      <div class="iai-pic">
-        <img class="iai-bg" src={bgUrl} alt="" draggable={false} />
+      <div class={'iai-pic scene-' + (scene ?? 'moon')}>
+        <img class="iai-bg" src={iaiBg(scene)} alt="" draggable={false} />
         <img class={'iai-sam' + (drawn ? ' drawn' : '')} src={drawn ? samuraiCutUrl : samuraiUrl} alt="" draggable={false} />
         <canvas ref={cv} class="iai-petals" width={480} height={270} />
       </div>

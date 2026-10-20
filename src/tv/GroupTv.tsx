@@ -1,7 +1,7 @@
 // Групповая игра на ТВ: задание → «рисуют…» → показ работ по одной → галерея для голосования → итоги.
 import type { GameState, GroupPublic } from '../shared/types';
 import { washiCanvas } from '../games/brush';
-import { Avatar, TimerBar } from '../ui/common';
+import { Avatar, PixIcon, ResText, TimerBar } from '../ui/common';
 import { GROUP_GAMES, senryuLines } from '../shared/settings';
 import { IaidoResults, IaidoTv } from './IaidoTv';
 import { PREF } from '../map/mapData';
@@ -40,15 +40,21 @@ export function GroupScroll({ g }: { g: GroupPublic }) {
   const info = GROUP_GAMES[g.game];
   const call = g.game === 'calligraphy' ? g.prompt : g.game === 'fukuwarai' ? FACE_CALL[g.face ?? ''] ?? info.call
     : g.game === 'sashimi' ? `${g.prompt}: отрежь ${g.target} г` : info.call;
+  return <ScrollBanner game={g.game} pref={g.pref} call={call} />;
+}
+
+/** свиток групповой игры по id игры (джа-одори рисует его сама — у неё своё состояние) */
+export function ScrollBanner({ game, pref, call, how }: { game: GroupPublic['game']; pref: number; call?: string; how?: any }) {
+  const info = GROUP_GAMES[game];
   return (
     <div class="gscroll">
       <div class="gscroll-rod" />
       <div class="gscroll-paper" style={{ backgroundImage: `url(${paper()})` }}>
-        <div class="gscroll-sub">Играют все · {PREF[g.pref]?.ru}</div>
+        <div class="gscroll-sub">Играют все · {PREF[pref]?.ru}</div>
         <div class="gscroll-kanji">{info.kanji}</div>
         <div class="gscroll-name">{info.name} <span>{info.ja}</span></div>
-        <div class="gscroll-call">{call}</div>
-        <div class="gscroll-how">{info.how}</div>
+        <div class="gscroll-call">{call ?? info.call}</div>
+        <div class="gscroll-how">{how ?? info.how}</div>
         <div class="gscroll-seal">{info.ja.slice(0, 2)}</div>
       </div>
       <div class="gscroll-rod" />
@@ -75,7 +81,7 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
           {head}
           {g.game === 'sashimi'
             ? <FishBoard fish={g.fish ?? 'tuna'} view={{}} scale={5} class="big" />
-            : <div class="group-brush">{{ calligraphy: '🖌️', fukuwarai: '🙈', senryu: '✍️', iaido: '⚔️', sashimi: '🔪', dragon: '🐉' }[g.game]}</div>}
+            : <div class="group-brush"><PixIcon id={'group_' + g.game} size={96} /></div>}
           <div class="group-sub">{g.phase === 'draw' ? info.doing : 'Собираем работы…'}</div>
           {g.phase === 'draw' && <TimerBar start={g.startAt} end={g.deadline} now={now} big />}
           <Who s={s} g={g} done={g.submitted} />
@@ -124,7 +130,7 @@ function Who({ s, g, done }: { s: GameState; g: GroupPublic; done: string[] }) {
         if (!p) return null;
         return (
           <div class={'qpart' + (done.includes(id) ? ' done' : ' waiting')}>
-            <Avatar p={p} size={36} /> <span>{p.name}</span>{done.includes(id) && <span class="ans-check">✔</span>}
+            <Avatar p={p} size={36} /> <span>{p.name}</span>{done.includes(id) && <span class="ans-check"><PixIcon id="ui_check" /></span>}
           </div>
         );
       })}
@@ -135,7 +141,6 @@ function Who({ s, g, done }: { s: GameState; g: GroupPublic; done: string[] }) {
 function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<string, string | null> }) {
   const ranked = [...g.players].filter((id) => s.players[id]).sort((a, b) => (g.points?.[b] ?? 0) - (g.points?.[a] ?? 0));
   const podium = ranked.filter((id) => (g.places?.[id] ?? 9) <= 3);
-  const medal = ['', '🥇', '🥈', '🥉'];
   return (
     <div class="group-results">
       <div class="group-head"><span class="group-game">Итоги · {GROUP_GAMES[g.game].name}</span><span class="group-task">{g.prompt}</span></div>
@@ -146,7 +151,7 @@ function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<st
           return (
             <div class={'podium-item place' + pl + ' pop'}>
               <Sheet g={g} img={imgs[id]} n={g.order.indexOf(id) + 1} />
-              <div class="podium-name"><span class="medal">{medal[pl]}</span> <Avatar p={p} size={32} /> {p.name}</div>
+              <div class="podium-name"><span class="medal">{pl <= 3 && <PixIcon id={'ui_medal' + pl} size={28} />}</span> <Avatar p={p} size={32} /> {p.name}</div>
               <div class="podium-pts">{g.points?.[id]} очк. · {g.awards?.[id]}</div>
             </div>
           );
@@ -155,7 +160,7 @@ function Results({ s, g, imgs }: { s: GameState; g: GroupPublic; imgs: Record<st
       </div>
       <div class="qparts">
         {ranked.filter((id) => (g.places?.[id] ?? 9) > 3).map((id) => (
-          <div class="qpart done">{g.places?.[id] && <b>{g.places[id]}.</b>} <Avatar p={s.players[id]} size={30} /> <span>{s.players[id].name}</span> <span class="muted">№{g.order.indexOf(id) + 1} · {g.points?.[id] ?? 0}</span> {g.awards?.[id] && <span class="iai-res-award">{g.awards[id]}</span>}</div>
+          <div class="qpart done">{g.places?.[id] && <b>{g.places[id]}.</b>} <Avatar p={s.players[id]} size={30} /> <span>{s.players[id].name}</span> <span class="muted">№{g.order.indexOf(id) + 1} · {g.points?.[id] ?? 0}</span> {g.awards?.[id] && <span class="iai-res-award"><ResText text={g.awards[id]} /></span>}</div>
         ))}
       </div>
     </div>
@@ -205,7 +210,6 @@ function SashimiShow({ s, g, head }: { s: GameState; g: GroupPublic; head: any }
 function SashimiResults({ s, g }: { s: GameState; g: GroupPublic }) {
   const ranked = Object.keys(g.grams ?? {}).filter((id) => s.players[id]).sort((a, b) => (g.points?.[a] ?? 0) - (g.points?.[b] ?? 0));
   const marks = ranked.map((id) => ({ t: g.cuts![id], color: s.players[id].color }));
-  const medal = ['', '🥇', '🥈', '🥉'];
   return (
     <div class="group-results sashimi-results">
       <div class="group-head"><span class="group-game">Итоги · Сашими · {FISH[g.fish ?? 'tuna'].name}</span><span class="group-task">цель {g.target} г</span></div>
@@ -216,8 +220,8 @@ function SashimiResults({ s, g }: { s: GameState; g: GroupPublic }) {
           const pl = g.places?.[id];
           return (
             <div class={'qpart done' + (pl ? ' place' + pl : '')}>
-              <span class="medal">{pl ? medal[pl] : ''}</span> <Avatar p={p} size={32} /> <span style={{ color: p.color }}>{p.name}</span>
-              <span>{g.grams![id]} г</span> <span class="muted">±{g.points?.[id]}</span> {g.awards?.[id] && <b>{g.awards[id]}</b>}
+              <span class="medal">{pl && pl <= 3 ? <PixIcon id={'ui_medal' + pl} size={28} /> : ''}</span> <Avatar p={p} size={32} /> <span style={{ color: p.color }}>{p.name}</span>
+              <span>{g.grams![id]} г</span> <span class="muted">±{g.points?.[id]}</span> {g.awards?.[id] && <b><ResText text={g.awards[id]} /></b>}
             </div>
           );
         })}

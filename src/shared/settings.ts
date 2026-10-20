@@ -1,5 +1,8 @@
 import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
+/** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
+export const ECON_VERSION = 1;
+
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
     { id: 'music', name: 'Музыка', combat: true, color: '#ff6b8b' },
@@ -23,10 +26,10 @@ export const DEFAULT_SETTINGS: Settings = {
   duelRounds: 3,
   rhythmInDuel: true,
   reward: {
-    moverCorrectYen: 300,
+    moverCorrectYen: 500,
     moverCorrectStars: 1,
     moverWrongYen: 100,
-    otherCorrectYen: 100,
+    otherCorrectYen: 250,
     calibCorrectYen: 100,
     prefMoney: 500,
     prefStars: 2,
@@ -35,12 +38,12 @@ export const DEFAULT_SETTINGS: Settings = {
     duelWinStars: 1,
   },
   shop: {
-    special: { yen: 0, stars: 3 },
-    hp: { yen: 500, stars: 0, amount: 2 },
-    stat: { yen: 400, stars: 2 },
-    fifty1: { yen: 300, stars: 0 },
-    fifty2: { yen: 600, stars: 0 },
-    move2: { yen: 400, stars: 0 },
+    special: { yen: 500, stars: 3 },
+    hp: { yen: 1000, stars: 0, amount: 2 },
+    stat: { yen: 900, stars: 2 },
+    fifty1: { yen: 600, stars: 0 },
+    fifty2: { yen: 1200, stars: 0 },
+    move2: { yen: 800, stars: 0 },
   },
   // соло-игры и групповые по префектурам: см. RECOMMENDED_LAYOUT
   pachinkoPrefs: [23, 27, 11],
@@ -62,9 +65,9 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'sen3', game: 'senryu', text: 'Сакура в цвету / Начальник под деревом', pref: 29 },
     { id: 'sen4', game: 'senryu', text: 'Тихий пруд в саду / В пруд прыгнул лягушонок', pref: 24 },
     { id: 'sen5', game: 'senryu', text: 'Караоке, ночь / Микрофон не отдаёт', pref: 28 },
-    { id: 'iai1', game: 'iaido', text: 'Дуэль на рассвете у стен замка', pref: 43 },
-    { id: 'iai2', game: 'iaido', text: 'Поединок в бамбуковой роще', pref: 46 },
-    { id: 'iai3', game: 'iaido', text: 'Ронины встретились на мосту', pref: 13 },
+    { id: 'iai1', game: 'iaido', text: 'Дуэль на рассвете у стен замка', scene: 'dawn', pref: 43 },
+    { id: 'iai2', game: 'iaido', text: 'Поединок в бамбуковой роще', scene: 'bamboo', pref: 46 },
+    { id: 'iai3', game: 'iaido', text: 'Ронины встретились на мосту', scene: 'bridge', pref: 13 },
     { id: 'sash1', game: 'sashimi', text: 'Тунец из Кацууры', fish: 'tuna', pref: 30 },
     { id: 'sash3', game: 'sashimi', text: 'Нога камчатского краба', fish: 'crab', pref: 1 },
     { id: 'sash4', game: 'sashimi', text: 'Живой кальмар из Ёбуко', fish: 'squid', pref: 41 },
@@ -86,10 +89,11 @@ export const DEFAULT_SETTINGS: Settings = {
   sudokuPrefs: [8, 39, 15],
   sudoku: { rewards: [{ yen: 200, stars: 0 }, { yen: 500, stars: 1 }, { yen: 1000, stars: 3 }], givens9: 40 },
   pachinko: { yenPerBall: 4, pack: 25 },
-  ring: { cost: 200, prizeYen: 1500, physicalPrize: true, cellMs: 70 },
+  ring: { cost: 300, cellMs: 70 },
   audioLatencyMs: 0,
   prefRewards: {},
   prizeNames: ['Приз от ведущего'],
+  econ: ECON_VERSION,
 };
 
 /**
@@ -146,6 +150,13 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   if (!saved) return d;
   const out: any = { ...d, ...saved };
   for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group', 'chohan', 'sudoku'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
+  // экономику пересчитали: старые сохранённые награды и цены заменяем новыми (один раз, дальше решает ведущий)
+  if ((saved.econ ?? 0) < ECON_VERSION) {
+    out.reward = { ...out.reward, moverCorrectYen: d.reward.moverCorrectYen, moverWrongYen: d.reward.moverWrongYen, otherCorrectYen: d.reward.otherCorrectYen };
+    out.shop = structuredClone(d.shop);
+    out.ring = { ...out.ring, cost: d.ring.cost };
+    out.econ = ECON_VERSION;
+  }
   // в старых настройках награды только за 3 места — остальные места берём стандартные
   out.group.prizes = d.group.prizes.map((x, i) => out.group.prizes[i] ?? x);
   // джа-одори появилась позже сохранённых настроек: один раз закрепляем её за Нагасаки, если там свободно.
@@ -153,6 +164,11 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   if (!saved.group?.dragon && saved.groupPrefs && !Object.values(saved.groupPrefs).includes('dragon') && !saved.groupPrefs[42]) {
     out.groupPrefs = { ...saved.groupPrefs, 42: 'dragon' };
   }
+  // сцены иайдо появились позже: стандартным заданиям без сцены даём их фон
+  if (Array.isArray(saved.groupTasks)) out.groupTasks = out.groupTasks.map((t: GroupTask) => {
+    const def = !t.scene && t.game === 'iaido' ? d.groupTasks.find((x) => x.id === t.id)?.scene : undefined;
+    return def ? { ...t, scene: def } : t;
+  });
   return out;
 }
 

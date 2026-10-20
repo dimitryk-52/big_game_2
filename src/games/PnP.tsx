@@ -127,7 +127,7 @@ function SudokuPnP({ pid }: { pid: string }) {
       <div class="pnp-sudoku" style={{ gridTemplateColumns: `repeat(${n}, 1fr)` }}>
         {Array.from({ length: n * n }, (_, i) => <span class={i < Math.round(k * n * n) ? 'on' : ''} />)}
       </div>
-      <div class="pnp-foot">{st ? (st.win ? `✔ ${n}×${n} решено!` : `${n}×${n} · ${st.filled}/${st.total}`) : 'думает…'}</div>
+      <div class="pnp-foot">{st ? (st.win ? <><PixIcon id="ui_check" size={14} /> {n}×{n} решено!</> : `${n}×${n} · ${st.filled}/${st.total}`) : 'думает…'}</div>
     </>
   );
 }
@@ -172,7 +172,7 @@ function RingPnP({ pid }: { pid: string }) {
   useEffect(() => {
     const off = pnpBus.on(pid, (ev) => {
       if (ev.k === 'ring') {
-        st.current = { layout: ringLayout(ev.seed, ev.physical), t0: ev.t0, cellMs: ev.cellMs, stop: null };
+        st.current = { layout: ringLayout(ev.seed), t0: ev.t0, cellMs: ev.cellMs, stop: null };
       }
       if (ev.k === 'ringStop' && st.current) {
         st.current.stop = { cell: ev.cell, res: ev.res };

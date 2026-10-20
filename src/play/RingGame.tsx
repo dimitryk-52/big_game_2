@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player } from '../shared/types';
-import { ringCellAt, ringLayout, type RingLayout } from '../games/logic';
+import { RING_PRIZE_INFO, ringCellAt, ringLayout, type RingLayout, type RingPrize } from '../games/logic';
 import { drawRing } from '../games/ring';
 import { vibrate } from '../shared/util';
 import { sfx } from '../shared/sound';
+import { ResText } from '../ui/common';
 
-interface Run { layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: 'gold' | 'green' | 'miss' } }
+interface Run { layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: RingPrize } }
 
 /** paused — экран спрятан (вопрос, групповая игра): указатель идёт по часам хоста, поэтому
  *  запущенная попытка не теряется — вернувшись, игрок жмёт СТОП как обычно */
@@ -22,7 +23,7 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
 
   useEffect(() => {
     let raf = 0;
-    const idle: RingLayout = { green: [3, 15], gold: st.physicalPrize ? 9 : null };
+    const idle = ringLayout(7);
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const c = cv.current;
@@ -40,8 +41,8 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
     setErr('');
     setMsg('');
     try {
-      const r = await client.req<{ seed: number; t0: number; cellMs: number; physical: boolean }>('ringStart');
-      run.current = { layout: ringLayout(r.seed, r.physical), t0: r.t0, cellMs: r.cellMs, stop: null };
+      const r = await client.req<{ seed: number; t0: number; cellMs: number }>('ringStart');
+      run.current = { layout: ringLayout(r.seed), t0: r.t0, cellMs: r.cellMs, stop: null };
       setPhase('running');
       sfx.click();
     } catch (e: any) { setErr(e.message); }
@@ -55,27 +56,30 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
     setPhase('stopping');
     vibrate(40);
     try {
-      const res = await client.req<{ cell: number; res: 'gold' | 'green' | 'miss' }>('ringStop', { at });
+      const res = await client.req<{ cell: number; res: RingPrize }>('ringStop', { at });
       r.stop = { cell: res.cell, res: res.res };
-      if (res.res === 'gold') { sfx.fanfare(); setMsg('🏆 ПРИЗ! Ведущий вручит его тебе'); vibrate([100, 50, 100, 50, 300]); }
-      else if (res.res === 'green') { sfx.jackpot(); setMsg(`Выигрыш: +¥${st.prizeYen}`); }
-      else { sfx.wrong(); setMsg('Мимо! Попробуй ещё'); }
+      const big = ['yen1500', 'star3', 'special', 'turn2'].includes(res.res);
+      if (res.res === 'miss') { sfx.wrong(); setMsg('Мимо! Попробуй ещё'); }
+      else {
+        if (big) { sfx.fanfare(); vibrate([100, 50, 100, 50, 300]); } else sfx.jackpot();
+        setMsg(`{ico:${RING_PRIZE_INFO[res.res].icon}} Выигрыш: ${RING_PRIZE_INFO[res.res].name}`);
+      }
     } catch (e: any) { setErr(e.message); }
     setPhase('done');
   };
 
   return (
     <div class="ringgame pad col">
-      <div class="center"><b>Призовая машина</b> · попытка ¥{st.cost}</div>
+      <div class="center"><b>Призовое кольцо</b> · попытка ¥{st.cost}</div>
       <canvas ref={cv} width={600} height={600} class="ring-cv" />
-      {msg && <div class="status-card pop center">{msg}</div>}
+      {msg && <div class="status-card pop center"><ResText text={msg} /></div>}
       {err && <div class="warn">{err}</div>}
       {phase === 'running' || phase === 'stopping' ? (
         <button class="btn primary big-btn stop-btn" disabled={phase !== 'running'} onPointerDown={(e) => { e.preventDefault(); void stop(); }}>СТОП</button>
       ) : (
         <button class="btn yellow big-btn" disabled={me.yen < st.cost} onClick={start}>Играть (¥{st.cost})</button>
       )}
-      <div class="muted small-text">Зелёная ячейка — ¥{st.prizeYen}{st.physicalPrize ? ', золотая — настоящий приз!' : ''}</div>
+      <div class="muted small-text">Огонёк бежит по кольцу — жми СТОП на нужном призе. В каждом секторе свой приз: йены, звёзды, бонусы, спецвопрос и даже доп. ход.</div>
       <button class="btn small ghost" onClick={onExit}>Назад</button>
     </div>
   );

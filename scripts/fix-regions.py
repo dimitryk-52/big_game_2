@@ -9,7 +9,8 @@
 #     озёра внутри суши остаются;
 #  2. применяет правки из scripts/region-fixes.json:
 #     paint — пиксели префектур "from" внутри многоугольника "poly" отдаются префектуре "to"
-#             (0 — море, "near" — ближайшей соседней префектуре); "water": true — только водяные пиксели;
+#             (0 — море, "near" — ближайшей соседней префектуре); "water": true — только водяные пиксели,
+#             "land": true — только не водяные;
 #     fill_holes — дырки внутри префектуры (озёра) становятся её частью;
 #  3. пересчитывает bb/size в src/map/japan.json, якорь — только если он оказался вне префектуры.
 # Повторный запуск ничего не портит. --out пишет результат в другую папку (для проверки).
@@ -50,6 +51,8 @@ for f in fix.get('paint', []):
     m = poly_mask(f['poly']) & np.isin(reg, f['from'])
     if f.get('water'):
         m &= water
+    if f.get('land'):
+        m &= ~water
     if f['to'] == 'near':
         other = (reg > 0) & ~np.isin(reg, f['from'])
         iy, ix = nd.distance_transform_edt(~other, return_distances=False, return_indices=True)

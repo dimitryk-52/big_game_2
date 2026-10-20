@@ -122,6 +122,9 @@ if __name__ == '__main__':
             if dst.exists() and '--force' not in sys.argv and dst.stat().st_mtime >= src.stat().st_mtime:
                 continue
             out = pixelize(Image.open(src), cell, colors)
+            # палитровый PNG (цветов ≤ 256) — без потерь и втрое легче RGB: телефон грузит фон быстрее
+            if out.getcolors(256):
+                out = out.convert('RGB').quantize(colors=len(out.getcolors(256)), method=Image.Quantize.MAXCOVERAGE, dither=Image.Dither.NONE)
             out.save(dst, optimize=True)
             print(f'{src.name} → {dst.name} {out.size[0]}×{out.size[1]}')
     else:

@@ -160,6 +160,53 @@ const GROUP_ART: Record<string, string[]> = {
 };
 for (const [id, rows] of Object.entries(GROUP_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => GROUP_PAL[ch] ?? null)));
 
+// значки интерфейса вместо эмодзи и символов шрифта (✔ ✘ ⏱ ▶ ❤ …): <PixIcon id="ui_check" />, в тексте — см. PxText
+const UI_PAL: Record<string, string> = {
+  w: '#ffffff', g: '#c9ccd6', d: '#7a7f99', k: '#222233', r: '#e8364e', R: '#a51d33', G: '#5ce16b', y: '#ffd23f', o: '#ff9f43',
+  b: '#4dabff', B: '#9a6232', s: '#ffe2c4', p: '#ff8fb0',
+};
+const UI_ART: Record<string, string[]> = {
+  ui_check: ['.........GG', '........GGG', '.......GGG.', 'GG....GGG..', 'GGG..GGG...', '.GGGGGG....', '..GGGG.....', '...GG......'],
+  ui_cross: ['rr....rr', 'rrr..rrr', '.rrrrrr.', '..rrrr..', '..rrrr..', '.rrrrrr.', 'rrr..rrr', 'rr....rr'],
+  ui_timer: ['...ggg...', '....g....', '..wwwww..', '.wwwkwww.', 'wwwwkwwww', 'wwwwkkkww', 'wwwwwwwww', '.wwwwwww.', '..wwwww..'],
+  ui_right: ['....w...', '....ww..', 'wwwwwww.', 'wwwwwwww', 'wwwwwww.', '....ww..', '....w...'],
+  ui_left: ['...w....', '..ww....', '.wwwwwww', 'wwwwwwww', '.wwwwwww', '..ww....', '...w....'],
+  ui_play: ['w.....', 'www...', 'wwwww.', 'wwwwww', 'wwwww.', 'www...', 'w.....'],
+  ui_pause: ['ww.ww', 'ww.ww', 'ww.ww', 'ww.ww', 'ww.ww', 'ww.ww', 'ww.ww'],
+  ui_heart: ['.rr...rr.', 'rrrr.rrrr', 'rwrrrrrrr', 'rrrrrrrrr', '.rrrrrrr.', '..rrrrr..', '...rrr...', '....r....'],
+  ui_up: ['....G....', '...GGG...', '..GGGGG..', '.GGGGGGG.', 'GGGGGGGGG', '...GGG...', '...GGG...', '...GGG...'],
+  ui_undo: ['..w......', '.wwwwww..', 'wwwwwwww.', '.ww...ww.', '..w....ww', '.......ww', '......ww.', '...wwww..'],
+  ui_trash: ['...ggg...', 'ggggggggg', '.ggggggg.', '.gdgdgdg.', '.gdgdgdg.', '.gdgdgdg.', '.gdgdgdg.', '..ggggg..'],
+  ui_backspace: ['...wwwwwww', '..wwkwwwkw', '.wwwwkwkww', 'wwwwwwkwww', '.wwwwkwkww', '..wwkwwwkw', '...wwwwwww'],
+  ui_dizzy: ['..yyyyy..', '.yyyyyyy.', 'ykykykyky', 'yykyyykyy', 'ykykykyky', 'yyyyyyyyy', 'yykkkkkyy', '.yyyyyyy.', '..yyyyy..'],
+  ui_warn: ['....y....', '...yyy...', '...yky...', '..yykyy..', '..yykyy..', '.yyyyyyy.', '.yyykyyy.', 'yyyyyyyyy'],
+  ui_note: ['...wwwww', '...wwwww', '...w...w', '...w...w', '...w...w', '.www.www', 'wwwwwwww', '.ww..ww.'],
+  ui_film: ['wkwkwkwkw', 'kwkwkwkwk', 'ggggggggg', 'gbbbbbbbg', 'gbbbbbbbg', 'gbbbbbbbg', 'ggggggggg'],
+  ui_phone: ['ggggggg', 'gbbbbbg', 'gbbbbbg', 'gbbbbbg', 'gbbbbbg', 'gbbbbbg', 'gggwggg', 'ggggggg'],
+  ui_hand: ['..s......', '.sss.....', '.sss.....', '.sssss...', '.sssssss.', 'sssssssss', 'sssssssss', '.sssssss.', '..sssss..'],
+  ui_home: ['....r....', '...rrr...', '..rrrrr..', '.rrrrrrr.', 'rrrrrrrrr', '.wwwwwww.', '.wwBBwww.', '.wwBBwww.', '.wwBBwww.'],
+  ui_map: ['GGG.yyy.G', 'GGGyyyyGG', 'GGyyyyGGG', 'GyyyGGGGG', 'yyyGGGbbb', 'yyGGGbbbb', 'GGGbbbbbb'],
+  ui_drum: ['..wwwww..', '.wwwwwww.', 'rrrrrrrrr', 'ryrrrrryr', 'rrrrrrrrr', 'ryrrrrryr', 'rrrrrrrrr', '.rrrrrrr.'],
+  ui_fullscreen: ['www..www', 'w......w', 'w......w', '........', '........', 'w......w', 'w......w', 'www..www'],
+  ui_sound: ['...w.....', '..ww..w..', 'wwww...w.', 'wwww.w.w.', 'wwww.w.w.', 'wwww...w.', '..ww..w..', '...w.....'],
+  ui_mute: ['...w.....', '..ww.....', 'wwww.r.r.', 'wwww..r..', 'wwww.r.r.', 'wwww.....', '..ww.....', '...w.....'],
+  ui_flag: ['gwkwkwk', 'gkwkwkw', 'gwkwkwk', 'gkwkwkw', 'g......', 'g......', 'g......'],
+  ui_plus: ['..GGG..', '..GGG..', 'GGGGGGG', 'GGGGGGG', 'GGGGGGG', '..GGG..', '..GGG..'],
+  ui_bug: ['..k.k..', '...k...', '.rrkrr.', 'rkrkrkr', 'rrrkrrr', 'rkrkrkr', '.rrkrr.'],
+};
+for (const [id, rows] of Object.entries(UI_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => UI_PAL[ch] ?? null)));
+// медали 1–3 места: лента и диск с цифрой
+const MEDAL_DIGIT = [['.d.', 'dd.', '.d.', '.d.', 'ddd'], ['dd.', '..d', '.d.', 'd..', 'ddd'], ['dd.', '..d', '.d.', '..d', 'dd.']];
+const MEDAL_COL = [['#ffd23f', '#a8761a'], ['#d9dce6', '#6b7088'], ['#e09a5a', '#7d4520']];
+MEDAL_DIGIT.forEach((dg, i) => {
+  const rows = ['.bb...rr.', '..bb.rr..', '...b.r...', '..ccccc..', '.ccccccc.', 'cc.....cc', 'cc.....cc', 'cc.....cc', 'cc.....cc', 'cc.....cc', '.ccccccc.', '..ccccc..']
+    .map((r) => r.split(''));
+  dg.forEach((r, y) => r.split('').forEach((ch, x) => { rows[5 + y][3 + x] = ch === 'd' ? 'd' : 'c'; }));
+  for (let y = 5; y < 10; y++) { rows[y][2] = 'c'; rows[y][6] = 'c'; }
+  const pal: Record<string, string> = { b: '#4dabff', r: '#e8364e', c: MEDAL_COL[i][0], d: MEDAL_COL[i][1] };
+  grids.set('ui_medal' + (i + 1), rows.map((r) => r.map((ch) => pal[ch] ?? null)));
+});
+
 /** спецтема: круг с радужным круговым градиентом (если нет своего topic_special.png) */
 export function rainbowGrid(n = 11): Grid {
   const c = (n - 1) / 2;

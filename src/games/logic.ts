@@ -3,23 +3,40 @@ import { rng } from '../shared/util';
 import type { DragonPublic } from '../shared/types';
 
 // ───── Призовое кольцо ─────
+// Кольцо из 24 секторов, в каждом свой приз. Порядок секторов перемешивается от seed попытки.
 export const RING_CELLS = 24;
+export type RingPrize = 'miss' | 'yen200' | 'yen500' | 'yen1500' | 'star1' | 'star3' | 'fifty1' | 'fifty2' | 'move2' | 'special' | 'turn2';
+/** набор секторов: девять пустых, мелочь почаще, крупное — по одному */
+export const RING_SET: RingPrize[] = [
+  'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss',
+  'yen200', 'yen200', 'yen200', 'yen500', 'yen500', 'yen500', 'yen1500',
+  'star1', 'star1', 'star3', 'fifty1', 'fifty2', 'move2', 'special', 'turn2',
+];
+export const RING_PRIZE_INFO: Record<RingPrize, { name: string; icon: string; color: string; yen?: number; stars?: number }> = {
+  miss: { name: 'мимо', icon: '', color: '#2a2f5c' },
+  yen200: { name: '¥200', icon: 'money', color: '#3d7a4a', yen: 200 },
+  yen500: { name: '¥500', icon: 'money', color: '#2fa04a', yen: 500 },
+  yen1500: { name: '¥1500', icon: 'money', color: '#ffb000', yen: 1500 },
+  star1: { name: '+1★', icon: 'stars', color: '#4a6fd8', stars: 1 },
+  star3: { name: '+3★', icon: 'stars', color: '#7a4dff', stars: 3 },
+  fifty1: { name: 'Убрать 1 неверный', icon: 'bonus_fifty1', color: '#c0437a' },
+  fifty2: { name: '50/50', icon: 'bonus_fifty2', color: '#d4552f' },
+  move2: { name: 'Ход на 2', icon: 'bonus_move2', color: '#b8673a' },
+  special: { name: 'Спецвопрос', icon: 'special', color: '#e04dff' },
+  turn2: { name: 'Доп. ход', icon: 'bonus_turn2', color: '#ff4d6d' },
+};
 export interface RingLayout {
-  green: number[];
-  gold: number | null;
+  cells: RingPrize[];
 }
-export function ringLayout(seed: number, physical: boolean): RingLayout {
+export function ringLayout(seed: number): RingLayout {
   const r = rng(seed);
-  const g1 = Math.floor(r() * RING_CELLS);
-  const g2 = (g1 + 8 + Math.floor(r() * 8)) % RING_CELLS;
-  let gold: number | null = null;
-  if (physical) {
-    do gold = Math.floor(r() * RING_CELLS);
-    while (gold === g1 || gold === g2);
+  const cells = [...RING_SET];
+  for (let i = cells.length - 1; i > 0; i--) {
+    const k = Math.floor(r() * (i + 1));
+    [cells[i], cells[k]] = [cells[k], cells[i]];
   }
-  return { green: [g1, g2], gold };
+  return { cells };
 }
-/** указатель разгоняется первые 2 секунды, потом крутится с постоянной скоростью */
 export function ringCellAt(t0: number, t: number, cellMs: number) {
   const dt = Math.max(0, t - t0);
   const ramp = 2000;
@@ -27,10 +44,8 @@ export function ringCellAt(t0: number, t: number, cellMs: number) {
   const dist = dt < ramp ? (dt * dt) / (2 * ramp * cellMs) : ramp / (2 * cellMs) + (dt - ramp) / cellMs;
   return { cell: Math.floor(dist) % RING_CELLS, frac: dist % 1, dist };
 }
-export function ringResult(layout: RingLayout, cell: number): 'gold' | 'green' | 'miss' {
-  if (layout.gold === cell) return 'gold';
-  if (layout.green.includes(cell)) return 'green';
-  return 'miss';
+export function ringResult(layout: RingLayout, cell: number): RingPrize {
+  return layout.cells[cell] ?? 'miss';
 }
 
 // ───── Ритм-игра ─────

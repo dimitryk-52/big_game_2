@@ -1,9 +1,10 @@
 // Админка: групповые игры — задания, время, награды за места.
 import { useEffect, useState } from 'preact/hooks';
-import type { DragonSettings, FaceId, FishId, GroupGameId, Settings } from '../shared/types';
+import type { DragonSettings, FaceId, FishId, GroupGameId, IaiSceneId, Settings } from '../shared/types';
 import { DEFAULT_SETTINGS, GROUP_GAMES, dragonSettings, groupTime, iaidoRounds } from '../shared/settings';
 import { FACES } from '../games/faces';
 import { FISH } from '../games/sashimi';
+import { IAI_SCENES } from '../games/iaidoScenes';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
 
@@ -36,7 +37,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         </select>
       </div>
       <div class="note">
-        {game === 'iaido' && <>Иайдо: дуэль самураев на реакцию. Все держат палец над телефоном, в случайный момент на ТВ вспыхивает «!» (со звуком «кин»). Нажал раньше — выбыл из раунда; со второго раунда бывает ложная тревога — серый «?» и стук бамбука. Время нажатия сравнивается по синхронизированным часам, сеть на победителя не влияет. За раунд: самому быстрому 3 очка, второму 2, третьему 1; при равных очках выше лучшее время. Задание — просто подпись сцены.<br /></>}
+        {game === 'iaido' && <>Иайдо: дуэль самураев на реакцию. Все держат палец над телефоном, в случайный момент на ТВ вспыхивает «!» (со звуком «кин»). Нажал раньше — выбыл из раунда; со второго раунда бывает ложная тревога — серый «?» и стук бамбука. Время нажатия сравнивается по синхронизированным часам, сеть на победителя не влияет. За раунд: самому быстрому 3 очка, второму 2, третьему 1; при равных очках выше лучшее время. Задание — подпись сцены, у каждого задания свой фон (выбор рядом с текстом).<br /></>}
         {game === 'calligraphy' && <>Каллиграфия:</>}
         {game === 'fukuwarai' && <>Фукуварай: на телефоне пустое лицо и детали. Детали перетаскивают на лицо, и они сразу исчезают — собираем вслепую. Не успел — оставшиеся детали падают куда попало. Потом лица раскрываются на ТВ и все голосуют.<br /></>}
         {game === 'sashimi' && <>Сашими: на телефоне рыба на доске и нож. Нужно отрезать кусок заданного веса (цель случайная, 15–55% от веса целиком). Вес зависит от толщины: у спины сантиметр весит больше, чем у хвоста. Потом куски взвешиваются на ТВ по одному, места — по точности, без голосования. В префектуре рыбы ({(Object.keys(FISH) as FishId[]).map((f) => `${FISH[f].name} — ${FISH[f].prefs.map((c) => PREF[c]?.ru).join(', ')}`).join('; ')}) берутся её задания, в остальных — любые.<br /></>}
@@ -60,6 +61,11 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
           {game === 'sashimi' && (
             <select value={t.fish ?? 'tuna'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.fish = (e.target as HTMLSelectElement).value as FishId; })}>
               {(Object.keys(FISH) as FishId[]).map((f) => <option value={f}>{FISH[f].name} ({FISH[f].total} г)</option>)}
+            </select>
+          )}
+          {game === 'iaido' && (
+            <select title="Фон картины" value={t.scene ?? 'moon'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.scene = (e.target as HTMLSelectElement).value as IaiSceneId; })}>
+              {(Object.keys(IAI_SCENES) as IaiSceneId[]).map((k) => <option value={k}>{IAI_SCENES[k].name}</option>)}
             </select>
           )}
           <input class="inp-s grow" placeholder={game === 'senryu' ? 'Первая строка / Вторая строка' : 'Текст задания'} value={t.text} onInput={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.text = (e.target as HTMLInputElement).value; })} />

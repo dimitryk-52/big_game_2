@@ -53,6 +53,8 @@ export interface Player {
   calib: Record<TopicId, number>;
   bonuses: Record<BonusId, number>;
   specials: number;
+  /** темы купленных спецвопросов (по одной на спецвопрос); остальные спецвопросы — из любой спецтемы */
+  specialTopics?: TopicId[];
   prizes: string[];
   online: boolean;
   /** чем игрок занят на телефоне (пнп на ТВ) */
@@ -79,6 +81,9 @@ export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sa
 /** что режем в «Сашими» */
 export type FishId = 'tuna' | 'salmon' | 'crab' | 'squid';
 /** лицо для фукуварай */
+/** иайдо: фон картины (src/games/iaidoScenes.ts) */
+export type IaiSceneId = 'moon' | 'dawn' | 'bamboo' | 'bridge';
+
 export type FaceId = 'okame' | 'daruma' | 'oni';
 
 /** задание групповой игры (например, «Нарисуйте кандзи „человек“») */
@@ -90,6 +95,8 @@ export interface GroupTask {
   face?: FaceId;
   /** сашими: что режем; задания со своей рыбой выбираются в её префектурах */
   fish?: FishId;
+  /** иайдо: фон картины (по умолчанию ночная сакура) */
+  scene?: IaiSceneId;
   /** префектура задания: там играется именно оно, в других префектурах игры — не выпадает */
   pref?: number;
 }
@@ -104,6 +111,8 @@ export interface GroupPublic {
   fish?: FishId;
   total?: number;
   target?: number;
+  /** иайдо: фон картины */
+  scene?: IaiSceneId;
   pref: number;
   phase: 'intro' | 'draw' | 'show' | 'vote' | 'results';
   players: string[];
@@ -268,6 +277,12 @@ export interface Settings {
   autoAdvance: boolean;
   /** вопрос ведёт ведущий кнопкой «Далее»: интро → текст (читает вслух) → ответы и таймер → закрыть */
   hostPaced?: boolean;
+  /** пульт: интро префектуры само переходит к вопросу */
+  autoIntro?: boolean;
+  /** пульт: ответы появляются сами, когда ведущий успел прочитать вопрос (по длине текста) */
+  autoReading?: boolean;
+  /** версия экономики: при росте старые сохранённые цены и награды заменяются новыми */
+  econ?: number;
   baseStrength: number;
   /** делений на полоске силы; если у кого-то сила больше — шкала растёт сама */
   startHp: number;
@@ -326,7 +341,8 @@ export interface Settings {
   sudokuPrefs: number[];
   sudoku: { rewards: { yen: number; stars: number }[]; givens9: number };
   pachinko: { yenPerBall: number; pack: number };
-  ring: { cost: number; prizeYen: number; physicalPrize: boolean; cellMs: number };
+  /** призовое кольцо: цена попытки и скорость; призы секторов — RING_SET в games/logic.ts */
+  ring: { cost: number; cellMs: number };
   /** задержка звука ТВ (саундбар/Bluetooth), мс — для ритм-игры */
   audioLatencyMs: number;
   /** ручные награды префектур: код → тип */

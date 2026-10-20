@@ -14,6 +14,7 @@ import { netMode } from '../shared/net';
 import { MediaBox } from './MediaBox';
 import type { Question } from '../shared/types';
 import { LOGO_URL } from '../shared/logo';
+import { PixIcon } from '../ui/common';
 import { IntroPreview } from './IntroPreview';
 
 function setRoomInUrl(room: string) {
@@ -72,11 +73,11 @@ function Boot() {
           <div class="col">
             {canResume && (
               <button class="btn primary" onClick={() => start(true)}>
-                ▶ Продолжить игру ({Object.keys(snap.s.players).length} игроков, {snap.s.phase === 'turns' ? `круг ${snap.s.round}` : snap.s.phase})
+                <PixIcon id="ui_play" size={18} /> Продолжить игру ({Object.keys(snap.s.players).length} игроков, {snap.s.phase === 'turns' ? `круг ${snap.s.round}` : snap.s.phase})
               </button>
             )}
             <button class={'btn ' + (canResume ? '' : 'primary')} onClick={() => (canResume ? newGame() : start(false))}>
-              🆕 Новая игра
+              <PixIcon id="ui_plus" size={18} /> Новая игра
             </button>
             {canResume && <button class="btn small ghost" onClick={() => start(false)}>Начать заново в этой же комнате</button>}
             <button class="btn small ghost" onClick={() => { const r = prompt('Код комнаты', room); if (r) setRoom(r.toUpperCase()); }}>Сменить комнату</button>

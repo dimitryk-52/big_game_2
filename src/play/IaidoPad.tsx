@@ -3,20 +3,20 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GroupPublic, Player } from '../shared/types';
-import { useFrame } from '../ui/common';
+import { PixIcon, useFrame } from '../ui/common';
 import { vibrate } from '../shared/util';
 import { runPetals } from '../games/petals';
-import bgUrl from '../img/iaido/bg.png';
+import { iaiBg } from '../games/iaidoScenes';
 import katanaUrl from '../img/iaido/katana.png';
 import sayaUrl from '../img/iaido/saya.png';
 
 /** фон (ночная сакура, лепестки) и меч; drawn — клинок выхвачен, foul — фальстарт */
-function IaiScene({ drawn, foul, live, children }: { drawn: boolean; foul: boolean; live: boolean; children: any }) {
+function IaiScene({ g, drawn, foul, live, children }: { g: GroupPublic; drawn: boolean; foul: boolean; live: boolean; children: any }) {
   const cv = useRef<HTMLCanvasElement>(null);
   useEffect(() => runPetals(cv.current!, 30), []);
   return (
     <>
-      <img class="iai-pad-bg" src={bgUrl} alt="" draggable={false} />
+      <img class="iai-pad-bg" src={iaiBg(g.scene)} alt="" draggable={false} />
       <canvas ref={cv} class="iai-pad-petals" width={180} height={320} />
       <div class="iai-pad-top">{children}</div>
       <div class={'iai-sword' + (drawn ? ' drawn' : '') + (foul ? ' foul' : '') + (live ? ' live' : '')}>
@@ -53,7 +53,7 @@ export function IaidoPad({ client, g, me }: { client: GameClient; g: GroupPublic
   if (g.phase === 'intro' || !iai) {
     return (
       <div class="iai-pad wait">
-        <IaiScene drawn={false} foul={false} live={false}>
+        <IaiScene g={g} drawn={false} foul={false} live={false}>
           <div class="iai-pad-big">斬</div>
           <div class="iai-pad-text">Иайдо: жми, когда на ТВ вспыхнет «!»</div>
           <div class="muted small-text">Слушай ведущего</div>
@@ -77,12 +77,12 @@ export function IaidoPad({ client, g, me }: { client: GameClient; g: GroupPublic
 
   const myTime = iai.times?.[me.id];
   const place = iai.step === 'done' ? [...iai.cut].sort((a, b) => (iai.times![a] ?? 0) - (iai.times![b] ?? 0)).indexOf(me.id) : -1;
-  let big = '斬';
+  let big: any = '斬';
   let text = 'Жди «!» на ТВ…';
   let cls = 'iai-pad';
   if (!open && ready) { text = 'Приготовься…'; cls += ' wait'; }
-  if (early) { big = '✗'; text = 'Рано! Выбываешь из раунда'; cls += ' out'; }
-  else if (at != null && ready) { big = '✔'; text = 'Удар нанесён!'; cls += ' hit'; }
+  if (early) { big = <PixIcon id="ui_cross" size={64} />; text = 'Рано! Выбываешь из раунда'; cls += ' out'; }
+  else if (at != null && ready) { big = <PixIcon id="ui_check" size={64} />; text = 'Удар нанесён!'; cls += ' hit'; }
   if (iai.step === 'done') {
     cls = 'iai-pad done' + (early ? ' out' : '');
     if (!early) {
@@ -92,7 +92,7 @@ export function IaidoPad({ client, g, me }: { client: GameClient; g: GroupPublic
   }
   return (
     <div class={cls} onPointerDown={strike}>
-      <IaiScene drawn={early || at != null || myTime != null} foul={early} live={open && at == null && !early}>
+      <IaiScene g={g} drawn={early || at != null || myTime != null} foul={early} live={open && at == null && !early}>
         <div class="iai-pad-round">Раунд {iai.round} / {iai.rounds}</div>
         <div class="iai-pad-big">{big}</div>
         <div class="iai-pad-text">{text}</div>

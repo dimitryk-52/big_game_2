@@ -6,6 +6,7 @@ import type { GameState, Player } from '../shared/types';
 import { SUDOKU_LEVELS, boxOf, conflicts } from '../games/sudoku';
 import { vibrate } from '../shared/util';
 import { sfx } from '../shared/sound';
+import { PixIcon, ResText } from '../ui/common';
 
 interface Cur { level: number; done: boolean; size?: number; puzzle?: number[] }
 
@@ -32,7 +33,7 @@ export function Sudoku({ client, s, me, paused, onExit }: { client: GameClient; 
       <div class="sudoku-levels">
         {SUDOKU_LEVELS.map((l, i) => (
           <div class={'sudoku-lv' + (cur && i < cur.level ? ' done' : '') + (cur && i === cur.level && !cur.done ? ' on' : '')}>
-            <b>{l.size}×{l.size}</b><small>{cur && i < cur.level ? '✔ решено' : rw(i)}</small>
+            <b>{l.size}×{l.size}</b><small><ResText text={cur && i < cur.level ? '✔ решено' : rw(i)} size={14} /></small>
           </div>
         ))}
       </div>
@@ -49,7 +50,7 @@ export function Sudoku({ client, s, me, paused, onExit }: { client: GameClient; 
           } catch (e: any) { setErr(e.message); }
         }} />
       )}
-      {cur?.done && <div class="status-card center">Все три судоку решены! 🎉</div>}
+      {cur?.done && <div class="status-card center">Все три судоку решены! <PixIcon id="prize" /></div>}
       <button class="btn small ghost" onClick={onExit}>Назад</button>
     </div>
   );
@@ -119,7 +120,7 @@ function Board({ client, me, size, puzzle, onSolved }: { client: GameClient; me:
         {Array.from({ length: size }, (_, i) => i + 1).map((n) => (
           <button class="btn" disabled={sel == null || !!puzzle[sel]} onClick={() => put(n)}>{n}</button>
         ))}
-        <button class="btn" disabled={sel == null || !!puzzle[sel] || !grid[sel]} onClick={() => put(0)}>⌫</button>
+        <button class="btn" disabled={sel == null || !!puzzle[sel] || !grid[sel]} onClick={() => put(0)}><PixIcon id="ui_backspace" size={20} /></button>
       </div>
       <div class="muted small-text center">Заполнено {filled} из {grid.length}. Ушёл — решение сохранится до следующего раза.</div>
     </>

@@ -101,6 +101,8 @@
 .timer-fill { background: #3cc94a; }
 .hp-fill { background: #e8364e; }
 .timer-num, .hpbar span { text-shadow: var(--tx-outline); }
+/* обводка «съедает» узкие цифры — разводим их */
+.hpbar span, .timer-num { letter-spacing: 0.14em; padding-left: 0.14em; }
 
 /* ───── поля ввода ───── */
 .inp { border: var(--px) solid var(--outline); clip-path: var(--notch); box-shadow: inset 0 0 0 var(--px) #fff; background: #11142b; }

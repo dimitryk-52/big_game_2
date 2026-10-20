@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player } from '../shared/types';
+import { PixIcon } from '../ui/common';
 import { OnsenView, onsenTravel, type OnsenLook } from '../games/OnsenView';
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -91,12 +92,12 @@ export function Onsen({ client, paused }: { client: GameClient; s: GameState; me
     <div class="onsen">
       <div ref={el} class="onsen-frame" onPointerDown={down} onPointerMove={pmove} onPointerUp={up} onPointerCancel={up}>
         <OnsenView look={look} />
-        {hint && gyro !== 'on' && <div class="onsen-hint">👆 Води пальцем — осмотрись</div>}
+        {hint && gyro !== 'on' && <div class="onsen-hint"><PixIcon id="ui_hand" size={16} /> Води пальцем — осмотрись</div>}
       </div>
       <div class="onsen-bar">
-        <div class="onsen-title">♨️ Онсэн · здоровье восстановлено</div>
+        <div class="onsen-title"><PixIcon id="onsen" size={18} /> Онсэн · здоровье восстановлено</div>
         <button class={'btn small' + (gyro === 'on' ? ' on' : '')} onClick={toggleGyro}>
-          {gyro === 'on' ? '📱 Поворот телефона: вкл' : gyro === 'denied' ? '📱 Поворот недоступен' : '📱 Смотреть, поворачивая телефон'}
+          <PixIcon id="ui_phone" size={16} /> {gyro === 'on' ? 'Поворот телефона: вкл' : gyro === 'denied' ? 'Поворот недоступен' : 'Смотреть, поворачивая телефон'}
         </button>
       </div>
     </div>

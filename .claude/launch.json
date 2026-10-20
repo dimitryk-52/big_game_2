@@ -17,6 +17,17 @@
         "tools/pixelart/server.mjs"
       ],
       "port": 4180
+    },
+    {
+      "name": "dev-5179",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5179",
+        "--strictPort"
+      ],
+      "port": 5179
     }
   ]
 }

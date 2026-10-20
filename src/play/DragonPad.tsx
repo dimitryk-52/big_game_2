@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { DragonPublic, GameState, Player } from '../shared/types';
-import { useFrame } from '../ui/common';
+import { PixIcon, ResText, useFrame } from '../ui/common';
 import { DRAGON_COUNT, dragonFoot, dragonNearest, dragonTimes, dragonWindow } from '../games/logic';
 import { GROUP_GAMES } from '../shared/settings';
 import { vibrate } from '../shared/util';
@@ -121,14 +121,14 @@ export function DragonPad({ client, s, me }: { client: GameClient; s: GameState;
       <div class="pad col center-screen">
         <h2>{pl ? `${pl} место!` : 'Итоги на ТВ'}</h2>
         <div class="muted">{d.out[me.id] == null ? 'Ты донёс дракона до конца!' : `Ты сбился на шаге ${d.out[me.id] - d.warm + 1}`}</div>
-        {d.awards?.[me.id] && <div class="q-result pop">{d.awards[me.id]}</div>}
+        {d.awards?.[me.id] && <div class="q-result pop"><ResText text={d.awards[me.id]} size={28} /></div>}
       </div>
     );
   }
   if (!alive) {
     return (
       <div class="pad col center-screen">
-        <div class="dragon-dizzy">😵</div>
+        <div class="dragon-dizzy"><PixIcon id="ui_dizzy" size={72} /></div>
         <h2>Ты выбыл</h2>
         <div class="muted">Сбился на шаге {(d.out[me.id] ?? d.warm) - d.warm + 1}. Смотри, кто донесёт дракона, — на ТВ!</div>
         <div class="muted">Несут: {d.alive.length} из {d.players.length}</div>

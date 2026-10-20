@@ -122,18 +122,22 @@ export function Inventory({ p, size = 32, all }: { p: Pick<Player, 'bonuses' | '
   );
 }
 
-/** текст результата, где {skill:id} — иконка скилла (например «+1 {skill:music}») */
-export function ResText({ text, topics, size = 18 }: { text: string; topics: Topic[]; size?: number }) {
-  const parts = text.split(/\{skill:([\w-]+)\}/);
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (i % 2 === 0) return part;
-        const t = topics.find((x) => x.id === part);
-        return t ? <SkillIcon t={t} size={size} /> : part;
-      })}
-    </>
-  );
+/** символы в текстах (награды, итоги), которые рисуются пиксельными иконками, а не шрифтом */
+const CHAR_ICONS: Record<string, string> = { '★': 'stars', '⭐': 'stars', '❤': 'ui_heart', '✔': 'ui_check', '✘': 'ui_cross', '✗': 'ui_cross', '→': 'ui_right', '➜': 'ui_right', '🏆': 'prize' };
+const CHAR_RE = new RegExp(`\\{(skill|ico):([\\w-]+)\\}|(${Object.keys(CHAR_ICONS).join('|')})\\uFE0F?`, 'u');
+
+/** текст с иконками: {skill:id} — иконка скилла (например «+1 {skill:music}»), {ico:id} — любая PixIcon, ★ ❤ ✔ → … — пиксельные значки */
+export function ResText({ text, topics = [], size = 18 }: { text: string; topics?: Topic[]; size?: number }) {
+  const out: any[] = [];
+  let rest = text;
+  for (let m = CHAR_RE.exec(rest); m; m = CHAR_RE.exec(rest)) {
+    if (m.index) out.push(rest.slice(0, m.index));
+    const t = m[1] === 'skill' && topics.find((x) => x.id === m[2]);
+    out.push(t ? <SkillIcon t={t} size={size} /> : m[1] === 'ico' ? <PixIcon id={m[2]} size={size} /> : m[1] ? m[0] : <PixIcon id={CHAR_ICONS[m[3]]} size={size} />);
+    rest = rest.slice(m.index + m[0].length);
+  }
+  if (rest) out.push(rest);
+  return <>{out}</>;
 }
 
 /** иконка и цифра; grid — сеткой в несколько строк (тем может быть 10+) */
@@ -147,13 +151,14 @@ export function SkillChips({ topics, stats, size = 16, grid }: { topics: Topic[]
 
 /** интро префектуры при первом входе: фон (если нарисован) и название по-русски и по-японски */
 /** bgLayer — фон рисует общий слой под интро (ТВ), здесь только заглушка, если фона нет */
-export function PrefIntro({ code, who, reward, bgLayer }: { code: number; who?: Player; reward?: RewardType; bgLayer?: boolean }) {
+/** still — без анимаций (телефон): тот же фон и та же плашка с названием, что на ТВ */
+export function PrefIntro({ code, who, reward, bgLayer, still }: { code: number; who?: Player; reward?: RewardType; bgLayer?: boolean; still?: boolean }) {
   const bg = prefBgUrl(code);
-  const smooth = useSmoothBg(bgLayer ? null : bg);
+  const smooth = useSmoothBg(bgLayer || still ? null : bg);
   const p = PREF[code];
   return (
-    <div class={'pref-intro' + (bgLayer && bg ? ' over' : '')}>
-      {bg ? !bgLayer && smooth.src && <img class={'pref-intro-bg zoom' + (smooth.smooth ? ' smooth' : '')} src={smooth.src} alt="" draggable={false} /> : <div class="pref-intro-bg empty" />}
+    <div class={'pref-intro' + (bgLayer && bg ? ' over' : '') + (still ? ' still' : '')}>
+      {bg ? (still ? <img class="pref-intro-bg" src={bg} alt="" draggable={false} /> : !bgLayer && smooth.src && <img class={'pref-intro-bg zoom' + (smooth.smooth ? ' smooth' : '')} src={smooth.src} alt="" draggable={false} />) : <div class="pref-intro-bg empty" />}
       <div class="pref-intro-title">
         <div class="pref-intro-ja">{p?.ja}</div>
         <div class="pref-intro-ru">{p?.ru}</div>

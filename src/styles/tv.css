@@ -196,7 +196,11 @@
 .iai-pic { position: absolute; left: 50%; top: 50%; width: max(100cqw, 177.78cqh); height: max(56.25cqw, 100cqh); transform: translate(-50%, -50%); }
 .iai-bg, .iai-petals { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 /* самурай: 96×96 на картине 480×270 */
-.iai-sam { position: absolute; left: 35.4%; top: 63%; width: 20%; height: 35.56%; image-rendering: pixelated; }
+.iai-sam { position: absolute; left: 38.5%; top: 65.5%; width: 23.8%; height: 33%; image-rendering: pixelated; }
+/* место и размер самурая на каждом фоне (сняты со скриншотов ведущего) */
+.scene-dawn .iai-sam { left: 49.5%; top: 57.7%; width: 25.15%; height: 35.1%; }
+.scene-bamboo .iai-sam { left: 40.57%; top: 41.8%; width: 36.87%; height: 51.4%; }
+.scene-bridge .iai-sam { left: 27.23%; top: 6.41%; width: 59.7%; height: 83.3%; }
 .iai-sam.drawn { animation: iaiDash 0.25s steps(3) both; }
 .iai-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 55% 40%, transparent 50%, rgba(5, 2, 15, 0.65) 100%); animation: iaiBreath 3s ease-in-out infinite; }
 .iai-slash { position: absolute; left: -10%; top: 50%; z-index: 2; width: 120%; height: 0.9vh; background: linear-gradient(90deg, transparent, #fff 30%, #fff 70%, transparent); box-shadow: 0 0 2vh #ffd6e8; transform: rotate(-14deg) scaleX(0); transform-origin: left; animation: iaiSlash 0.6s cubic-bezier(.2,.9,.2,1) forwards; pointer-events: none; }
@@ -308,3 +312,5 @@
 .dragon-row { display: grid; grid-template-columns: 1.6em auto 1fr auto auto; gap: 0.6em; align-items: center; font-size: 1.15em; width: 100%; padding: 1px 8px; }
 .dragon-row.place1 { background: rgba(255, 210, 63, 0.18); }
 .dragon-award { color: var(--yellow); }
+/* джа-одори: тот же свиток, что у остальных групповых игр */
+.dragon-center > .gscroll { display: flex; flex-direction: column; align-items: center; filter: drop-shadow(10px 10px 0 rgba(11, 13, 31, 0.85)); pointer-events: auto; }
