@@ -259,7 +259,10 @@
 .shop { position: relative; display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px;
   /* стена лавки, пока нет картинки: тёмные доски */
   background: repeating-linear-gradient(90deg, #3b2418 0 46px, #34200f 46px 48px, #452a1b 48px 94px, #2c1a0e 94px 96px); }
-.shop.has-art { background-size: cover; background-position: center top; image-rendering: pixelated; }
+.shop.has-art { background: #2e1a10 no-repeat center top / 100% auto; image-rendering: pixelated; }
+.shop-top { display: flex; flex-direction: column; gap: 10px; }
+/* занавес на картинке кончается на 124 из 270 пикселей ширины: верх ровно до его края */
+.shop.has-art .shop-top { aspect-ratio: 270 / 124; margin-bottom: 4px; }
 .shop-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 0; }
 .shop-sign { background: #8c1f2b; color: #ffe9b0; border: 3px solid #1a0d06; box-shadow: inset 0 0 0 2px #d9a441, 3px 3px 0 #1a0d06; padding: 4px 12px; font-size: 22px; letter-spacing: 0.05em; }
 .shop-wallet { background: rgba(16, 12, 8, 0.75); padding: 4px 8px; border: 2px solid #1a0d06; }

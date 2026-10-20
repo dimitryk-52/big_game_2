@@ -76,12 +76,15 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
 
   return (
     <div class={'shop scroll' + (BG ? ' has-art' : '')} style={BG ? { backgroundImage: `url(${BG})` } : undefined}>
-      <div class="shop-head">
-        <div class="shop-sign">店 Магазин</div>
-        <span class="shop-wallet">{fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
+      {/* верх — на занавесе-норэн; полки начинаются под ним */}
+      <div class="shop-top">
+        <div class="shop-head">
+          <div class="shop-sign">店 Магазин</div>
+          <span class="shop-wallet">{fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
+        </div>
+        <div class="pad-x">{timer}</div>
+        {msg && <div class="status-card pop shop-msg">{msg}</div>}
       </div>
-      <div class="pad-x">{timer}</div>
-      {msg && <div class="status-card pop shop-msg">{msg}</div>}
       {SHELVES.map((row) => (
         <div class="shelf">
           <div class="shelf-items">

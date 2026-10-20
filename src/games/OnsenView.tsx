@@ -11,7 +11,7 @@ export interface OnsenLook { x: number; y: number }
 /** во сколько раз картинка выше окна — немного запаса, чтобы смотреть вверх-вниз (запасной вариант без WebGL) */
 export const ONSEN_ZOOM = 1.15;
 
-const PANO_ASPECT = 2514 / 1000;
+const PANO_ASPECT = 3932 / 1564;
 /** сколько градусов вокруг охватывает панорама по горизонтали; по вертикали — пропорционально */
 const SPAN_X = 180;
 const SPAN_Y = SPAN_X / PANO_ASPECT;
