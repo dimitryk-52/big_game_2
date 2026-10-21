@@ -63,6 +63,8 @@ label { display: inline-flex; gap: 6px; align-items: center; }
 .snd-badge.synth { color: #9aa3d6; }
 .snd-badge.none { color: #ff9f43; }
 .snd-badge.off { color: var(--red); }
+.snd-badge.fx { color: #ffd23f; font-weight: bold; }
+.snd-where { font-size: 11px; font-weight: normal; padding: 1px 6px; margin-left: 6px; background: rgba(255, 255, 255, 0.08); vertical-align: middle; white-space: nowrap; }
 .admin:has(.intros) { height: 100vh; display: flex; flex-direction: column; }
 .intros { display: flex; flex: 1; min-height: 0; }
 .intros-list { width: 280px; flex-shrink: 0; overflow-y: auto; padding: 10px; border-right: 3px solid #fff; background: var(--bg2); display: flex; flex-direction: column; gap: 2px; }

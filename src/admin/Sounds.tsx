@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Settings } from '../shared/types';
 import {
-  INTRO_LIST, MUSIC_LIST, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundLabel, soundMap, soundUrl, stopAllSounds, uploadSound,
+  INTRO_LIST, MUSIC_LIST, PHONE_SOUNDS, SOUND_EVENTS, SOUND_GROUPS, introId, listSoundFiles, onSoundsChange, playFile, saveSounds, soundLabel, soundMap, soundUrl, stopAllSounds, uploadSound,
   type IntroKind, type SoundCfg, type SoundMap,
 } from '../shared/sounds';
 import { unlockAudio } from '../shared/sound';
@@ -255,6 +255,10 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
   );
 }
 
+/** где играет и что это: короткий fx или подложка */
+const where = (fx: boolean) => <>{fx && <span class="snd-badge fx" title="Короткий звук на событие">fx</span>}</>;
+const TV = <span class="snd-where" title="Играет на ТВ — можно поставить свой файл">📺 ТВ</span>;
+
 function badge(cfg: SoundCfg | undefined, synth: boolean, fallback?: string) {
   if (cfg?.mute) return <span class="snd-badge off">тишина</span>;
   if (cfg?.file) return <span class="snd-badge own">свой</span>;
@@ -269,7 +273,7 @@ function MusicSection({ snd }: { snd: Snd }) {
   useEffect(() => stopMusic, []);
   return (
     <section class="snd-group">
-      <h3>🎵 Фоновая музыка</h3>
+      <h3>🎵 Фоновая музыка {TV} <span class="muted small">подложка</span></h3>
       <div class="muted small">
         Играет по кругу на ТВ, между треками — плавный переход. У вопросов и групповых игр без своего файла — как раньше (тишина);
         у карты и дуэли без своего файла — <code>music/map.mp3</code> и <code>music/duel.mp3</code>. В вопросах с аудио/видео и в ритм-батле музыки нет.
@@ -321,13 +325,13 @@ export function SoundsTab() {
         if (!evs.length) return null;
         return (
           <section class="snd-group">
-            <h3>{g.name}</h3>
+            <h3>{g.name} {TV}</h3>
             {g.note && <div class="muted small">{g.note}</div>}
             <table class="qtable snd-table">
               <tbody>
                 {evs.map((e) => (
                   <tr>
-                    <td class="snd-name"><b>{e.name}</b> {badge(snd.map[e.id], !!e.synth, e.fallback)}<div class="muted small">{e.when}</div></td>
+                    <td class="snd-name"><b>{e.name}</b> {where(!e.bed)}{badge(snd.map[e.id], !!e.synth, e.fallback)}<div class="muted small">{e.when}</div></td>
                     <td><Picker id={e.id} snd={snd} synth={!!e.synth} label={e.name} none={e.fallback} onPlay={e.fallback ? (c) => fallbackPreview(e.id, c) : undefined} /></td>
                   </tr>
                 ))}
@@ -336,6 +340,20 @@ export function SoundsTab() {
           </section>
         );
       })}
+      <section class="snd-group">
+        <h3>На телефонах <span class="snd-where">📱 телефон</span></h3>
+        <div class="muted small">Всегда встроенные 8-битные: телефоны берут игру с GitHub Pages, свои файлы туда не качаются (и не нужно — трафик и задержка). Здесь только послушать.</div>
+        <table class="qtable snd-table">
+          <tbody>
+            {PHONE_SOUNDS.map((e) => (
+              <tr>
+                <td class="snd-name"><b>{e.name}</b> {where(true)}<span class="snd-badge synth">8-бит</span><div class="muted small">{e.when}</div></td>
+                <td><button class="btn small" title="Послушать" onClick={() => { unlockAudio(); stopAll(); e.synth(); }}>▶</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }
@@ -459,7 +477,7 @@ export function IntrosTab({ settings }: { settings: Settings }) {
       <main class="intros-main col">
         <NoServer files={snd.files} />
         <div class="row wrap intros-title">
-          <h2>{sel.name} <span class="muted">{sel.sub}</span></h2>
+          <h2>{sel.name} <span class="muted">{sel.sub}</span> {TV}{where(true)}</h2>
           <span class="muted small">{SECTIONS.find((x) => x.kind === sel.kind)!.hint}</span>
         </div>
         {sel.kind === 'pref' && prefInfo(+sel.id) && <div class="muted small">Здесь: {prefInfo(+sel.id)}</div>}

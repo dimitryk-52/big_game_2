@@ -27,6 +27,8 @@ export interface SoundEvent {
   synth?: () => void;
   /** без своего файла играет другое событие — подпись для админки */
   fallback?: string;
+  /** подложка (длинный звук под действием), а не короткий fx */
+  bed?: boolean;
 }
 export interface SoundGroup { id: string; name: string; note?: string; events: SoundEvent[] }
 
@@ -77,7 +79,7 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'groupGo', name: 'Старт работы', when: 'Свиток свернулся — все начали рисовать / сочинять / резать' },
       { id: 'groupShow', name: 'Показ работы', when: 'Каждая следующая работа на экране (каллиграфия, фукуварай, сэнрю)' },
       { id: 'groupVote', name: 'Голосование', when: 'Галерея работ — все голосуют' },
-      { id: 'iaiTension', name: 'Иайдо: нагнетание', when: 'Один раз в начале каждого раунда (например, кабуки). «!» не вспыхнет, пока файл не доиграет до конца, потом — через случайные 1–5 c. Нет файла — как раньше: сигнал через 2–7 c' },
+      { id: 'iaiTension', bed: true, name: 'Иайдо: нагнетание', when: 'Один раз в начале каждого раунда (например, кабуки). «!» не вспыхнет, пока файл не доиграет до конца, потом — через случайные 1–5 c. Нет файла — как раньше: сигнал через 2–7 c' },
       { id: 'iaiSignal', name: 'Иайдо: сигнал «!»', when: 'Вспыхнул сигнал — пора рубить. Свой файл тоже звучит точно в момент сигнала (без своего — встроенный «кин!»)' },
       { id: 'iaiDecoy', name: 'Иайдо: ложный «?»', when: 'Ложная тревога (без своего файла — встроенный стук бамбука)' },
       { id: 'iaiCut', name: 'Иайдо: удар', when: 'Кто-то первым срубил', synth: sfx.slash },
@@ -104,6 +106,21 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'pause', name: 'Пауза', when: 'Ведущий поставил игру на паузу (клавиша P)' },
     ],
   },
+];
+
+/** звуки на телефонах: всегда встроенные 8-битные — телефоны берут игру с GitHub Pages, файлы туда не качаются */
+export const PHONE_SOUNDS: { name: string; when: string; synth: () => void }[] = [
+  { name: 'Пачинко: шарик', when: 'Запуск каждого шарика', synth: sfx.pachi },
+  { name: 'Пачинко: шарик в лунке', when: 'Шарик попал в лунку; ещё — покупка шариков', synth: sfx.coin },
+  { name: 'Пачинко: джекпот', when: 'Барабаны сошлись', synth: sfx.jackpot },
+  { name: 'Чо-хан: стакан', when: 'Трясут стакан с костями', synth: sfx.rattle },
+  { name: 'Чо-хан: кости легли', when: 'Можно ставить', synth: sfx.click },
+  { name: 'Чо-хан: выигрыш / проигрыш', when: 'Угадал (джекпот) или нет', synth: () => { sfx.jackpot(); setTimeout(sfx.wrong, 900); } },
+  { name: 'Призовая машина: старт', when: 'Кольцо запущено', synth: sfx.click },
+  { name: 'Призовая машина: итог', when: 'Мимо / выигрыш / большой выигрыш', synth: () => { sfx.wrong(); setTimeout(sfx.jackpot, 700); setTimeout(sfx.fanfare, 1700); } },
+  { name: 'Судоку: решено', when: 'Решённое судоку принято', synth: sfx.jackpot },
+  { name: 'Магазин: покупка', when: 'Игрок купил бонус', synth: sfx.coin },
+  { name: 'Сашими: разрез', when: 'Игрок отрезал кусок на своём телефоне', synth: sfx.chop },
 ];
 
 export const SOUND_EVENTS: Record<string, SoundEvent> = Object.fromEntries(SOUND_GROUPS.flatMap((g) => g.events.map((e) => [e.id, e])));
