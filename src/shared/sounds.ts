@@ -25,8 +25,15 @@ export interface SoundEvent {
   when: string;
   /** встроенный 8-битный звук; нет — событие пока молчит */
   synth?: () => void;
+  /** без своего файла играет другое событие — подпись для админки */
+  fallback?: string;
 }
 export interface SoundGroup { id: string; name: string; note?: string; events: SoundEvent[] }
+
+/** групповые игры с таймером на работу (у иайдо и джа-одори его нет) */
+export const GROUP_TIMED: GroupGameId[] = ['calligraphy', 'fukuwarai', 'senryu', 'sashimi'];
+export const groupEndId = (g: GroupGameId) => `groupEnd:${g}`;
+export const groupTableId = (g: GroupGameId) => `groupTable:${g}`;
 
 /** все события, которые звучат на ТВ. id — постоянные: по ним хранятся назначения */
 export const SOUND_GROUPS: SoundGroup[] = [
@@ -78,6 +85,13 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'chop', name: 'Сашими: разрез', when: 'Игрок отрезал кусок рыбы', synth: sfx.chop },
       { id: 'dragonOut', name: 'Джа-одори: сбился', when: 'Игрок сбился с ритма и выбыл', synth: sfx.stumble },
     ],
+  },
+  {
+    id: 'groupEach', name: 'Групповые игры: конец времени и таблица',
+    note: 'Без своего файла у конца времени — тишина, у таблицы — звук «Приз / победа».', events: (Object.keys(GROUP_GAMES) as GroupGameId[]).flatMap((g) => [
+      ...(GROUP_TIMED.includes(g) ? [{ id: groupEndId(g), name: `${GROUP_GAMES[g].name}: время вышло`, when: 'Таймер дошёл до нуля (или все сдали раньше)' }] : []),
+      { id: groupTableId(g), name: `${GROUP_GAMES[g].name}: таблица итогов`, when: 'На ТВ показали места и награды', fallback: 'как «Приз / победа»' },
+    ]),
   },
   {
     id: 'solo', name: 'Соло-игры (окошки на ТВ)', note: 'Звуки на самих телефонах (шарики пачинко, стакан чо-хан) остаются 8-битными — телефоны берут игру с GitHub, файлов там нет. Интро соло-игр — на вкладке «Интро».', events: [

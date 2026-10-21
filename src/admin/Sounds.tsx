@@ -40,25 +40,53 @@ function useSounds() {
 }
 type Snd = ReturnType<typeof useSounds>;
 
+/** что сейчас играет в предпросмотре (id события) — у него ▶ становится ■ */
+let nowId: string | null = null;
+let nowTok = 0;
+const nowSubs = new Set<() => void>();
+function setNowId(id: string | null) {
+  nowId = id;
+  nowSubs.forEach((c) => c());
+  return ++nowTok;
+}
+/** отметить, что у события id играет предпросмотр, пока src не доиграет */
+function track(id: string, src: Promise<AudioBufferSourceNode | undefined> | HTMLAudioElement | undefined) {
+  const tok = setNowId(id);
+  const end = () => { if (nowTok === tok) setNowId(null); };
+  if (src instanceof HTMLAudioElement) src.addEventListener('ended', end);
+  else if (src) void src.then((x) => (x ? x.addEventListener('ended', end) : end()));
+  else end();
+}
+function usePreviewing() {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const c = () => bump((x) => x + 1);
+    nowSubs.add(c);
+    return () => { nowSubs.delete(c); };
+  }, []);
+  return nowId;
+}
+
 /** предпросмотр фоновой музыки — обычным <audio>, чтобы не декодировать весь трек */
 let musicEl: HTMLAudioElement | null = null;
 function stopMusic() {
   musicEl?.pause();
   musicEl = null;
 }
-function previewMusic(cfg: SoundCfg | undefined, dflt?: string) {
-  stopAllSounds();
-  stopMusic();
+function previewMusic(id: string, cfg: SoundCfg | undefined, dflt?: string) {
+  stopAll();
   if (cfg?.mute) return;
   const url = cfg?.file ? soundUrl(cfg.file) : dflt;
   if (!url) return;
   musicEl = new Audio(url);
   musicEl.volume = Math.min(1, 0.6 * (cfg?.file ? cfg.vol ?? 1 : 1));
   void musicEl.play().catch(() => {});
+  track(id, musicEl);
 }
 function stopAll() {
   stopAllSounds();
   stopMusic();
+  if (nowId) setNowId(null);
 }
 
 /** сыграть то, что сейчас стоит на событии */
@@ -66,8 +94,20 @@ function preview(id: string, cfg: SoundCfg | undefined) {
   unlockAudio();
   stopAll();
   if (cfg?.mute) return;
-  if (cfg?.file) return void playFile(cfg.file, cfg.vol ?? 1);
+  if (cfg?.file) return track(id, playFile(cfg.file, cfg.vol ?? 1));
   SOUND_EVENTS[id]?.synth?.();
+}
+
+/** событие, которое без своего файла играет звук «Приз / победа» */
+function fallbackPreview(id: string, cfg: SoundCfg | undefined) {
+  if (cfg?.file || cfg?.mute) return preview(id, cfg);
+  const prize = soundMap().prize;
+  if (prize?.file && !prize.mute) {
+    unlockAudio();
+    stopAll();
+    return track(id, playFile(prize.file, prize.vol ?? 1));
+  }
+  preview('prize', prize);
 }
 
 /** где ещё стоит файл (кроме события except) — названия событий */
@@ -109,11 +149,12 @@ function Picker({ id, snd, synth, onPlay, label, none }: { id: string; snd: Snd;
   };
   const value = cfg.mute ? '__mute' : cfg.file ?? '';
   const files = snd.files ?? [];
+  const on = usePreviewing() === id;
   return (
     <div class={'snd-pick' + (drag ? ' drag' : '')}
       onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
       onDrop={(e) => { e.preventDefault(); setDrag(false); void take(e.dataTransfer?.files[0]); }}>
-      <button class="btn small" title="Послушать" onClick={() => (onPlay ? onPlay(cfg) : preview(id, cfg))}>▶</button>
+      <button class="btn small" title={on ? 'Остановить' : 'Послушать'} onClick={() => (on ? stopAll() : onPlay ? onPlay(cfg) : preview(id, cfg))}>{on ? '■' : '▶'}</button>
       <select value={value} onChange={(e) => {
         const v = (e.target as HTMLSelectElement).value;
         const next: SoundCfg = v === '__mute' ? { ...cfg, file: undefined, mute: true } : { ...cfg, file: v || undefined, mute: false };
@@ -143,7 +184,7 @@ function Picker({ id, snd, synth, onPlay, label, none }: { id: string; snd: Snd;
               const next = { ...cfg, vol };
               void snd.set(id, next);
               if (onPlay) onPlay(next);
-              else { stopAll(); void playFile(cfg.file!, vol); }
+              else { stopAll(); track(id, playFile(cfg.file!, vol)); }
             }} />
           <span>{Math.round((cfg.vol ?? 1) * 100)}%</span>
         </label>
@@ -214,9 +255,10 @@ function Library({ snd, current, title, onPick, onClose }: { snd: Snd; current?:
   );
 }
 
-function badge(cfg: SoundCfg | undefined, synth: boolean) {
+function badge(cfg: SoundCfg | undefined, synth: boolean, fallback?: string) {
   if (cfg?.mute) return <span class="snd-badge off">тишина</span>;
   if (cfg?.file) return <span class="snd-badge own">свой</span>;
+  if (fallback) return <span class="snd-badge synth">{fallback}</span>;
   return synth ? <span class="snd-badge synth">8-бит</span> : <span class="snd-badge none">молчит</span>;
 }
 
@@ -242,7 +284,7 @@ function MusicSection({ snd }: { snd: Snd }) {
                   <b>{m.name}</b> {cfg?.mute ? <span class="snd-badge off">тишина</span> : cfg?.file ? <span class="snd-badge own">свой</span> : m.dflt ? <span class="snd-badge synth">стандартная</span> : <span class="snd-badge none">тишина</span>}
                   <div class="muted small">{m.when}</div>
                 </td>
-                <td><Picker id={m.id} snd={snd} synth={false} label={'Музыка: ' + m.name} none={m.dflt ? `стандартная (${m.dflt})` : undefined} onPlay={(c) => { unlockAudio(); previewMusic(c, m.dflt); }} /></td>
+                <td><Picker id={m.id} snd={snd} synth={false} label={'Музыка: ' + m.name} none={m.dflt ? `стандартная (${m.dflt})` : undefined} onPlay={(c) => { unlockAudio(); previewMusic(m.id, c, m.dflt); }} /></td>
               </tr>
             );
           })}
@@ -285,8 +327,8 @@ export function SoundsTab() {
               <tbody>
                 {evs.map((e) => (
                   <tr>
-                    <td class="snd-name"><b>{e.name}</b> {badge(snd.map[e.id], !!e.synth)}<div class="muted small">{e.when}</div></td>
-                    <td><Picker id={e.id} snd={snd} synth={!!e.synth} label={e.name} /></td>
+                    <td class="snd-name"><b>{e.name}</b> {badge(snd.map[e.id], !!e.synth, e.fallback)}<div class="muted small">{e.when}</div></td>
+                    <td><Picker id={e.id} snd={snd} synth={!!e.synth} label={e.name} none={e.fallback} onPlay={e.fallback ? (c) => fallbackPreview(e.id, c) : undefined} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -343,8 +385,8 @@ export function IntrosTab({ settings }: { settings: Settings }) {
   const play = (withSound = true, c: SoundCfg | undefined = snd.map[sid]) => {
     setN((x) => x + 1);
     unlockAudio();
-    stopAllSounds();
-    if (withSound && c?.file && !c.mute) void playFile(c.file, c.vol ?? 1);
+    stopAll();
+    if (withSound && c?.file && !c.mute) track(sid, playFile(c.file, c.vol ?? 1));
   };
   const go = (d: number) => {
     const i = list.indexOf(sel);
@@ -353,12 +395,12 @@ export function IntrosTab({ settings }: { settings: Settings }) {
   };
   const pick = (x: typeof sel) => {
     setSel(x);
-    stopAllSounds();
+    stopAll();
     setN((v) => v + 1);
     if (auto) {
       const c = snd.map[introId(x.kind, x.id)];
       unlockAudio();
-      if (c?.file) void playFile(c.file, c.vol ?? 1);
+      if (c?.file) track(introId(x.kind, x.id), playFile(c.file, c.vol ?? 1));
     }
   };
   // ↑/↓ — соседний пункт, пробел — ещё раз
@@ -426,7 +468,7 @@ export function IntrosTab({ settings }: { settings: Settings }) {
         <div class="row wrap">
           <button class="btn primary" onClick={() => play()}>▶ Интро со звуком <span class="muted small">(пробел)</span></button>
           <button class="btn small" onClick={() => play(false)}>↻ Только анимация</button>
-          <button class="btn small ghost" onClick={() => stopAllSounds()}>■ Стоп</button>
+          <button class="btn small ghost" onClick={() => stopAll()}>■ Стоп</button>
           <span style={{ flex: 1 }} />
           <button class="btn small" onClick={() => go(-1)}>← Пред. <span class="muted small">↑</span></button>
           <button class="btn small" onClick={() => go(1)}>След. → <span class="muted small">↓</span></button>

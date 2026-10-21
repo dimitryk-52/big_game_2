@@ -5,7 +5,7 @@ import type { DragonPublic, GameState } from '../shared/types';
 import { Avatar, PixIcon, useFrame } from '../ui/common';
 import { characterCanvas } from '../shared/sprites';
 import { startDragonDrums } from '../shared/sound';
-import { DRAGON_COUNT, DRAGON_BAR, dragonBpm, dragonFoot, dragonTimes } from '../games/logic';
+import { DRAGON_COUNT, dragonBpm, dragonFoot, dragonTimes } from '../games/logic';
 import { STREET_GROUND, dragonImg, fallbackStreet } from '../games/dragonArt';
 import { GROUP_GAMES } from '../shared/settings';
 import { PREF } from '../map/mapData';
@@ -90,8 +90,7 @@ export function DragonTv({ s }: { s: GameState }) {
       {d.phase === 'intro' && (
         <div class="dragon-center">
           <ScrollBanner game="dragon" pref={d.pref} how={<>
-            Танец дракона с праздника Нагасаки Кунчи. На телефоне — <b>ЛЕВАЯ</b> и <b>ПРАВАЯ</b>: жмите по очереди в такт барабану.
-            Сначала {d.warm} шагов разминки, потом гонг — и зачёт. Каждые {DRAGON_BAR} шагов темп растёт. Сбился — выбыл со своим куском дракона.
+            Тапай в такт барабану: <b>ЛЕВАЯ</b>, <b>ПРАВАЯ</b>, <b>ЛЕВАЯ</b>… Сбился — выбыл.
           </>} />
         </div>
       )}

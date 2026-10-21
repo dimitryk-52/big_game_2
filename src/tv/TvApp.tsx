@@ -18,7 +18,7 @@ import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
 import { DragonTv } from './DragonTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
-import { playSound } from '../shared/sounds';
+import { groupTableId, hasCustom, playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 
@@ -56,7 +56,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'iaiEarly': playSound('iaiEarly'); break;
         case 'dragonOut': playSound('dragonOut'); break;
         case 'prize': {
-          playSound('prize');
+          // таблица групповой игры: свой звук игры, если назначен
+          playSound(d.game && hasCustom(groupTableId(d.game)) ? groupTableId(d.game) : 'prize');
           const p = host.state.players[d.pid];
           if (p?.pref) m?.confetti(p.pref);
           break;

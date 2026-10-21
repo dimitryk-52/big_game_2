@@ -2,8 +2,9 @@
 // итог дуэли…), фазы групповых игр и интро (префектура, групповая игра, открылось окошко соло-игры).
 // Сравниваем с прошлым состоянием и играем звук один раз на переход.
 import { useEffect, useRef } from 'preact/hooks';
-import type { GameState } from '../shared/types';
-import { introId, loadSounds, onSoundsChange, playSound } from '../shared/sounds';
+import type { GameState, GroupGameId } from '../shared/types';
+import { GROUP_TIMED, groupEndId, introId, loadSounds, onSoundsChange, playSound } from '../shared/sounds';
+import { now } from '../shared/util';
 
 /** у каких сцен свой звук (id события на вкладке «Звуки») */
 const STAGE_SOUND: Record<string, string> = {
@@ -28,6 +29,22 @@ export function useTvSounds(s: GameState) {
   const dragonKey = dr && st.t === 'dragon' ? `${dr.id}:${dr.phase}` : '';
   const busy = Object.fromEntries(Object.values(s.players).map((p) => [p.id, p.busy ?? null]));
 
+  // конец времени групповой игры: в момент дедлайна, а если все сдали раньше — при смене фазы. Один раз на игру
+  const ended = useRef(-1);
+  const drawing = g && st.t === 'group' && g.phase === 'draw' && GROUP_TIMED.includes(g.game) ? g : null;
+  const timeUp = (id: number, game: GroupGameId) => {
+    if (ended.current === id) return;
+    ended.current = id;
+    playSound(groupEndId(game));
+  };
+  useEffect(() => {
+    if (!drawing) return;
+    const left = drawing.deadline - now();
+    if (left < -1000) { ended.current = drawing.id; return; } // ТВ перезагрузили после конца времени
+    const t = setTimeout(() => timeUp(drawing.id, drawing.game), Math.max(0, left));
+    return () => clearTimeout(t);
+  }, [drawing?.id, drawing?.deadline]);
+
   useEffect(() => {
     const p = prev.current;
     prev.current = { stage: stageKey, group: groupKey, dragon: dragonKey, busy, paused: s.paused };
@@ -38,6 +55,7 @@ export function useTvSounds(s: GameState) {
       else if (STAGE_SOUND[st.t]) playSound(STAGE_SOUND[st.t]);
     }
     if (groupKey && groupKey !== p.group && g) {
+      if (p.group === `${g.id}:draw:` && GROUP_TIMED.includes(g.game)) timeUp(g.id, g.game);
       if (g.phase === 'intro') playSound(introId('group', g.game));
       else if (g.phase === 'draw') playSound('groupGo');
       else if (g.phase === 'show' && g.showIdx >= 0) playSound('groupShow');

@@ -983,7 +983,7 @@ export class GameEngine {
     g.awards = awards;
     g.phase = 'results';
     this.emit();
-    this.io.fx?.('prize', {});
+    this.io.fx?.('prize', { game: g.game });
     const win = g.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
     if (win.length) this.log(`${GROUP_GAMES[g.game].name}: побеждает ${win.join(', ')}`);
     await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
@@ -1210,7 +1210,7 @@ export class GameEngine {
     d.awards = awards;
     d.phase = 'results';
     this.emit();
-    this.io.fx?.('prize', {});
+    this.io.fx?.('prize', { game: 'dragon' });
     const win = d.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
     if (win.length) this.log(`🐉 Джа-одори: дольше всех дракона нёс ${win.join(', ')}`);
     await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);

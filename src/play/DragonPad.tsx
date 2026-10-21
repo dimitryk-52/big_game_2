@@ -110,7 +110,7 @@ export function DragonPad({ client, s, me }: { client: GameClient; s: GameState;
         <div class="group-kanji small">{info.kanji}</div>
         <h2>{info.name} <span class="jp">{info.ja}</span></h2>
         <div class="dragon-place">Ты несёшь {pos === 1 ? 'голову дракона' : pos === d.players.length ? 'хвост дракона' : `кусок №${pos}`}</div>
-        <div class="muted">Жми <b>ЛЕВУЮ</b> и <b>ПРАВУЮ</b> по очереди в такт барабану на ТВ. Сначала {d.warm} шагов разминки, потом зачёт. Сбился — выбыл.</div>
+        <div class="muted">Тапай в такт барабану: <b>ЛЕВАЯ</b>, <b>ПРАВАЯ</b>, <b>ЛЕВАЯ</b>… Сбился — выбыл.</div>
         <Buttons j={J.current} hint={null} onTap={() => {}} disabled />
       </div>
     );
