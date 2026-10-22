@@ -97,15 +97,15 @@ function composeChar(p: LookSrc, frame: CharFrame): HexGrid {
   return out;
 }
 
-/** сетка цветов → холст с контуром (+1px со всех сторон) */
-function gridCanvas(g: HexGrid, scale: number, flip: boolean, outline = 'rgba(0,0,0,0.85)') {
+/** сетка цветов → холст с чёрным контуром (+1px со всех сторон) */
+function gridCanvas(g: HexGrid, scale: number, flip: boolean) {
   const h = g.length, w = g[0]?.length ?? 0;
   const c = document.createElement('canvas');
   c.width = (w + 2) * scale;
   c.height = (h + 2) * scale;
   const ctx = c.getContext('2d')!;
   const X = (x: number) => (flip ? w - 1 - x : x) + 1;
-  ctx.fillStyle = outline;
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
   g.forEach((r, y) => r.forEach((ch, x) => {
     if (!ch) return;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -138,14 +138,13 @@ export function characterUrl(p: LookSrc, scale = 4, frame: CharFrame = 0, flip =
   return u;
 }
 
-/** акита-ину: 20×15 с контуром; frame 1 — шаг. Контур тёмно-коричневый, чтобы чёрный нос не сливался с ним */
-const AKITA_OUTLINE = '#6b3a1e';
+/** акита-ину: 18×12 с контуром; frame 1 — шаг */
 export const AKITA_W = 20;
 export const AKITA_H = 15;
 export function akitaCanvas(scale = 1, frame: 0 | 1 = 0, flip = false): HTMLCanvasElement {
   const key = `akita|${scale}|${frame}|${flip ? 1 : 0}`;
   let c = cache.get(key);
-  if (!c) cache.set(key, (c = gridCanvas(parts.get(frame ? 'akita_w' : 'akita') ?? [[null]], scale, flip, AKITA_OUTLINE)));
+  if (!c) cache.set(key, (c = gridCanvas(parts.get(frame ? 'akita_w' : 'akita') ?? [[null]], scale, flip)));
   return c;
 }
 export function akitaUrl(scale = 4, frame: 0 | 1 = 0, flip = false) {
