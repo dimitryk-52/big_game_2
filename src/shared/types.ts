@@ -1,6 +1,8 @@
 // Общие типы игры. Хост (ТВ) — единственный источник правды; телефоны получают
 // публичное состояние и отправляют только действия игрока.
 
+import type { Look } from './look';
+
 export type TopicId = string;
 export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
@@ -43,6 +45,10 @@ export interface Player {
   name: string;
   color: string;
   hat: number;
+  /** внешность (нет у старых сохранений — тогда DEFAULT_LOOK) */
+  look?: Look;
+  /** собака акита-ину — у первого, кто пришёл в Акиту */
+  akita?: boolean;
   pref: number | null;
   hp: number;
   maxHp: number;
@@ -397,7 +403,7 @@ export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' |
 /** телефон/админ → хост (канал input) */
 export type InputMsg =
   | { t: 'hello'; cid: string; pid?: string }
-  | { t: 'join'; cid: string; name: string; color: string; hat: number }
+  | { t: 'join'; cid: string; name: string; color: string; hat: number; look?: Look }
   | { t: 'restore'; cid: string; name: string; pin: string }
   | { t: 'ping'; cid: string; n: number; t0: number; pid?: string }
   | { t: 'answer'; pid: string; n: number; choice: number; at: number }

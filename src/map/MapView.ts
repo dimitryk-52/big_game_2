@@ -7,7 +7,8 @@ import {
   CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { characterCanvas, pixelBadge, type BadgePart } from '../shared/sprites';
+import { AKITA_H, CHAR_H, akitaCanvas, characterCanvas, pixelBadge, type BadgePart } from '../shared/sprites';
+import { TOKYO_PREF } from '../shared/look';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
@@ -47,9 +48,19 @@ interface Token {
   /** куда фишка ушла анимацией, пока хост ещё не записал новую префектуру (и до какого времени ждём) */
   goingTo: null | { code: number; until: number };
   flash: number;
-  color: string;
-  hat: number;
+  /** внешность, из которой собраны кадры */
+  key: string;
+  /** 1 — смотрит вправо, -1 — влево */
+  face: 1 | -1;
+  /** сдвиг фазы покачивания */
+  phase: number;
+  /** акита-ину бежит следом */
+  dog: null | { s: Sprite; frames: Texture[]; x: number; y: number; face: 1 | -1 };
 }
+
+const BODY_SCALE = 1.2;
+const DOG_SCALE = 1.1;
+const nearestTex = (c: HTMLCanvasElement) => { const tx = Texture.from(c); tx.source.scaleMode = 'nearest'; return tx; };
 
 /** шрифт берётся из CSS-переменной --font (меняется в одном месте — base.css) */
 const font = () => getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'DotGothic16, monospace';
@@ -319,25 +330,37 @@ export class MapView {
         if (p.pref === going.code || performance.now() > going.until) this.tokens.get(p.id)!.goingTo = null;
         else target = prefAnchorWorld(going.code);
       }
-      if (!t || t.color !== p.color || t.hat !== p.hat) {
-        t?.root.destroy({ children: true });
-        const frames = [0, 1].map((f) => {
-          const tx = Texture.from(characterCanvas(p.color, p.hat, 1, f));
-          tx.source.scaleMode = 'nearest';
-          return tx;
-        });
+      const key = JSON.stringify([p.color, p.hat, p.look]);
+      if (!t || t.key !== key) {
+        const old = t;
+        old?.root.destroy({ children: true });
+        const frames = ([0, 1, 2] as const).map((f) => nearestTex(characterCanvas(p, 1, f)));
         const root = new Container();
         const ring = new Graphics();
         const body = new Sprite(frames[0]);
-        body.anchor.set(0.5, 1);
-        body.scale.set(1.6);
+        // якорь — под ногами (нижняя строка холста — контур)
+        body.anchor.set(0.5, (CHAR_H - 1) / CHAR_H);
         const label = nameLabel(p.name);
         const plate = new Graphics();
         root.addChild(ring, body, plate, label);
         this.tokenLayer.addChild(root);
-        t = { pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: target.x, y: target.y, tx: target.x, ty: target.y, hop: null, goingTo: null, flash: 0, color: p.color, hat: p.hat };
+        // при высадке смотрим в сторону Токио
+        const tokyo = prefAnchorWorld(TOKYO_PREF);
+        const face: 1 | -1 = old?.face ?? (tokyo.x >= target.x ? 1 : -1);
+        t = {
+          pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: old?.x ?? target.x, y: old?.y ?? target.y, tx: target.x, ty: target.y,
+          hop: old?.hop ?? null, goingTo: old?.goingTo ?? null, flash: 0, key, face, phase: Math.random() * 1000, dog: null,
+        };
+        if (old?.dog) { old.dog.s.destroy(); }
         this.tokens.set(p.id, t);
       }
+      if (p.akita && !t.dog) {
+        const frames = ([0, 1] as const).map((f) => nearestTex(akitaCanvas(1, f)));
+        const s = new Sprite(frames[0]);
+        s.anchor.set(0.5, (AKITA_H - 1) / AKITA_H);
+        this.tokenLayer.addChildAt(s, 0);
+        t.dog = { s, frames, x: t.x - t.face * 12, y: t.y, face: t.face };
+      } else if (!p.akita && t.dog) { t.dog.s.destroy(); t.dog = null; }
       t.label.text = p.name;
       if (t.plateFor !== p.name) { t.plateFor = p.name; drawNamePlate(t.plate, t.label, p.color); }
       t.tx = target.x;
@@ -348,7 +371,7 @@ export class MapView {
       if (u.activePid === p.id) pixelOval(t.ring, 11, 5, 0xfff27a, 0.9);
       else pixelOval(t.ring, 8, 3.5, 0x000000, 0.35);
     }
-    for (const [id, t] of this.tokens) if (!live.has(id)) { t.root.destroy({ children: true }); this.tokens.delete(id); }
+    for (const [id, t] of this.tokens) if (!live.has(id)) { t.root.destroy({ children: true }); t.dog?.s.destroy(); this.tokens.delete(id); }
   }
 
   /** анимация прыжков по пути префектур */
@@ -597,13 +620,33 @@ export class MapView {
         const a = t.hop.pts[i], b = t.hop.pts[i + 1];
         t.x = a.x + (b.x - a.x) * k;
         t.y = a.y + (b.y - a.y) * k;
+        if (Math.abs(b.x - a.x) > 1) t.face = b.x > a.x ? 1 : -1;
         t.body.y = -Math.sin(k * Math.PI) * 22;
-        t.body.texture = t.frames[Math.floor(this.time / 120) % 2];
+        t.body.texture = t.frames[Math.floor(this.time / 120) % 2 ? 2 : 0];
         if (t.hop.t >= t.hop.dur) { t.hop = null; t.body.y = 0; t.body.texture = t.frames[0]; }
       } else {
+        // сдвиг хоть немного вправо/влево — поворачиваемся туда (по вертикали направление не меняем)
+        if (Math.abs(t.tx - t.x) > 2) t.face = t.tx > t.x ? 1 : -1;
         t.x += (t.tx - t.x) * Math.min(1, dt / 120);
         t.y += (t.ty - t.y) * Math.min(1, dt / 120);
-        t.body.y = -Math.abs(Math.sin(this.time / 300 + t.tx)) * 1.5;
+        t.body.y = 0;
+        // покачивание: вдох каждые ~0.55 с
+        t.body.texture = t.frames[Math.floor((this.time + t.phase) / 550) % 2];
+      }
+      t.body.scale.set(BODY_SCALE * t.face, BODY_SCALE);
+      if (t.dog) {
+        const d = t.dog;
+        const gx = t.x - t.face * 13, gy = t.y + 2;
+        const vx = (gx - d.x) * Math.min(1, dt / 260), vy = (gy - d.y) * Math.min(1, dt / 260);
+        d.x += vx;
+        d.y += vy;
+        const moving = Math.hypot(vx, vy) > 0.15;
+        if (Math.abs(vx) > 0.15) d.face = vx > 0 ? 1 : -1;
+        else if (!moving) d.face = t.face;
+        d.s.texture = d.frames[moving && Math.floor(this.time / 110) % 2 ? 1 : 0];
+        d.s.position.set(d.x, d.y);
+        d.s.scale.set(DOG_SCALE * d.face * t.root.scale.y, DOG_SCALE * t.root.scale.y);
+        d.s.alpha = t.body.alpha;
       }
       if (t.flash > 0) {
         t.flash -= dt;

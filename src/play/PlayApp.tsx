@@ -4,8 +4,9 @@ import type { GameState, Player, PublicQuestion, SoloGameId } from '../shared/ty
 import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
+import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
 import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
-import { BONUS_INFO, HATS, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt } from '../shared/settings';
+import { BONUS_INFO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
@@ -71,6 +72,27 @@ export function PlayApp({ client, onLeaveRoom }: { client: GameClient; onLeaveRo
 
 // ───────── регистрация ─────────
 
+/** ‹ название › — листаем варианты части */
+function PartPick({ label, parts, v, on }: { label: string; parts: Part[]; v: number; on: (i: number) => void }) {
+  const n = parts.length;
+  return (
+    <div class="part-pick">
+      <span class="muted">{label}</span>
+      <button class="btn small" onClick={() => on((v + n - 1) % n)}>‹</button>
+      <b>{parts[v % n].name}</b>
+      <button class="btn small" onClick={() => on((v + 1) % n)}>›</button>
+    </div>
+  );
+}
+
+function Swatches({ tones, v, on }: { tones: Tone[]; v: number; on: (i: number) => void }) {
+  return (
+    <div class="tones">
+      {tones.map((t, i) => <button class={'swatch' + (i === v ? ' on' : '')} style={{ background: `linear-gradient(135deg, ${t[0]} 60%, ${t[1]} 60%)` }} onClick={() => on(i)} />)}
+    </div>
+  );
+}
+
 function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; onLeaveRoom: () => void }) {
   const [mode, setMode] = useState<'new' | 'restore'>(s.phase === 'lobby' ? 'new' : 'restore');
   const [name, setName] = useState('');
@@ -78,7 +100,16 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
   const taken = new Set(Object.values(s.players).map((p) => p.color));
   const [color, setColor] = useState(PLAYER_COLORS.find((c) => !taken.has(c)) ?? PLAYER_COLORS[0]);
   const [hat, setHat] = useState(0);
+  const [look, setLook] = useState<Look>(() => randomLook());
+  const [flip, setFlip] = useState(false);
   const [sent, setSent] = useState(false);
+  const set = (k: keyof Look) => (v: number) => setLook({ ...look, [k]: v });
+  const shuffle = () => {
+    const free = PLAYER_COLORS.filter((c) => !taken.has(c));
+    setLook(randomLook());
+    setHat(Math.floor(Math.random() * HATS.length));
+    if (free.length) setColor(free[Math.floor(Math.random() * free.length)]);
+  };
   useEffect(() => { if (client.joinError) setSent(false); }, [client.joinError]);
   return (
     <div class="phone scroll">
@@ -92,20 +123,26 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
       </div>
       {mode === 'new' ? (
         <div class="col pad">
-          <div class="avatar-preview pop" key={color + hat}><Avatar p={{ color, hat }} size={120} /></div>
+          <div class="avatar-preview" onClick={() => setFlip(!flip)}><Avatar p={{ color, hat, look }} size={150} idle flip={flip} /></div>
           <input class="inp" maxLength={16} placeholder="Твоё имя" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-          <div class="muted">Цвет</div>
+          <button class="btn small" onClick={shuffle}>🎲 Случайно</button>
+          <PartPick label="Причёска" parts={HAIRS} v={look.hair} on={set('hair')} />
+          <Swatches tones={HAIR_COLORS} v={look.hairC} on={set('hairC')} />
+          <PartPick label="Убор"parts={HATS} v={hat} on={setHat} />
+          {hat > 0 && <Swatches tones={CLOTH_COLORS} v={look.hatC} on={set('hatC')} />}
+          <PartPick label="Верх" parts={TOPS} v={look.top} on={set('top')} />
+          <div class="muted">Цвет верха — твой цвет в игре</div>
           <div class="colors">
             {PLAYER_COLORS.map((c) => (
               <button class={'swatch' + (c === color ? ' on' : '') + (taken.has(c) ? ' taken' : '')} style={{ background: c }} onClick={() => setColor(c)} />
             ))}
           </div>
-          <div class="muted">Головной убор</div>
-          <div class="row wrap">
-            {HATS.map((h, i) => <button class={'btn small' + (i === hat ? ' yellow' : '')} onClick={() => setHat(i)}>{h}</button>)}
-          </div>
+          <PartPick label="Низ" parts={BOTS} v={look.bot} on={set('bot')} />
+          <Swatches tones={CLOTH_COLORS} v={look.botC} on={set('botC')} />
+          <div class="muted">Кожа</div>
+          <Swatches tones={SKINS} v={look.skin} on={set('skin')} />
           {client.joinError && <div class="warn">{client.joinError}</div>}
-          <button class="btn primary big-btn" disabled={!name.trim() || sent} onClick={() => { setSent(true); client.join(name.trim(), color, hat); setTimeout(() => setSent(false), 4000); }}>
+          <button class="btn primary big-btn" disabled={!name.trim() || sent} onClick={() => { setSent(true); client.join(name.trim(), color, hat, look); setTimeout(() => setSent(false), 4000); }}>
             {sent ? 'Подключаемся…' : 'Играть!'}
           </button>
         </div>

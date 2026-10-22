@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { BonusId, GameState, Player, RewardType, Topic } from '../shared/types';
 import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
-import { characterUrl, pixelIconUrl, topicIconUrl } from '../shared/sprites';
+import { CHAR_H, CHAR_W, characterUrl, pixelIconUrl, topicIconUrl, type LookSrc } from '../shared/sprites';
 import { prefBgUrl, useSmoothBg } from '../shared/prefBg';
 import { PREF } from '../map/mapData';
 
@@ -33,15 +33,15 @@ export function TimerBar({ start, end, now, big }: { start: number; end: number;
   );
 }
 
-export function Avatar({ p, size = 48, dim }: { p: Pick<Player, 'color' | 'hat'>; size?: number; dim?: boolean }) {
+export function Avatar({ p, size = 48, dim, flip, idle }: { p: LookSrc; size?: number; dim?: boolean; flip?: boolean; idle?: boolean }) {
+  const st = { width: size * CHAR_W / CHAR_H, height: size, opacity: dim ? 0.4 : 1 };
+  if (!idle) return <img class="avatar" src={characterUrl(p, 4, 0, flip)} style={st} alt="" draggable={false} />;
+  // покачивание: второй кадр (вдох) поверх первого мигает по CSS
   return (
-    <img
-      class="avatar"
-      src={characterUrl(p.color, p.hat, 4)}
-      style={{ width: size * 0.75, height: size, opacity: dim ? 0.4 : 1 }}
-      alt=""
-      draggable={false}
-    />
+    <span class="avatar avatar-idle" style={st}>
+      <img src={characterUrl(p, 4, 0, flip)} alt="" draggable={false} />
+      <img class="f1" src={characterUrl(p, 4, 1, flip)} alt="" draggable={false} />
+    </span>
   );
 }
 

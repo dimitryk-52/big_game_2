@@ -131,6 +131,7 @@
 /* дуэль */
 .duel-hud { position: absolute; top: 10px; left: calc((100% - clamp(240px, 18vw, 340px) - 24px) / 2); transform: translateX(-50%); display: flex; align-items: center; gap: 1.5em; z-index: 30; background: rgba(40, 10, 20, 0.95); border: 4px solid var(--pink); padding: 10px 20px; box-shadow: 6px 6px 0 var(--shadow); }
 .duel-side { display: flex; align-items: center; gap: 10px; position: relative; padding: 4px; border: 3px solid transparent; }
+.duel-side.def { flex-direction: row-reverse; text-align: right; }
 .duel-side.asking { border-color: var(--yellow); }
 .duel-side.hurt { animation: shake 0.4s; }
 .duel-vs { text-align: center; font-size: 1.6em; color: var(--pink); }

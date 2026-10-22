@@ -252,7 +252,6 @@ export function syllables(text: string) {
 }
 
 export const PLAYER_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff', '#ff9f43', '#2ee6d6', '#ff7ad9', '#a3a3ff', '#f5f5f5'];
-export const HATS = ['Кепка', 'Хатимаки', 'Корона', 'Ушки', 'Без шляпы'];
 
 /** значки соло-игр на карте: id иконки → префектуры */
 export function machinesOf(st: Settings): Record<string, number[]> {

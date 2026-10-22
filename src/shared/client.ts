@@ -1,5 +1,6 @@
 // Клиент игрока: принимает состояние от хоста, синхронизирует часы, шлёт действия.
 import type { GameMsg, GameState, InputMsg, PickKind } from './types';
+import type { Look } from './look';
 import { createTransport, type NetStatus, type Transport } from './net';
 import { ClockSync } from './clock';
 import { uid } from './util';
@@ -122,9 +123,9 @@ export class GameClient {
     return this.clock.hostNow();
   }
 
-  join(name: string, color: string, hat: number) {
+  join(name: string, color: string, hat: number, look?: Look) {
     this.joinError = null;
-    this.send({ t: 'join', cid: this.cid, name, color, hat });
+    this.send({ t: 'join', cid: this.cid, name, color, hat, look });
   }
   restore(name: string, pin: string) {
     this.joinError = null;

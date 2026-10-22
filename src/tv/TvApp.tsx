@@ -507,7 +507,7 @@ function Fighter({ s, q, id, role, side }: { s: GameState; q: PublicQuestion; id
   return (
     <div class={'fighter ' + side + (done ? '' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (d?.asker === id ? ' asking' : '')}>
       <div class="fighter-role">{d?.asker === id ? 'спрашивает' : role}</div>
-      <div class={'fighter-av' + (hurt ? ' hurt' : '')} key={hurt ? d!.lastHit!.n : 0}><Avatar p={p} size={128} /></div>
+      <div class={'fighter-av' + (hurt ? ' hurt' : '')} key={hurt ? d!.lastHit!.n : 0}><Avatar p={p} size={128} idle flip={side === 'right'} /></div>
       <div class="fighter-name">{p.name}</div>
       <HpBar hp={p.hp} max={p.maxHp} />
       <SkillChips topics={s.settings.topics.filter((t) => t.combat)} stats={p.stats} size={20} />
@@ -521,9 +521,10 @@ function DuelHud({ s }: { s: GameState }) {
   const a = s.players[d.attacker], b = s.players[d.defender];
   if (!a || !b) return null;
   const hitKey = d.lastHit ? d.lastHit.n : 0;
+  // соперники смотрят друг на друга: левый вправо, правый влево
   const side = (p: Player, role: string) => (
-    <div class={'duel-side' + (d.asker === p.id ? ' asking' : '') + (d.lastHit?.to === p.id ? ' hurt' : '')} key={p.id + (d.lastHit?.to === p.id ? hitKey : '')}>
-      <Avatar p={p} size={64} />
+    <div class={'duel-side' + (p.id === d.defender ? ' def' : '') + (d.asker === p.id ? ' asking' : '') + (d.lastHit?.to === p.id ? ' hurt' : '')} key={p.id + (d.lastHit?.to === p.id ? hitKey : '')}>
+      <Avatar p={p} size={64} idle flip={p.id === d.defender} />
       <div class="col" style={{ gap: 4, minWidth: 160 }}>
         <div><b>{p.name}</b> <span class="muted">{role}</span></div>
         <HpBar hp={p.hp} max={p.maxHp} />

@@ -10,6 +10,7 @@ import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
+import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/look';
 import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
@@ -547,6 +548,11 @@ export class GameEngine {
     const firstVisit = !ps.rev;
     ps.rev = true;
     ps.visits++;
+    // первый, кто дошёл до Акиты, получает собаку акита-ину (бонус от неё — потом)
+    if (to === AKITA_PREF && !Object.values(this.s.players).some((x) => x.akita)) {
+      p.akita = true;
+      this.log(`${p.name}: акита-ину теперь бежит следом!`);
+    }
     this.io.fx?.(landing ? 'land' : 'arrive', { pid, code: to, firstVisit });
     this.emit();
     if (firstVisit) {
@@ -1317,13 +1323,13 @@ export class GameEngine {
     return this.s.joinOrder.filter((id) => this.s.players[id]);
   }
 
-  private newPlayer(name: string, color: string, hat: number, bot = false): Player {
+  private newPlayer(name: string, color: string, hat: number, look: Look, bot = false): Player {
     const st = this.s.settings;
     const stats: Record<TopicId, number> = {};
     const calib: Record<TopicId, number> = {};
     for (const t of st.topics.filter((x) => x.combat)) { stats[t.id] = st.baseStrength; calib[t.id] = 0; }
     return {
-      id: uid(10), name, color, hat, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
+      id: uid(10), name, color, hat: Number.isInteger(hat) && hat >= 0 && hat < HATS.length ? hat : 0, look, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
       bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
     };
   }
@@ -1341,7 +1347,7 @@ export class GameEngine {
     if (this.s.phase !== 'lobby') return err('Игра уже идёт. Если ты уже играешь — нажми «Я уже в игре».');
     if (this.s.joinOrder.length >= 10) return err('Уже 10 игроков — мест нет');
     if (Object.values(this.s.players).some((p) => p.name.toLowerCase() === name.toLowerCase())) return err('Это имя уже занято');
-    const p = this.newPlayer(name, m.color, m.hat);
+    const p = this.newPlayer(name, m.color, m.hat, cleanLook(m.look));
     const pin = String(1000 + randInt(9000));
     this.s.players[p.id] = p;
     this.s.joinOrder.push(p.id);
@@ -1561,7 +1567,7 @@ export class GameEngine {
     const used = new Set(Object.values(this.s.players).map((p) => p.name));
     const name = names.find((n) => !used.has('🤖' + n)) ?? 'Бот' + randInt(100);
     const colors = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff', '#ff9f43', '#2ee6d6', '#ff7ad9', '#a3a3ff', '#f5f5f5'];
-    const p = this.newPlayer('🤖' + name, colors[this.s.joinOrder.length % colors.length], randInt(5), true);
+    const p = this.newPlayer('🤖' + name, colors[this.s.joinOrder.length % colors.length], randInt(HATS.length), randomLook(), true);
     this.s.players[p.id] = p;
     this.s.joinOrder.push(p.id);
     this.sec.pins[p.id] = '0000';

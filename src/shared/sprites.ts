@@ -1,95 +1,156 @@
-// Процедурные пиксельные персонажи (временные — потом заменим на нарисованные).
-const SKIN = '#f6c9a0';
-const HAIR = '#2b1d1a';
+// Модульные пиксельные персонажи: части в src/img/char/*.png (исходник art/chars/chars.px.js, холст 16×24,
+// смотрят вправо). Цвета-маркеры перекрашиваются под внешность игрока, контур добавляется здесь.
+import { BOTS, CLOTH_COLORS, DEFAULT_LOOK, HAIRS, HAIR_BACK, HAIR_COLORS, HATS, SKINS, TOPS, type Look } from './look';
 
-// 12×16, символы: . пусто, s кожа, h волосы, e глаз, b тело (цвет игрока), d тёмное тело, l ноги, w белый, m рот
-const BASE = [
-  '............',
-  '............',
-  '....hhhh....',
-  '...hhhhhh...',
-  '...hssssh...',
-  '...sesses...',
-  '...ssssss...',
-  '....smms....',
-  '...bbbbbb...',
-  '..sbbwwbbs..',
-  '..sbbbbbbs..',
-  '...bbbbbb...',
-  '...dddddd...',
-  '...ll..ll...',
-  '...ll..ll...',
-  '...kk..kk...',
-];
-// шляпы рисуются поверх первых строк
-const HATS: string[][] = [
-  // кепка
-  ['............', '....cccc....', '...cccccc...', '...cccccccc.'],
-  // хатимаки (повязка)
-  ['............', '............', '....hhhh....', '...whrwwhw..'],
-  // корона
-  ['....y.y.y...', '....yyyyy...', '...yyyyyy...', '............'],
-  // ушки
-  ['...c....c...', '...cc..cc...', '...hhhhhh...', '............'],
-  // без шляпы
-  [],
-];
+const charFiles = import.meta.glob<string>('../img/char/*.png', { eager: true, import: 'default', query: '?url' });
+/** пиксели части: '#rrggbb' или null */
+type HexGrid = (string | null)[][];
+const parts = new Map<string, HexGrid>();
+
+function loadParts() {
+  return Promise.all(Object.entries(charFiles).map(([path, url]) => new Promise<void>((ok) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      const hex = (i: number) => '#' + [d[i], d[i + 1], d[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('');
+      const g: HexGrid = [];
+      for (let y = 0; y < c.height; y++) {
+        const row: (string | null)[] = [];
+        for (let x = 0; x < c.width; x++) row.push(d[(y * c.width + x) * 4 + 3] < 128 ? null : hex((y * c.width + x) * 4));
+        g.push(row);
+      }
+      parts.set(path.replace(/^.*\/|\.png$/g, ''), g);
+      ok();
+    };
+    img.onerror = () => ok();
+    img.src = url;
+  })));
+}
+
+// маркеры из chars.px.js → слот внешности
+const MARK: Record<string, string> = {
+  '#f2c49b': 's', '#c98b6b': 'S', '#7a4630': 'h', '#4e2a1e': 'H', '#e04858': 't', '#a02c40': 'T',
+  '#3858c0': 'b', '#24387c': 'B', '#1a1a30': 'o', '#f0a830': 'c', '#b87018': 'C',
+};
 
 function shade(hex: string, k: number) {
   const n = parseInt(hex.slice(1), 16);
   const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * k)));
-  return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
+}
+
+/** что нужно для рисования персонажа */
+export type LookSrc = { color: string; hat: number; look?: Look };
+/** размер кадра с контуром, пиксели */
+export const CHAR_W = 18;
+export const CHAR_H = 26;
+
+/** кадры: 0 — стоит, 1 — вдох (голова и туловище на 1px ниже), 2 — шаг */
+export type CharFrame = 0 | 1 | 2;
+
+function lookOf(p: LookSrc): Look { return p.look ?? DEFAULT_LOOK; }
+
+function charKey(p: LookSrc) {
+  const l = lookOf(p);
+  return [p.color, p.hat, l.skin, l.hair, l.hairC, l.hatC, l.top, l.bot, l.botC].join('|');
+}
+
+/** собрать кадр в сетку 16×24 из цветов */
+function composeChar(p: LookSrc, frame: CharFrame): HexGrid {
+  const l = lookOf(p);
+  const hair = HAIRS[l.hair % HAIRS.length].id;
+  const hat = HATS[((p.hat % HATS.length) + HATS.length) % HATS.length];
+  const bot = BOTS[l.bot % BOTS.length].id;
+  const skin = SKINS[l.skin % SKINS.length], hc = HAIR_COLORS[l.hairC % HAIR_COLORS.length];
+  const bc = CLOTH_COLORS[l.botC % CLOTH_COLORS.length], cc = CLOTH_COLORS[l.hatC % CLOTH_COLORS.length];
+  const pal: Record<string, string> = {
+    s: skin[0], S: skin[1], h: hc[0], H: hc[1], t: p.color, T: shade(p.color, 0.68),
+    b: bc[0], B: bc[1], o: shade(bc[1], 0.6), c: cc[0], C: cc[1],
+  };
+  const out: HexGrid = Array.from({ length: 24 }, () => Array<string | null>(16).fill(null));
+  const dy = frame === 1 ? 1 : 0;
+  const hatGrid = parts.get('hat_' + hat.id);
+  // по cover: top прячем волосы выше нижнего края убора
+  let hairCut = -1;
+  if (hat.cover === 'all') hairCut = 99;
+  else if (hat.cover === 'top' && hatGrid) hatGrid.forEach((r, y) => { if (r.some(Boolean)) hairCut = y; });
+  const put = (name: string, oy: number, isHair = false) => {
+    const g = parts.get(name);
+    if (!g) return;
+    g.forEach((r, y) => r.forEach((c, x) => {
+      if (!c || y + oy < 0 || y + oy >= 24) return;
+      if (isHair && y < hairCut) return;
+      out[y + oy][x] = pal[MARK[c]] ?? c;
+    }));
+  };
+  if (HAIR_BACK.has(hair)) put('hairb_' + hair, dy, true);
+  put('bot_' + bot + (frame === 2 ? '_w' : ''), 0);
+  put('top_' + TOPS[l.top % TOPS.length].id, dy);
+  put('head', dy);
+  put('hair_' + hair, dy, true);
+  put('hat_' + hat.id, dy);
+  return out;
+}
+
+/** сетка цветов → холст с чёрным контуром (+1px со всех сторон) */
+function gridCanvas(g: HexGrid, scale: number, flip: boolean) {
+  const h = g.length, w = g[0]?.length ?? 0;
+  const c = document.createElement('canvas');
+  c.width = (w + 2) * scale;
+  c.height = (h + 2) * scale;
+  const ctx = c.getContext('2d')!;
+  const X = (x: number) => (flip ? w - 1 - x : x) + 1;
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  g.forEach((r, y) => r.forEach((ch, x) => {
+    if (!ch) return;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (!g[y + dy]?.[x + dx]) ctx.fillRect(X(x + dx) * scale, (y + dy + 1) * scale, scale, scale);
+    }
+  }));
+  g.forEach((r, y) => r.forEach((ch, x) => {
+    if (!ch) return;
+    ctx.fillStyle = ch;
+    ctx.fillRect(X(x) * scale, (y + 1) * scale, scale, scale);
+  }));
+  return c;
 }
 
 const cache = new Map<string, HTMLCanvasElement>();
 
-export function characterCanvas(color: string, hat: number, scale = 1, frame = 0): HTMLCanvasElement {
-  const key = `${color}|${hat}|${scale}|${frame}`;
-  const c0 = cache.get(key);
-  if (c0) return c0;
-  const rows = BASE.map((r) => r.split(''));
-  const hatRows = HATS[hat % HATS.length] ?? [];
-  hatRows.forEach((r, i) => r.split('').forEach((ch, j) => { if (ch !== '.') rows[i][j] = ch; }));
-  if (frame === 1) {
-    // шаг: ноги в другой позиции
-    rows[13] = '...ll...ll..'.split('');
-    rows[14] = '..ll....ll..'.split('');
-    rows[15] = '..kk.....kk.'.split('');
-  }
-  const pal: Record<string, string> = {
-    s: SKIN, h: HAIR, e: '#111', m: '#c0504d', b: color, d: shade(color, 0.6), l: '#33335a', k: '#111122', w: '#ffffff',
-    c: color, r: '#e02828', y: '#ffd23f',
-  };
-  const c = document.createElement('canvas');
-  c.width = 12 * scale;
-  c.height = 16 * scale;
-  const ctx = c.getContext('2d')!;
-  // контур
-  ctx.fillStyle = 'rgba(0,0,0,0.85)';
-  rows.forEach((r, y) => r.forEach((ch, x) => {
-    if (ch === '.') return;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const n = rows[y + dy]?.[x + dx];
-      if (n === undefined || n === '.') ctx.fillRect((x + dx) * scale, (y + dy) * scale, scale, scale);
-    }
-  }));
-  rows.forEach((r, y) => r.forEach((ch, x) => {
-    if (ch === '.') return;
-    ctx.fillStyle = pal[ch] ?? '#f0f';
-    ctx.fillRect(x * scale, y * scale, scale, scale);
-  }));
-  cache.set(key, c);
+/** персонаж CHAR_W×CHAR_H (×scale); flip — смотрит влево */
+export function characterCanvas(p: LookSrc, scale = 1, frame: CharFrame = 0, flip = false): HTMLCanvasElement {
+  const key = `${charKey(p)}|${scale}|${frame}|${flip ? 1 : 0}`;
+  let c = cache.get(key);
+  if (!c) cache.set(key, (c = gridCanvas(composeChar(p, frame), scale, flip)));
   return c;
 }
 
 const urlCache = new Map<string, string>();
-export function characterUrl(color: string, hat: number, scale = 4) {
-  const key = `${color}|${hat}|${scale}`;
+export function characterUrl(p: LookSrc, scale = 4, frame: CharFrame = 0, flip = false) {
+  const key = `${charKey(p)}|${scale}|${frame}|${flip ? 1 : 0}`;
   let u = urlCache.get(key);
-  if (!u) {
-    u = characterCanvas(color, hat, scale).toDataURL();
-    urlCache.set(key, u);
-  }
+  if (!u) urlCache.set(key, (u = characterCanvas(p, scale, frame, flip).toDataURL()));
+  return u;
+}
+
+/** акита-ину: 18×12 с контуром; frame 1 — шаг */
+export const AKITA_W = 20;
+export const AKITA_H = 15;
+export function akitaCanvas(scale = 1, frame: 0 | 1 = 0, flip = false): HTMLCanvasElement {
+  const key = `akita|${scale}|${frame}|${flip ? 1 : 0}`;
+  let c = cache.get(key);
+  if (!c) cache.set(key, (c = gridCanvas(parts.get(frame ? 'akita_w' : 'akita') ?? [[null]], scale, flip)));
+  return c;
+}
+export function akitaUrl(scale = 4, frame: 0 | 1 = 0, flip = false) {
+  const key = `akita|${scale}|${frame}|${flip ? 1 : 0}`;
+  let u = urlCache.get(key);
+  if (!u) urlCache.set(key, (u = akitaCanvas(scale, frame, flip).toDataURL()));
   return u;
 }
 
@@ -106,7 +167,7 @@ const grids = new Map<string, Grid>();
 
 /** загрузить PNG иконок; вызывается один раз до первого рендера (main.tsx) */
 export async function loadIcons() {
-  await Promise.all(Object.entries(iconFiles).map(([path, url]) => new Promise<void>((ok) => {
+  await Promise.all([loadParts(), ...Object.entries(iconFiles).map(([path, url]) => new Promise<void>((ok) => {
     const img = new Image();
     img.onload = () => {
       const c = document.createElement('canvas');
@@ -129,7 +190,7 @@ export async function loadIcons() {
     };
     img.onerror = () => ok();
     img.src = url;
-  })));
+  }))]);
 }
 
 // запасная иконка темы без своего PNG: ромб цвета темы

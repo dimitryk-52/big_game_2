@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { DragonPublic, GameState } from '../shared/types';
 import { Avatar, PixIcon, useFrame } from '../ui/common';
-import { characterCanvas } from '../shared/sprites';
+import { CHAR_H, CHAR_W, characterCanvas } from '../shared/sprites';
 import { startDragonDrums } from '../shared/sound';
 import { DRAGON_COUNT, dragonBpm, dragonFoot, dragonTimes } from '../games/logic';
 import { STREET_GROUND, dragonImg, fallbackStreet } from '../games/dragonArt';
@@ -15,7 +15,9 @@ import { ScrollBanner } from './GroupTv';
 /** насколько уезжает улица за шаг, в пикселях street.png */
 const STRIDE = 5;
 /** персонаж рисуется в 2 раза крупнее пикселя мира */
-const CH = 2;
+/** масштаб персонажа (холст CHAR_W×CHAR_H) и его рост над мостовой */
+const PS = 1.5;
+const PH = (CHAR_H - 1) * PS;
 
 /** дробный номер шага в момент t; до первого шага — отрицательный (отсчёт) */
 function progress(d: DragonPublic, t: number) {
@@ -201,7 +203,7 @@ function draw(c: HTMLCanvasElement, s: GameState, d: DragonPublic, A: Anim) {
 
   // волна по дракону: от головы к хвосту
   const ph = moving ? walk * Math.PI / 2 : perf / 700;
-  const DY = gy - 16 * CH - 30;
+  const DY = gy - PH - 30;
   const AMP = 7;
   const yAt = (sIdx: number) => DY + AMP * Math.sin(ph - sIdx * 0.9);
 
@@ -228,7 +230,7 @@ function draw(c: HTMLCanvasElement, s: GameState, d: DragonPublic, A: Anim) {
     ctx.translate(x, gy);
     ctx.rotate(a * Math.PI / 2);
     ctx.globalAlpha = 0.85;
-    ctx.drawImage(characterCanvas(p0.color, p0.hat, 1, 0), -6 * CH, -16 * CH, 12 * CH, 16 * CH);
+    ctx.drawImage(characterCanvas(p0, 1, 0), -CHAR_W * PS / 2, -PH, CHAR_W * PS, CHAR_H * PS);
     ctx.restore();
     ctx.globalAlpha = 1;
     // имя видно, пока игрок падает, потом не мешает остальным
@@ -288,9 +290,9 @@ function draw(c: HTMLCanvasElement, s: GameState, d: DragonPublic, A: Anim) {
     const pl = s.players[id];
     const x = xsArr[j];
     const frac = walk - Math.floor(walk);
-    const frame = moving ? Math.floor(walk) % 2 : 0;
+    const frame = moving ? (Math.floor(walk) % 2 ? 2 : 0) : (Math.floor(perf / 550) + j) % 2 as 0 | 1;
     const bob = moving ? -Math.max(0, 1 - frac * 3) * 1.5 : 0;
-    ctx.drawImage(characterCanvas(pl.color, pl.hat, 1, frame), x - 6 * CH, gy - 16 * CH + bob, 12 * CH, 16 * CH);
+    ctx.drawImage(characterCanvas(pl, 1, frame), x - CHAR_W * PS / 2, gy - PH + bob, CHAR_W * PS, CHAR_H * PS);
     label(ctx, pl.name, x, gy + 9, '#ffffff');
   });
   ctx.restore();

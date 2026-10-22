@@ -7,10 +7,11 @@ import '../styles/base.css';
 import '../styles/tv.css';
 import '../styles/play.css';
 import '../styles/kit.css';
-import { loadIcons, characterUrl, pixelBadgeUrl, pixelIconUrl, topicIconUrl, SPECIAL_TOPIC } from '../shared/sprites';
+import { BOTS, CLOTH_COLORS, DEFAULT_LOOK, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS } from '../shared/look';
+import { loadIcons, akitaUrl, pixelBadgeUrl, type LookSrc, pixelIconUrl, topicIconUrl, SPECIAL_TOPIC } from '../shared/sprites';
 import { Reel, makeSpin, reelLabel, reelPos, type ReelSeg, type ReelSpin } from './Reel';
 import { Wheel, makeSpin as makeWheelSpin, wheelLabel, wheelRot, type WheelSpin } from './Wheel';
-import { DEFAULT_SETTINGS } from '../shared/settings';
+import { DEFAULT_SETTINGS, PLAYER_COLORS } from '../shared/settings';
 import type { Player } from '../shared/types';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, useFrame, PixelImg } from './common';
 import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
@@ -30,7 +31,11 @@ const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring'
 const UI_ICONS = ['ui_check', 'ui_cross', 'ui_timer', 'ui_left', 'ui_right', 'ui_up', 'ui_play', 'ui_pause', 'ui_heart', 'ui_medal1', 'ui_medal2', 'ui_medal3',
   'ui_undo', 'ui_trash', 'ui_backspace', 'ui_dizzy', 'ui_warn', 'ui_note', 'ui_film', 'ui_phone', 'ui_hand', 'ui_home', 'ui_map', 'ui_drum',
   'ui_fullscreen', 'ui_sound', 'ui_mute', 'ui_flag', 'ui_plus', 'ui_bug'];
-const HAT_COLORS = ['#ff4d6d', '#4dabff', '#ffd23f', '#5ce16b', '#c77dff'];
+
+/** персонаж в обе стороны, с покачиванием */
+function CharCell({ p, label }: { p: LookSrc; label: string }) {
+  return <div class="ui-icon"><Avatar p={p} size={104} idle /><Avatar p={p} size={104} idle flip /><div class="ui-label">{label}</div></div>;
+}
 
 function Section({ title, note, children }: { title: string; note?: string; children: any }) {
   return (
@@ -215,8 +220,16 @@ function Catalog() {
         {ICONS.slice(5).map((id) => <div class="ui-icon"><img class="pix-icon" src={pixelBadgeUrl(id, 4, 'machine')} alt="" /><div class="ui-label">{id} (автомат)</div></div>)}
       </Section>
 
-      <Section title="Персонажи" note="Пока рисуются кодом: src/shared/sprites.ts (BASE, HATS).">
-        {HAT_COLORS.map((c, h) => <img class="avatar" src={characterUrl(c, h, 4)} width={72} height={96} />)}
+      <Section title="Персонажи: причёски" note="Части рисуются в pxl: art/chars/chars.px.js → src/img/char/*.png; перекраска и сборка — src/shared/sprites.ts, списки — src/shared/look.ts.">
+        {HAIRS.map((h, i) => <CharCell label={h.name} p={{ color: PLAYER_COLORS[i % 10], hat: 0, look: { ...DEFAULT_LOOK, hair: i, hairC: i % HAIR_COLORS.length } }} />)}
+      </Section>
+      <Section title="Персонажи: головные уборы">
+        {HATS.map((h, i) => <CharCell label={h.name} p={{ color: PLAYER_COLORS[(i + 3) % 10], hat: i, look: { ...DEFAULT_LOOK, hair: i % HAIRS.length, hatC: i % CLOTH_COLORS.length } }} />)}
+      </Section>
+      <Section title="Персонажи: верх и низ, кожа">
+        {TOPS.map((t, i) => <CharCell label={t.name} p={{ color: PLAYER_COLORS[(i + 5) % 10], hat: 0, look: { ...DEFAULT_LOOK, top: i, bot: i % BOTS.length, botC: (i * 5) % CLOTH_COLORS.length, skin: i % SKINS.length } }} />)}
+        {BOTS.map((b, i) => <CharCell label={b.name} p={{ color: PLAYER_COLORS[i], hat: 0, look: { ...DEFAULT_LOOK, bot: i, botC: i + 6, skin: (i + 1) % SKINS.length } }} />)}
+        <div class="ui-icon"><img class="avatar" src={akitaUrl(5)} width={90} height={60} /><div class="ui-label">Акита-ину</div></div>
         <SkillChips topics={combat} stats={A.stats} size={20} />
       </Section>
 

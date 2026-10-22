@@ -30,7 +30,14 @@ html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); fo
 b, strong, h1, h2, h3 { font-weight: 700; }
 body { -webkit-font-smoothing: none; -webkit-tap-highlight-color: transparent; }
 button, input, select, textarea { font-family: var(--font); font-size: inherit; font-weight: inherit; color: inherit; }
-img.avatar { image-rendering: pixelated; display: inline-block; vertical-align: middle; }
+img.avatar, .avatar img { image-rendering: pixelated; display: inline-block; vertical-align: middle; }
+/* покачивание персонажа: кадр «вдох» поверх основного */
+.avatar-idle { position: relative; display: inline-block; vertical-align: middle; }
+.avatar-idle img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.avatar-idle img { animation: idle-f0 1.1s steps(1) infinite; }
+.avatar-idle .f1 { animation-name: idle-f1; }
+@keyframes idle-f0 { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes idle-f1 { 0% { opacity: 0; } 50% { opacity: 1; } }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
