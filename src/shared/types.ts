@@ -2,9 +2,10 @@
 // публичное состояние и отправляют только действия игрока.
 
 import type { Look } from './look';
+import type { FindId } from './economy';
 
 export type TopicId = string;
-export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food';
+export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food' | 'cheat' | 'neko' | 'coupon' | 'scroll';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
 
 export interface Topic {
@@ -73,6 +74,8 @@ export interface Player {
   /** темы купленных спецвопросов (по одной на спецвопрос); остальные спецвопросы — из любой спецтемы */
   specialTopics?: TopicId[];
   prizes: string[];
+  /** находка «старая карта»: префектуры в тумане, которые игрок разведал (видит только он на телефоне) */
+  scouted?: number[];
   online: boolean;
   /** чем игрок занят на телефоне (пнп на ТВ) */
   busy: null | SoloGameId;
@@ -246,6 +249,14 @@ export interface DuelPublic {
   lastHit: null | { to: string; dmg: number; n: number };
   winner: string | null;
   over: boolean;
+  /** победа нокаутом (тогда ещё и награда за победу) */
+  ko?: boolean;
+  /** сколько йен победитель украл у проигравшего */
+  stolen?: number;
+  /** ставки зрителей: кто → на кого → сколько */
+  bets?: Record<string, Record<string, number>>;
+  /** итог ставок: кто сколько выиграл (+) или проиграл (−) */
+  payouts?: Record<string, number>;
 }
 
 export interface RhythmPublic {
@@ -265,7 +276,7 @@ export type Stage =
   | { t: 'landing'; pid: string; deadline: number; blocked: number[] }
   | { t: 'turnStart'; pid: string }
   /** options3 — станции синкансэна, куда можно уехать по билету */
-  | { t: 'move'; pid: string; options: number[]; options2: number[]; options3?: number[]; /** корм: акита у соседа — её можно переманить (видит только ходящий на телефоне) */ lure?: boolean }
+  | { t: 'move'; pid: string; options: number[]; options2: number[]; options3?: number[]; /** корм: акита у соседа — её можно переманить (видит только ходящий на телефоне) */ lure?: boolean; /** свиток-вызов: кого можно вызвать на дуэль вместо хода (видит только ходящий на телефоне) */ challenge?: string[] }
   | { t: 'moving'; pid: string; from: number | null; to: number; path: number[] }
   | { t: 'bonus'; pids: string[]; deadline: number; offers: Record<string, BonusId[]>; picked: Record<string, BonusId | 'none'> }
   | { t: 'question' }
@@ -279,6 +290,12 @@ export type Stage =
   | { t: 'dragon' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
   | { t: 'extraTurn'; pid: string; deadline: number }
+  /** ставки зрителей перед дуэлью; done — кто уже закончил ставить */
+  | { t: 'duelBet'; deadline: number; done: string[] }
+  /** находка под ногами: на ТВ только «что-то нашёл» (кицунэ — публично); подробности у игрока на телефоне */
+  | { t: 'find'; pid: string; kind: FindId; amount?: number; from?: string }
+  /** наступила новая эпоха */
+  | { t: 'epoch'; epoch: number }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
@@ -325,7 +342,11 @@ export interface Settings {
     reviveYen: number;
     duelWinYen: number;
     duelWinStars: number;
+    /** победитель дуэли забирает этот % денег проигравшего */
+    duelStealPct: number;
   };
+  /** ставки зрителей перед дуэлью, сек */
+  betTime?: number;
   shop: {
     special: { yen: number; stars: number };
     hp: { yen: number; stars: number; amount: number };
@@ -336,6 +357,7 @@ export interface Settings {
     coin: { yen: number; stars: number };
     food: { yen: number; stars: number };
     ticket: { yen: number; stars: number };
+    scroll: { yen: number; stars: number };
   };
   /** станции синкансэна (коды префектур): билет перевозит с одной на любую другую */
   shinkansen: number[];
@@ -410,6 +432,8 @@ export interface GameState {
   settings: Settings;
   paused: boolean;
   phase: 'lobby' | 'calib' | 'landing' | 'turns' | 'end';
+  /** эпоха (0 — Эдо, 1 — Мэйдзи, 2 — Сёва): цены и награды, цвета интерфейса */
+  epoch?: number;
   /** отладочная сцена поверх игры (меню 🐞); сценарий при этом не трогается */
   debug?: DebugView | null;
 }
@@ -424,7 +448,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

@@ -53,7 +53,9 @@ export const DEFAULT_SETTINGS: Settings = {
     reviveYen: 300,
     duelWinYen: 300,
     duelWinStars: 1,
+    duelStealPct: 15,
   },
+  betTime: 15,
   shop: {
     special: { yen: 500, stars: 3 },
     hp: { yen: 1000, stars: 0, amount: 2 },
@@ -63,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
     move2: { yen: 800, stars: 0 },
     coin: { yen: 500, stars: 0 },
     food: { yen: 600, stars: 0 },
+    scroll: { yen: 1500, stars: 0 },
     ticket: { yen: 1000, stars: 0 },
   },
   // станции синкансэна (см. SHINKANSEN_LINES): 11 из 47, по одной на крупный город линии
@@ -208,6 +211,10 @@ export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: st
   coin: { name: 'Монета', short: '+1 удар', icon: '🪙' },
   food: { name: 'Корм', short: 'корм', icon: '🥡' },
   ticket: { name: 'Билет на синкансэн', short: 'синкансэн', icon: '🚄' },
+  cheat: { name: 'Шпаргалка', short: 'шпаргалка', icon: '📜' },
+  neko: { name: 'Манэки-нэко', short: '×2 йены', icon: '🐱' },
+  coupon: { name: 'Купон −50%', short: 'купон', icon: '🎫' },
+  scroll: { name: 'Свиток-вызов', short: 'вызов', icon: '📜' },
 };
 
 /** монетка: сколько урона добавляет к удару в дуэли */

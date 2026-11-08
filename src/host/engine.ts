@@ -15,6 +15,7 @@ import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCell
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
+import { EPOCHS, FIND_INFO, epochFor, epochOf, median, netWorth, rewardYen, shopCost, type FindId } from '../shared/economy';
 
 export interface HostIO {
   now(): number;
@@ -56,6 +57,10 @@ interface Secrets {
   flagSolved?: number[];
   /** выданные призы по рангам: чтобы один и тот же приз не выпал дважды */
   prizesGiven?: string[];
+  /** находки: сколько своих ходов сделал игрок, на каком ходу была последняя находка; находок в текущем круге */
+  ownTurns?: Record<string, number>;
+  findAt?: Record<string, number>;
+  findsRound?: { round: number; n: number };
 }
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
@@ -238,6 +243,26 @@ export class GameEngine {
           } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
           if (ep === this.epoch) void this.run(ep);
         })();
+        break;
+      }
+      case 'findTest': {
+        // отладка: прервать ход и выдать находку игроку (kind — какую), потом игра продолжится с начала хода
+        const p = this.s.players[args?.pid] ?? this.s.players[this.s.joinOrder[0]];
+        if (!p || p.pref == null) break;
+        this.abort();
+        const ep = this.epoch;
+        this.s.q = null;
+        this.s.duel = null;
+        void (async () => {
+          try { await this.giveFind(ep, p, 2, undefined, args?.kind); } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
+          if (ep === this.epoch) void this.run(ep);
+        })();
+        break;
+      }
+      case 'epochTest': {
+        // отладка: сразу сменить эпоху (без объявления)
+        this.s.epoch = Math.max(0, Math.min(EPOCHS.length - 1, Number(args?.epoch) || 0));
+        this.emit();
         break;
       }
       case 'debugFx':
@@ -482,6 +507,7 @@ export class GameEngine {
       this.log(`${p.name} высаживается: ${prefName(code)}`);
       // высадка — полноценный ход: интро, вопрос, магазин, групповая игра
       await this.arrive(epoch, p, code, true);
+      await this.checkEpoch(epoch);
       this.sec.landingIdx = i + 1;
       this.snapshot();
     }
@@ -498,6 +524,7 @@ export class GameEngine {
         if (this.s.players[pid]) await this.turn(epoch, pid);
         // редкий бонус: после хода можно сходить ещё раз
         while (this.s.players[pid] && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
+        await this.checkEpoch(epoch);
         this.s.turnIdx++;
         this.snapshot();
       }
@@ -520,22 +547,28 @@ export class GameEngine {
 
     if (p.hp <= 0) await this.revive(epoch, p);
 
+    // ── находка под ногами (тайная помощь отстающим) ──
+    const found = await this.maybeFind(epoch, p);
+    const rickshaw = found === 'rickshaw';
+
     // ── выбор хода ──
     const from = p.pref!;
     const free = (c: number) => this.occupants(c, pid).length < 2;
     const options = neighbors(from).filter(free);
-    const options2 = p.bonuses.move2 > 0 ? atDistance(from, 2).filter(free) : [];
+    const options2 = p.bonuses.move2 > 0 || rickshaw ? atDistance(from, 2).filter(free) : [];
     // билет на синкансэн: со станции — на любую другую станцию, где есть место
     const rail = st.shinkansen ?? [];
     const options3 = (p.bonuses.ticket ?? 0) > 0 && rail.includes(from) ? rail.filter((c) => c !== from && free(c)) : [];
-    if (!options.length && !options2.length && !options3.length) {
+    // свиток-вызов (果たし状): вместо хода — дуэль с любым живым игроком на карте
+    const foes = () => (p.bonuses.scroll ?? 0) > 0 && p.hp > 0 ? Object.values(this.s.players).filter((x) => x.id !== pid && x.hp > 0 && x.pref != null).map((x) => x.id) : [];
+    if (!options.length && !options2.length && !options3.length && !foes().length) {
       this.setStage({ t: 'banner', text: `${p.name}: некуда идти`, sub: 'Ход пропущен' });
       await this.sleep(epoch, 2500);
       return;
     }
     // корм: до хода можно переманить акиту, если её хозяин стоит в соседней префектуре
     const dogNear = () => (p.bonuses.food ?? 0) > 0 && Object.values(this.s.players).some((x) => x.akita && x.id !== pid && x.pref != null && neighbors(from).includes(x.pref));
-    const moveStage = () => this.setStage({ t: 'move', pid, options, options2, ...(options3.length ? { options3 } : {}), ...(dogNear() ? { lure: true } : {}) });
+    const moveStage = () => this.setStage({ t: 'move', pid, options, options2, ...(options3.length ? { options3 } : {}), ...(dogNear() ? { lure: true } : {}), ...(foes().length ? { challenge: foes() } : {}) });
     moveStage();
     // выбор: код префектуры; 'rail:<код>' — поездка по билету (на соседнюю станцию можно и пешком, и поездом); 'lure' — корм
     let choice: number | string | null | undefined;
@@ -543,6 +576,7 @@ export class GameEngine {
       choice = await this.waitInput(epoch, (m) => {
         if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
         if (m.value === 'lure') return dogNear() ? 'lure' : undefined;
+        if (typeof m.value === 'string' && m.value.startsWith('duel:')) return foes().includes(m.value.slice(5)) ? m.value : undefined;
         if (typeof m.value === 'string' && m.value.startsWith('rail:')) {
           const c = Number(m.value.slice(5));
           return options3.includes(c) ? m.value : undefined;
@@ -561,6 +595,20 @@ export class GameEngine {
       await this.sleep(epoch, 3000);
       moveStage();
     }
+    if (typeof choice === 'string' && choice.startsWith('duel:')) {
+      const foe = this.s.players[choice.slice(5)];
+      p.bonuses.scroll--;
+      this.log(`${p.name} шлёт свиток-вызов игроку ${foe.name}`);
+      this.io.fx?.('challenge', { pid, to: foe.id });
+      this.setStage({ t: 'banner', text: 'Свиток-вызов летит…', sub: `${p.name} → ${foe.name}` });
+      await this.sleep(epoch, 2600);
+      this.setStage({ t: 'banner', text: '果たし状', sub: `${p.name} вызывает ${foe.name} на поединок!`, big: true });
+      await this.sleep(epoch, 3200);
+      // дуэль на расстоянии: никто никуда не идёт; после неё ход окончен
+      await this.duel(epoch, p, foe);
+      return;
+    }
+    if (choice == null && !options.length && !options2.length && !options3.length) return; // идти некуда, а вызов не отправлен
     const byRail = typeof choice === 'string' && choice.startsWith('rail:');
     const to = byRail ? Number((choice as string).slice(5)) : (choice as number | undefined) ?? pick(options.length ? options : options2.length ? options2 : options3);
     const rode = byRail || (!options.includes(to) && !options2.includes(to));
@@ -569,9 +617,14 @@ export class GameEngine {
       this.log(`${p.name} едет на синкансэне: ${PREF[from]?.ru ?? from} → ${PREF[to]?.ru ?? to}`);
       this.io.fx?.('rail', { pid });
     } else if (!options.includes(to)) {
-      p.bonuses.move2--;
-      this.log(`${p.name} использует «${BONUS_INFO.move2.short}»`);
+      if (rickshaw) this.log(`${p.name} едет на рикше`);
+      else {
+        p.bonuses.move2--;
+        this.log(`${p.name} использует «${BONUS_INFO.move2.short}»`);
+      }
     }
+    // разведка старой карты нужна только на этот ход
+    if (p.scouted) delete p.scouted;
     this.setStage({ t: 'moving', pid, from, to, path: rode || options.includes(to) ? [from, to] : path(from, to) });
     await this.sleep(epoch, 1500);
     await this.arrive(epoch, p, to);
@@ -681,21 +734,31 @@ export class GameEngine {
     const results: Record<string, string> = {};
     const moverOk = res[pid] === q.correct;
     const solved = prize ? moverOk : pids.some((id) => res[id] === q.correct);
+    const ep = epochOf(this.s);
+    // манэки-нэко: за правильный ответ — вдвое больше йен (срабатывает сама и тратится)
+    const neko = (pl: Player, yen: number) => {
+      if (!((pl.bonuses.neko ?? 0) > 0)) return { yen, tag: '' };
+      pl.bonuses.neko--;
+      return { yen: yen * 2, tag: ' (нэко ×2)' };
+    };
     for (const id of pids) {
       const pl = this.s.players[id];
       if (prize) continue;
       if (id === pid) {
         if (moverOk) {
-          pl.yen += st.reward.moverCorrectYen;
+          const r = neko(pl, rewardYen(st.reward.moverCorrectYen, ep));
+          pl.yen += r.yen;
           pl.stars += st.reward.moverCorrectStars;
-          results[id] = `+¥${st.reward.moverCorrectYen} +${st.reward.moverCorrectStars}★`;
+          results[id] = `+¥${r.yen} +${st.reward.moverCorrectStars}★${r.tag}`;
         } else {
-          pl.yen += st.reward.moverWrongYen;
-          results[id] = `+¥${st.reward.moverWrongYen}`;
+          const y = rewardYen(st.reward.moverWrongYen, ep);
+          pl.yen += y;
+          results[id] = `+¥${y}`;
         }
       } else if (res[id] === q.correct) {
-        pl.yen += st.reward.otherCorrectYen;
-        results[id] = `+¥${st.reward.otherCorrectYen}`;
+        const r = neko(pl, rewardYen(st.reward.otherCorrectYen, ep));
+        pl.yen += r.yen;
+        results[id] = `+¥${r.yen}${r.tag}`;
       }
     }
     if (own) {
@@ -744,7 +807,7 @@ export class GameEngine {
     let text = '';
     let secret: string | undefined;
     switch (reward) {
-      case 'money': p.yen += st.reward.prefMoney; text = `+¥${st.reward.prefMoney}`; break;
+      case 'money': { const y = rewardYen(st.reward.prefMoney, epochOf(this.s)); p.yen += y; text = `+¥${y}`; break; }
       case 'stars': p.stars += st.reward.prefStars; text = `+${st.reward.prefStars} ★`; break;
       case 'bonus': {
         const b = pick<BonusId>(['fifty1', 'fifty1', 'fifty2', 'move2', 'coin', 'coin', 'ticket']);
@@ -783,10 +846,11 @@ export class GameEngine {
     const res = await this.ask(epoch, q, 'revive', 'Окинава · 沖縄', [p.id], q.time ?? st.questionTime);
     const results: Record<string, string> = {};
     if (res[p.id] === q.correct) {
-      p.yen += st.reward.reviveYen;
+      const y = rewardYen(st.reward.reviveYen, epochOf(this.s));
+      p.yen += y;
       const b = pick<BonusId>(['fifty1', 'fifty2', 'move2', 'coin']);
       p.bonuses[b]++;
-      results[p.id] = `+¥${st.reward.reviveYen} и бонус`; // какой — секрет, видно в инвентаре
+      results[p.id] = `+¥${y} и бонус`; // какой — секрет, видно в инвентаре
     } else results[p.id] = 'Ожил';
     await this.reveal(epoch, results);
   }
@@ -800,6 +864,10 @@ export class GameEngine {
     this.io.fx?.('duel');
     await this.sleep(epoch, 2800);
     const d = this.s.duel!;
+    const hp0 = { [att.id]: att.hp, [def.id]: def.hp };
+    // ставки зрителей: до выбора темы
+    const spectators = this.alivePids().filter((id) => id !== att.id && id !== def.id);
+    if (spectators.length) await this.duelBets(epoch, d, spectators);
     outer: for (let r = 1; r <= st.duelRounds; r++) {
       for (const asker of [att, def]) {
         if (att.hp <= 0 || def.hp <= 0) break outer;
@@ -877,18 +945,166 @@ export class GameEngine {
     }
     d.over = true;
     d.asker = null;
-    const loser = att.hp <= 0 ? att : def.hp <= 0 ? def : null;
+    // победитель: нокаут, иначе тот, кто потерял меньше HP; поровну — ничья
+    const lostA = hp0[att.id] - att.hp, lostD = hp0[def.id] - def.hp;
+    const ko = att.hp <= 0 ? att : def.hp <= 0 ? def : null;
+    const loser = ko ?? (lostA === lostD ? null : lostA > lostD ? att : def);
     if (loser) {
       const win = loser === att ? def : att;
       d.winner = win.id;
-      win.yen += st.reward.duelWinYen;
-      win.stars += st.reward.duelWinStars;
-      this.log(`${win.name} побеждает в дуэли! ${loser.name} без сил`);
-    } else this.log('Дуэль окончена: оба держатся');
+      // победитель забирает часть денег проигравшего
+      const stolen = Math.floor((loser.yen * (st.reward.duelStealPct ?? 15)) / 100 / 10) * 10;
+      loser.yen -= stolen;
+      win.yen += stolen;
+      d.stolen = stolen;
+      if (ko) {
+        d.ko = true;
+        win.yen += rewardYen(st.reward.duelWinYen, epochOf(this.s));
+        win.stars += st.reward.duelWinStars;
+        this.log(`${win.name} побеждает в дуэли! ${loser.name} без сил`);
+      } else this.log(`${win.name} побеждает в дуэли по очкам`);
+      if (stolen) {
+        this.log(`${win.name} забирает ¥${stolen} у ${loser.name}`);
+        this.io.fx?.('steal', { pid: win.id, from: loser.id, yen: stolen });
+      }
+    } else this.log('Дуэль окончена: ничья');
+    this.settleBets(d);
     this.setStage({ t: 'duelResult' });
     await this.sleep(epoch, 4500);
     this.s.duel = null;
     this.emit();
+  }
+
+  /** ставки зрителей перед дуэлью: +100 / +500 на любого бойца, деньги списываются сразу */
+  private async duelBets(epoch: number, d: NonNullable<GameState['duel']>, spectators: string[]) {
+    const ms = (this.s.settings.betTime ?? 15) * 1000;
+    const stage: Extract<Stage, { t: 'duelBet' }> = { t: 'duelBet', deadline: this.now + LEAD + ms, done: [] };
+    d.bets = {};
+    this.setStage(stage);
+    const end = stage.deadline + 300;
+    const waiting = () => spectators.some((id) => !stage.done.includes(id) && (this.s.players[id]?.online || this.s.players[id]?.bot));
+    while (waiting() && this.now < end) {
+      const m = await this.waitInput(epoch, (x) => (x.t === 'pick' && x.kind === 'bet' && spectators.includes(x.pid) && !stage.done.includes(x.pid) ? x : undefined), end - this.now);
+      if (!m || m.t !== 'pick') break;
+      const p = this.s.players[m.pid];
+      if (!p) continue;
+      if (m.value === 'done') { stage.done.push(m.pid); this.emit(); continue; }
+      const on = m.value?.on, amt = Number(m.value?.amt);
+      if ((on !== d.attacker && on !== d.defender) || (amt !== 100 && amt !== 500) || p.yen < amt) continue;
+      p.yen -= amt;
+      const mine = (d.bets[m.pid] ??= {});
+      mine[on] = (mine[on] ?? 0) + amt;
+      this.io.fx?.('bet', { pid: m.pid, on, amt });
+      this.emit();
+    }
+    const total = Object.values(d.bets).reduce((a, b) => a + Object.values(b).reduce((x, y) => x + y, 0), 0);
+    if (total) this.log(`Ставки на дуэль: ¥${total}`);
+  }
+
+  /** выплата ставок: на победителя — вдвое; ничья — деньги назад */
+  private settleBets(d: NonNullable<GameState['duel']>) {
+    if (!d.bets) return;
+    const payouts: Record<string, number> = {};
+    for (const [pid, bets] of Object.entries(d.bets)) {
+      const p = this.s.players[pid];
+      const staked = Object.values(bets).reduce((a, b) => a + b, 0);
+      if (!p || !staked) continue;
+      const back = d.winner ? (bets[d.winner] ?? 0) * 2 : staked;
+      p.yen += back;
+      payouts[pid] = back - staked;
+    }
+    d.payouts = payouts;
+  }
+
+  /** новая эпоха наступает, когда открыто достаточно префектур: объявляем на ТВ */
+  private async checkEpoch(epoch: number) {
+    const e = epochFor(this.s);
+    if (e <= epochOf(this.s)) return;
+    this.s.epoch = e;
+    this.log(`Наступила эпоха ${EPOCHS[e].name}`);
+    this.io.fx?.('epoch', { epoch: e });
+    this.setStage({ t: 'epoch', epoch: e });
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 6000);
+    this.snapshot();
+  }
+
+  /**
+   * Находка под ногами в начале хода — тайная помощь отстающим по стоимости (net worth).
+   * Лидер не находит ничего; сильно отстающий (меньше половины медианы) — 30%, отстающий (меньше 3/4) — 15%;
+   * остальные изредка находят мелочь (4%) — чтобы находки не выглядели подачкой.
+   * Между находками игрока — минимум 2 своих хода, за круг — не больше двух находок на всех.
+   */
+  private async maybeFind(epoch: number, p: Player): Promise<FindId | null> {
+    const st = this.s.settings;
+    const turns = (this.sec.ownTurns ??= {});
+    turns[p.id] = (turns[p.id] ?? 0) + 1;
+    const ids = this.alivePids();
+    if (ids.length < 2 || this.s.round < 2 || p.pref == null) return null;
+    const fr = (this.sec.findsRound ??= { round: this.s.round, n: 0 });
+    if (fr.round !== this.s.round) { fr.round = this.s.round; fr.n = 0; }
+    if (fr.n >= 2) return null;
+    const last = this.sec.findAt?.[p.id];
+    if (last != null && turns[p.id] - last <= 2) return null;
+    const nw = Object.fromEntries(ids.map((id) => [id, netWorth(this.s.players[id], st)]));
+    const mine = nw[p.id];
+    const top = Math.max(...Object.values(nw));
+    if (mine >= top) return null; // лидер (или все равны)
+    const med = median(Object.values(nw));
+    const tier = med >= 1000 && mine < med * 0.5 ? 2 : med >= 1000 && mine < med * 0.75 ? 1 : 0;
+    if (Math.random() >= [0.04, 0.15, 0.3][tier]) return null;
+    return this.giveFind(epoch, p, tier, nw);
+  }
+
+  /** выдать находку: tier 0 — мелочь для маскировки, 1 — отстающему, 2 — сильно отстающему; force — для отладки */
+  async giveFind(epoch: number, p: Player, tier: number, nw?: Record<string, number>, force?: FindId): Promise<FindId> {
+    const st = this.s.settings;
+    const ids = this.alivePids();
+    nw ??= Object.fromEntries(ids.map((id) => [id, netWorth(this.s.players[id], st)]));
+    const from = p.pref!;
+    const free = (c: number) => this.occupants(c, p.id).length < 2;
+    const fog = [...neighbors(from), ...atDistance(from, 2)].filter((c) => !this.s.prefs[c]?.rev);
+    const top = Math.max(...Object.values(nw));
+    const leader = this.s.players[ids.find((id) => nw![id] === top && id !== p.id) ?? ''];
+    const gap = Math.max(0, median(Object.values(nw)) - nw[p.id]);
+    const weights: [FindId, number][] = tier === 0
+      ? [['coin', 3], ['coupon', 2], ['map', fog.length ? 2 : 0], ['wallet', 2]]
+      : [
+        ['coin', 3], ['cheat', 2], ['wallet', 3], ['neko', 2], ['map', fog.length ? 2 : 0],
+        ['rickshaw', atDistance(from, 2).some(free) ? 2 : 0], ['coupon', 2], ['ticket', 1],
+        ['kitsune', tier === 2 && leader && leader.yen >= 300 ? 2 : 0],
+      ];
+    let kind: FindId = 'coin';
+    if (force) kind = force;
+    else {
+      let r = Math.random() * weights.reduce((a, [, w]) => a + w, 0);
+      for (const [k, w] of weights) { if ((r -= w) < 0) { kind = k; break; } }
+    }
+    if (kind === 'kitsune' && !leader) kind = 'wallet';
+
+    let amount: number | undefined;
+    let fromPid: string | undefined;
+    const info = FIND_INFO[kind];
+    if (info.bonus) p.bonuses[info.bonus] = (p.bonuses[info.bonus] ?? 0) + 1;
+    if (kind === 'wallet') {
+      // закрывает около четверти отставания до медианы; мелочь — тем, кто не отстаёт
+      amount = tier === 0 ? 100 + randInt(3) * 50 : Math.max(200, Math.min(1500, Math.round((gap * 0.25) / 50) * 50));
+      p.yen += amount;
+    }
+    if (kind === 'kitsune') {
+      amount = Math.min(leader.yen, rewardYen(pick([300, 400, 500]), epochOf(this.s)));
+      leader.yen -= amount;
+      p.yen += amount;
+      fromPid = leader.id;
+      this.log(`Кицунэ утащила ¥${amount} у ${leader.name} и принесла ${p.name}`);
+    }
+    if (kind === 'map') p.scouted = fog;
+    const turns = (this.sec.ownTurns ??= {});
+    this.sec.findAt = { ...(this.sec.findAt ?? {}), [p.id]: turns[p.id] ?? 0 };
+    if (this.sec.findsRound) this.sec.findsRound.n++;
+    this.io.fx?.('find', { pid: p.id, kind });
+    this.setStage({ t: 'find', pid: p.id, kind, ...(amount ? { amount } : {}), ...(fromPid ? { from: fromPid } : {}) });
+    await this.sleep(epoch, kind === 'kitsune' ? 6000 : 4000);
+    return kind;
   }
 
   private hit(p: Player, dmg: number) {
@@ -1104,7 +1320,8 @@ export class GameEngine {
       const p = this.s.players[id];
       if (lv < 0 || lv >= st.group.prizes.length || !p) continue;
       places[id] = lv + 1;
-      const pr = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
       p.stars += pr.stars;
       awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
@@ -1332,7 +1549,8 @@ export class GameEngine {
       const lv = levels.indexOf(d.alive.includes(id) ? Infinity : d.out[id]);
       if (lv < 0 || lv >= st.group.prizes.length) continue;
       places[id] = lv + 1;
-      const pr = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
       p.stars += pr.stars;
       awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
@@ -1458,7 +1676,7 @@ export class GameEngine {
     for (const t of st.topics.filter((x) => x.combat)) { stats[t.id] = st.baseStrength; calib[t.id] = 0; }
     return {
       id: uid(10), name, color, hat: Number.isInteger(hat) && hat >= 0 && hat < HATS.length ? hat : 0, look, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
-      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
+      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0, cheat: 0, neko: 0, coupon: 0, scroll: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
     };
   }
 
@@ -1534,12 +1752,15 @@ export class GameEngine {
         const ss = this.s.stage;
         if (ss.t !== 'shop' || ss.pid !== p.id || !ss.entered) return reply(false, null, 'Покупки — только в магазине');
         const item = a.item as keyof Settings['shop'];
-        const cost = st.shop[item];
-        if (!cost) return reply(false, null, 'Нет такого товара');
+        if (!st.shop[item]) return reply(false, null, 'Нет такого товара');
+        // купон: −50% по йенам на одну покупку
+        const coupon = (p.bonuses.coupon ?? 0) > 0 && st.shop[item].yen > 0;
+        const cost = shopCost(st, item, epochOf(this.s), coupon);
         if (item === 'stat' && !(a.topic in p.stats)) return reply(false, null, 'Выбери тему');
         const sTopics = st.topics.filter((t) => t.special).map((t) => t.id);
         if (item === 'special' && sTopics.length && !sTopics.includes(a.topic)) return reply(false, null, 'Выбери тему спецвопроса');
         if (!pay(cost)) return reply(false, null, 'Не хватает денег');
+        if (coupon) p.bonuses.coupon--;
         if (item === 'special') { p.specials++; if (a.topic) (p.specialTopics ??= []).push(a.topic); }
         else if (item === 'hp') { p.maxHp += st.shop.hp.amount; p.hp += st.shop.hp.amount; }
         else if (item === 'stat') p.stats[a.topic]++;
@@ -1553,13 +1774,15 @@ export class GameEngine {
         const q = this.s.q;
         const b = a.b as BonusId;
         if (!q || q.n !== a.n || q.revealed || q.reading || !q.participants.includes(p.id) || p.id in this.choices) return reply(false, null, 'Сейчас нельзя');
-        if (b !== 'fifty1' && b !== 'fifty2') return reply(false, null, 'Нет такого бонуса');
+        if (b !== 'fifty1' && b !== 'fifty2' && b !== 'cheat') return reply(false, null, 'Нет такого бонуса');
+        if (b === 'cheat' && (q.context !== 'pref' || q.prize)) return reply(false, null, 'Шпаргалка — только для вопросов префектур');
         if (q.removed[p.id]?.length) return reply(false, null, 'Бонус уже использован');
         if (!(p.bonuses[b] > 0)) return reply(false, null, 'Нет бонуса');
         if (this.now > q.deadline) return reply(false, null, 'Время вышло');
         p.bonuses[b]--;
         const wrong = shuffle([0, 1, 2, 3].filter((i) => i !== this.curCorrect));
-        q.removed = { ...q.removed, [p.id]: wrong.slice(0, b === 'fifty2' ? 2 : 1) };
+        q.removed = { ...q.removed, [p.id]: wrong.slice(0, b === 'cheat' ? 3 : b === 'fifty2' ? 2 : 1) };
+        if (b === 'cheat') this.log(`${p.name} подглядывает в шпаргалку`);
         this.io.fx?.('bonusUsed', { pid: p.id, b });
         this.emit();
         return reply(true, { removed: q.removed[p.id] });
@@ -1640,7 +1863,7 @@ export class GameEngine {
         p.busy = null;
         p.yen += info.yen ?? 0;
         p.stars += info.stars ?? 0;
-        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
+        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket' || res === 'scroll') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
         if (res === 'special') p.specials++;
         if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
         if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
@@ -1738,10 +1961,22 @@ export class GameEngine {
       });
     }
     if (st.t === 'move' && isBot(st.pid)) {
-      this.botLater('move', 1500, () => this.handle({ t: 'pick', pid: st.pid, kind: 'move', value: pick([...st.options, ...st.options2]) }));
+      const walk = [...st.options, ...st.options2];
+      // свиток-вызов бот тратит иногда (или когда идти некуда)
+      const value = st.challenge?.length && (!walk.length || Math.random() < 0.4) ? 'duel:' + pick(st.challenge) : pick(walk);
+      this.botLater('move', 1500, () => this.handle({ t: 'pick', pid: st.pid, kind: 'move', value }));
     }
     if (st.t === 'extraTurn' && isBot(st.pid)) {
       this.botLater('extra', 1200, () => this.handle({ t: 'pick', pid: st.pid, kind: 'extra', value: Math.random() < 0.7 }));
+    }
+    if (st.t === 'duelBet' && this.s.duel) {
+      const d = this.s.duel;
+      for (const b of bots) if (b.id !== d.attacker && b.id !== d.defender && !st.done.includes(b.id)) {
+        this.botLater('bet' + b.id, 1000 + randInt(3000), () => {
+          if (Math.random() < 0.6 && b.yen >= 100) this.handle({ t: 'pick', pid: b.id, kind: 'bet', value: { on: pick([d.attacker, d.defender]), amt: b.yen >= 500 && Math.random() < 0.3 ? 500 : 100 } });
+          this.handle({ t: 'pick', pid: b.id, kind: 'bet', value: 'done' });
+        });
+      }
     }
     if (st.t === 'duelPick' && isBot(st.pid)) {
       this.botLater('duel', 1500, () => {

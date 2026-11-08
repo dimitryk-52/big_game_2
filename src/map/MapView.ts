@@ -95,6 +95,7 @@ export class MapView {
   private labels = new Map<number, Text>();
   private icons = new Map<number, Sprite & { key?: string; bobs?: boolean; bob?: number }>();
   private particles: { g: Graphics; vx: number; vy: number; life: number; max: number }[] = [];
+  private flights: { s: Sprite; a: { x: number; y: number }; b: { x: number; y: number }; life: number; dur: number; to: number }[] = [];
   private lastLookKey = '';
   private last: MapUpdate | null = null;
   private time = 0;
@@ -443,6 +444,24 @@ export class MapView {
     }
   }
 
+  /** предмет летит по дуге из одной префектуры в другую (свиток-вызов), в конце — облачко */
+  fly(from: number, to: number, url: string, dur = 2200) {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      const s = new Sprite(nearestTex(c));
+      s.anchor.set(0.5);
+      s.scale.set(SCALE * 1.5);
+      const a = prefAnchorWorld(from), b = prefAnchorWorld(to);
+      s.position.set(a.x, a.y);
+      this.fxLayer.addChild(s);
+      this.flights.push({ s, a, b, life: 0, dur, to });
+    };
+    img.src = url;
+  }
+
   confetti(code: number) {
     const cols = [0xff4d6d, 0xffd23f, 0x4dabff, 0x5ce16b, 0xc77dff];
     for (let i = 0; i < 5; i++) this.puff(code, cols[i], 14);
@@ -718,6 +737,16 @@ export class MapView {
       p.vy += 0.02 * (dt / 16);
       p.g.alpha = 1 - p.life / p.max;
       if (p.life >= p.max) { p.g.destroy(); this.particles.splice(i, 1); }
+    }
+    for (let i = this.flights.length - 1; i >= 0; i--) {
+      const f = this.flights[i];
+      f.life += dt;
+      const k = Math.min(1, f.life / f.dur);
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const lift = Math.hypot(f.b.x - f.a.x, f.b.y - f.a.y) * 0.25 + 30;
+      f.s.position.set(f.a.x + (f.b.x - f.a.x) * e, f.a.y + (f.b.y - f.a.y) * e - Math.sin(Math.PI * e) * lift);
+      f.s.rotation = Math.sin(f.life / 90) * 0.25;
+      if (k >= 1) { this.puff(f.to, 0xe2585e); f.s.destroy(); this.flights.splice(i, 1); }
     }
   }
 }

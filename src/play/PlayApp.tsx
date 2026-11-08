@@ -22,6 +22,8 @@ import { DragonPad } from './DragonPad';
 import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
+import { BetPad, FindCard, ItemHelp, scoutNote } from './EconPad';
+import { EPOCHS, epochOf } from '../shared/economy';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -167,10 +169,12 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 // ───────── игра ─────────
 
-type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | null;
+type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
+  if (st.t === 'duelBet' && s.duel && me.id !== s.duel.attacker && me.id !== s.duel.defender && !st.done.includes(me.id)) return 'duelBet';
+  if (st.t === 'find' && st.pid === me.id) return 'find';
   if (st.t === 'question' && s.q?.participants.includes(me.id)) return 'question';
   if (st.t === 'bonus' && st.pids.includes(me.id) && !(me.id in st.picked)) return 'bonus';
   if (st.t === 'landing' && st.pid === me.id) return 'landing';
@@ -230,6 +234,9 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
     setDebugOpen(false);
   };
   const toggleDebug = () => { setPhoneDebug(!debug); setDebug(!debug); setDebugOpen(!debug); };
+  // эпоха перекрашивает интерфейс
+  const ep = epochOf(s);
+  useEffect(() => { document.documentElement.dataset.epoch = String(ep); }, [ep]);
   return (
     <div class="phone game">
       <Header client={client} s={s} me={me} onSecret={toggleDebug} />
@@ -254,6 +261,8 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'duelPick' && <DuelPick client={client} s={s} me={me} />}
         {att === 'shop' && <Shop client={client} s={s} me={me} />}
         {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
+        {att === 'duelBet' && <BetPad client={client} s={s} me={me} />}
+        {att === 'find' && <FindCard s={s} me={me} />}
         {att === 'group' && <GroupGame client={client} s={s} me={me} />}
         {att === 'dragon' && <DragonPad key={s.dr!.id} client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
@@ -333,7 +342,11 @@ function stageText(s: GameState, me: Player): string {
     case 'duelResult': return 'Итоги дуэли';
     case 'prize': return `🏆 ${n(st.pid)} получает приз!`;
     case 'end': return 'Игра окончена!';
+    case 'duelBet': return 'Зрители делают ставки на дуэль';
+    case 'find': return st.kind === 'kitsune' ? `Кицунэ принесла ${n(st.pid)} деньги лидера!` : `${n(st.pid)} что-то нашёл под ногами`;
+    case 'epoch': return `Наступила эпоха ${EPOCHS[st.epoch].name}: цены ×${EPOCHS[st.epoch].price}, награды ×${EPOCHS[st.epoch].reward}`;
   }
+  return '';
 }
 
 function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
@@ -347,6 +360,8 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         <SkillChips topics={topics} stats={me.stats} size={26} grid />
         <div class="muted">Инвентарь</div>
         <Inventory p={me} size={36} all />
+        <ItemHelp me={me} />
+        <div class="muted small-text">Эпоха: {EPOCHS[epochOf(s)].ja} {EPOCHS[epochOf(s)].name} — цены ×{EPOCHS[epochOf(s)].price}, награды ×{EPOCHS[epochOf(s)].reward}</div>
         {me.prizes.length > 0 && <div class="prizes"><PixIcon id="prize" /> Призы: {me.prizes.join(', ')}</div>}
       </div>
       <div class="panel col small-text">
@@ -388,7 +403,9 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     vibrate(30);
   };
   const [usingBonus, setUsingBonus] = useState(false);
-  const applyBonus = async (b: 'fifty1' | 'fifty2') => {
+  // шпаргалка — только в вопросах префектур (не в призовых)
+  const qb: ('fifty1' | 'fifty2' | 'cheat')[] = q.context === 'pref' && !q.prize ? ['cheat', 'fifty1', 'fifty2'] : ['fifty1', 'fifty2'];
+  const applyBonus = async (b: 'fifty1' | 'fifty2' | 'cheat') => {
     setUsingBonus(true);
     try { await client.req('qBonus', { n: q.n, b }); vibrate(30); } catch { /* время вышло или уже использован */ }
     setUsingBonus(false);
@@ -431,9 +448,9 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           );
         })}
       </div>}
-      {!q.reading && !q.revealed && choice === null && !expired && !removed.length && (['fifty1', 'fifty2'] as const).some((b) => me.bonuses[b] > 0) && (
+      {!q.reading && !q.revealed && choice === null && !expired && !removed.length && qb.some((b) => (me.bonuses[b] ?? 0) > 0) && (
         <div class="q-bonuses">
-          {(['fifty1', 'fifty2'] as const).filter((b) => me.bonuses[b] > 0).map((b) => (
+          {qb.filter((b) => (me.bonuses[b] ?? 0) > 0).map((b) => (
             <button class="btn small yellow" disabled={usingBonus} onClick={() => applyBonus(b)}><BonusIcon b={b} size={22} /> {BONUS_INFO[b].name} ×{me.bonuses[b]}</button>
           ))}
         </div>
@@ -541,6 +558,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
     : st.t === 'landing' ? Object.keys(s.prefs).map(Number).filter((c) => !st.blocked.includes(c)) : [];
   const allowedRef = useRef(allowed);
   const [lureSent, setLureSent] = useState(false);
+  const [foeOpen, setFoeOpen] = useState(false);
   allowedRef.current = allowed;
 
   useEffect(() => {
@@ -578,7 +596,8 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
   };
   useEffect(refresh, [sel, s.v]);
   // под туманом имя префектуры не показываем — только направление
-  const optName = (c: number) => (s.prefs[c]?.rev ? PREF[c].ru : me.pref ? `? ${dirName(me.pref, c)}` : '?');
+  // старая карта: разведанные префектуры видны по имени и с тем, что в них есть
+  const optName = (c: number) => (s.prefs[c]?.rev ? PREF[c].ru : me.scouted?.includes(c) ? `${PREF[c].ru}${scoutNote(s, c) ? ' · ' + scoutNote(s, c) : ''}` : me.pref ? `? ${dirName(me.pref, c)}` : '?');
 
   useEffect(() => { const u = prefBgUrl(sel); if (u) new Image().src = u; }, [sel]);
   // на станцию, куда можно и пешком, идём пешком — билет не тратим
@@ -603,7 +622,20 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
             <BonusIcon b="food" size={26} /> Кто-то рядом принюхивается… Достать корм?
           </button>
         )}
-        {st.t === 'move' && (
+        {/* свиток-вызов: вместо хода — дуэль с любым игроком на карте */}
+        {st.t === 'move' && st.challenge && !sent && (
+          foeOpen
+            ? <div class="opt-list challenge-list">
+                {st.challenge.map((id) => s.players[id] && (
+                  <button class="btn small primary" onClick={() => { setSent(true); client.pick('move', 'duel:' + id); vibrate([40, 40, 80]); }}>
+                    <Avatar p={s.players[id]} size={22} /> {s.players[id].name}
+                  </button>
+                ))}
+                <button class="btn small" onClick={() => setFoeOpen(false)}>Отмена</button>
+              </div>
+            : <button class="btn lure-btn" onClick={() => setFoeOpen(true)}><BonusIcon b="scroll" size={26} /> Отправить свиток-вызов</button>
+        )}
+        {st.t === 'move' && !foeOpen && (
           <div class="opt-list">
             {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{optName(c)}</button>)}
             {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {optName(c)}</button>)}

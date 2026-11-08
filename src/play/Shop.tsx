@@ -9,6 +9,7 @@ import { BONUS_INFO } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { sfx } from '../shared/sound';
 import { fmtYen, vibrate } from '../shared/util';
+import { epochOf, shopCost } from '../shared/economy';
 import { BonusIcon, PixIcon, ResText, SkillIcon, TimerBar } from '../ui/common';
 
 type Item = keyof Settings['shop'];
@@ -19,7 +20,7 @@ const BG = artUrl('shop_bg.png');
 const SHELF = artUrl('shelf.png');
 
 /** порядок на полках: по три товара */
-const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2'], ['coin', 'ticket', 'food']];
+const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2'], ['coin', 'ticket', 'food'], ['scroll']];
 
 export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const [msg, setMsg] = useState('');
@@ -45,6 +46,9 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
   const combat = s.settings.topics.filter((t) => t.combat && t.id in me.stats);
   const specials = s.settings.topics.filter((t) => t.special);
   const stations = (s.settings.shinkansen ?? []).map((c) => PREF[c]?.ru).filter(Boolean).join(', ');
+  // цены растут с эпохой; купон — −50% по йенам на одну покупку
+  const coupon = (me.bonuses.coupon ?? 0) > 0;
+  const price = (item: Item) => shopCost(s.settings, item, epochOf(s), coupon && shop[item].yen > 0);
   const can = (c: { yen: number; stars: number }) => me.yen >= c.yen && me.stars >= c.stars;
   const needsTopic = (item: Item) => item === 'stat' || (item === 'special' && specials.length > 0);
 
@@ -63,6 +67,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     // что это собачий корм, не говорим: игрок сам поймёт, когда окажется рядом с акитой
     food: { name: BONUS_INFO.food.name, tag: 'корм', icon: <BonusIcon b="food" size={44} />, desc: 'Пахнет вкусно. Кому-нибудь обязательно понравится — главное, оказаться рядом.', have: `Есть: ${me.bonuses.food ?? 0}` },
     ticket: { name: BONUS_INFO.ticket.name, tag: 'билет', icon: <BonusIcon b="ticket" size={44} />, desc: `Стоишь на станции синкансэна — в свой ход уезжаешь на любую другую станцию, где есть место. Станции: ${stations}.`, have: `Есть: ${me.bonuses.ticket ?? 0}` },
+    scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
   };
 
   const buy = async (item: Item) => {
@@ -86,7 +91,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
       <div class="shop-top">
         <div class="shop-head">
           {!BG && <div class="shop-sign">店 Магазин</div>}
-          <span class="shop-wallet">{fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
+          <span class="shop-wallet">{coupon && <span class="chip">купон −50%</span>} {fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
         </div>
         {/* на картинке — надпись прямо на занавесе, будто выкрашена на ткани */}
         {BG && <div class="shop-noren"><span>店</span>МАГАЗИН</div>}
@@ -97,7 +102,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
         <div class="shelf">
           <div class="shelf-items">
             {row.map((item) => {
-              const c = shop[item];
+              const c = price(item);
               const ok = can(c);
               return (
                 <button class={'shelf-item' + (ok ? '' : ' poor')} onClick={() => choose(item)}>
@@ -146,8 +151,8 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
                 ))}
               </div>
             )}
-            <button class="btn yellow big-btn" disabled={busy || !can(shop[open]) || (needsTopic(open) && !topic)} onClick={() => buy(open)}>
-              {!can(shop[open]) ? 'Не хватает' : needsTopic(open) && !topic ? 'Выбери тему' : <>Купить · <ResText text={[shop[open].yen ? `¥${shop[open].yen}` : '', shop[open].stars ? `${shop[open].stars} ★` : ''].filter(Boolean).join(' + ')} size={16} /></>}
+            <button class="btn yellow big-btn" disabled={busy || !can(price(open)) || (needsTopic(open) && !topic)} onClick={() => buy(open)}>
+              {!can(price(open)) ? 'Не хватает' : needsTopic(open) && !topic ? 'Выбери тему' : <>Купить · <ResText text={[price(open).yen ? `¥${price(open).yen}` : '', price(open).stars ? `${price(open).stars} ★` : ''].filter(Boolean).join(' + ')} size={16} /></>}
             </button>
             <button class="btn small ghost" onClick={() => setOpen(null)}>Закрыть</button>
           </div>

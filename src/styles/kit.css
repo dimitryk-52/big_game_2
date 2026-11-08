@@ -60,7 +60,7 @@
     inset 0 0 0 calc(var(--px) * 2) rgba(0, 0, 0, 0.35),
     inset 0 calc(var(--px) * -3) 0 rgba(0, 0, 0, 0.25);
 }
-.panel, .qpanel, .banner-inner, .lobby, .duel-pick, .debug-menu { background: #232850; }
+.panel, .qpanel, .banner-inner, .lobby, .duel-pick, .debug-menu { background: var(--bg2); }
 .qpanel { padding: 1.3em 1.5em; }
 .qpanel.special { --frame: var(--pink); }
 .pcard { --px: 2px; }
@@ -81,7 +81,7 @@
   border: var(--px) solid var(--outline);
   clip-path: var(--notch);
 }
-.chip { background: #161a35; box-shadow: inset 0 0 0 var(--px) var(--frame); padding: 3px 10px 4px; }
+.chip { background: var(--chip, #161a35); box-shadow: inset 0 0 0 var(--px) var(--frame); padding: 3px 10px 4px; }
 .qpart { background: #161a35; box-shadow: inset 0 0 0 var(--px) #555b8f; }
 .qpart.ok { box-shadow: inset 0 0 0 var(--px) var(--green); }
 .qpart.bad { box-shadow: inset 0 0 0 var(--px) var(--red); }
@@ -227,3 +227,57 @@ h1, h2, .banner-text, .pref-intro-ru, .fighter-name { text-shadow: var(--tx-outl
 
 /* ссылка в виде кнопки */
 a.btn { display: inline-block; color: #fff; text-decoration: none; }
+
+/* ───── эпохи: только перекраска фона, панелей и рамок (Эдо — исходная синяя палитра) ───── */
+/* Мэйдзи — тёмная хвоя и латунь */
+html[data-epoch="1"] {
+  --bg: #13302b; --bg2: #1b3d36; --panel: #24504a; --panel2: #2f625a; --muted: #a8d4c4; --chip: #0e2420;
+  --frame: #f0d890; --shadow: #071512; --pcard: rgba(19, 48, 43, 0.92);
+}
+/* Сёва — сливовый закат и медь */
+html[data-epoch="2"] {
+  --bg: #3a1a2c; --bg2: #4a2238; --panel: #5c2c46; --panel2: #723856; --muted: #e8b8cc; --chip: #2a1020;
+  --frame: #ffb27a; --shadow: #1a0812; --pcard: rgba(58, 26, 44, 0.92);
+}
+html[data-epoch] .pcard { background: var(--pcard, rgba(27, 31, 58, 0.92)); }
+html[data-epoch] .prompt, html[data-epoch] .duel-pick, html[data-epoch] .bonus-prompt { background: var(--bg2); }
+.epoch-chip { --frame: var(--yellow); }
+html[data-epoch="1"] .epoch-chip, html[data-epoch="2"] .epoch-chip { --frame: var(--frame); }
+body, .tv, .phone { transition: background-color 1.2s; }
+
+/* объявление эпохи */
+.epoch-banner { text-align: center; }
+.epoch-kanji { font-family: 'DotGothic16', var(--font); font-size: 6em; line-height: 1; color: var(--frame, #fff); text-shadow: var(--tx-outline); }
+
+/* ставки на дуэль (ТВ) */
+.bet-board { min-width: min(900px, 80vw); text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: stretch; --frame: var(--yellow); }
+.bet-board h2 { margin: 0; }
+.bet-row { display: flex; align-items: flex-start; justify-content: space-around; gap: 24px; }
+.bet-side { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+.bet-name { font-size: 1.4em; }
+.bet-total { font-size: 2.4em; font-weight: 800; color: var(--yellow); text-shadow: var(--tx-outline); }
+.bet-list { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.bet-chip { display: inline-flex; align-items: center; gap: 4px; }
+.bet-row .duel-vs { font-size: 2em; align-self: center; }
+
+/* находки */
+.find-banner { text-align: center; --frame: var(--yellow); }
+.find-glint { animation: glint 0.9s steps(2) infinite; }
+@keyframes glint { 50% { transform: scale(1.15) rotate(8deg); } }
+.find-banner.kitsune { --frame: #ff9a3c; }
+.kitsune-row { display: flex; align-items: center; justify-content: center; gap: 22px; font-size: 1.6em; }
+.kitsune-who { display: inline-flex; align-items: center; gap: 8px; }
+.kitsune-yen { color: var(--yellow); font-weight: 800; display: inline-flex; align-items: center; gap: 8px; }
+
+/* итог дуэли: кража и ставки */
+.steal-line { color: var(--yellow); }
+.pays { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.pay { display: inline-flex; align-items: center; gap: 4px; font-size: 1.1em; }
+.pay.plus { --frame: var(--green); color: var(--green); }
+.pay.minus { --frame: var(--red); color: #ff8a8a; }
+
+/* телефон: ставки, находки, предметы */
+.bet-fighter { gap: 8px; }
+.find-card { text-align: center; gap: 12px; }
+.item-help { gap: 6px; }
+.bet-fighter .btn:disabled { --c: #5b5f7e; color: #c9cbe0; }

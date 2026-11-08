@@ -31,7 +31,20 @@ export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'duelQuestion', name: 'Дуэль: вопрос', group: 'Дуэль' },
   { id: 'duelResult', name: 'Дуэль: итог', group: 'Дуэль' },
   { id: 'rhythm', name: 'Ритм-батл', group: 'Дуэль' },
+  { id: 'duelBet', name: 'Дуэль: ставки зрителей', group: 'Дуэль' },
+  { id: 'duelSteal', name: 'Дуэль: кража и выплаты ставок', group: 'Дуэль' },
   { id: 'end', name: 'Финал', group: 'Дуэль' },
+  { id: 'find:coin', name: 'Находка: монетка', group: 'Находки и эпохи' },
+  { id: 'find:cheat', name: 'Находка: шпаргалка', group: 'Находки и эпохи' },
+  { id: 'find:wallet', name: 'Находка: кошелёк', group: 'Находки и эпохи' },
+  { id: 'find:neko', name: 'Находка: манэки-нэко', group: 'Находки и эпохи' },
+  { id: 'find:map', name: 'Находка: старая карта', group: 'Находки и эпохи' },
+  { id: 'find:rickshaw', name: 'Находка: рикша', group: 'Находки и эпохи' },
+  { id: 'find:coupon', name: 'Находка: купон', group: 'Находки и эпохи' },
+  { id: 'find:ticket', name: 'Находка: билет', group: 'Находки и эпохи' },
+  { id: 'find:kitsune', name: 'Находка: кицунэ (видят все)', group: 'Находки и эпохи' },
+  { id: 'epoch:1', name: 'Эпоха Мэйдзи', group: 'Находки и эпохи' },
+  { id: 'epoch:2', name: 'Эпоха Сёва', group: 'Находки и эпохи' },
 ];
 
 export interface DebugArgs {
@@ -45,7 +58,8 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
   const pids = s.joinOrder.filter((id) => s.players[id]);
   const pid = a.pid && s.players[a.pid] ? a.pid : pids[0];
   if (!pid) return null;
-  const other = pids.find((id) => id !== pid) ?? pid;
+  // соперник — следующий по списку игрок (чтобы остальные могли быть зрителями)
+  const other = pids.length > 1 ? pids[(pids.indexOf(pid) + 1) % pids.length] : pid;
   const pref = a.pref && PREF[a.pref] ? a.pref : s.players[pid].pref ?? 13;
   const base = { n: -(Date.now() % 1e9) };
 
@@ -111,7 +125,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       return view({ t: 'landing', pid, deadline: now + s.settings.landingTime * 1000, blocked: occupied.flatMap((o) => [o, ...neighbors(o)]) });
     }
     case 'turnStart': return view({ t: 'turnStart', pid });
-    case 'move': return view({ t: 'move', pid, options: neighbors(pref), options2: atDistance(pref, 2), options3: (s.settings.shinkansen ?? []).filter((c) => c !== pref), lure: true });
+    case 'move': return view({ t: 'move', pid, options: neighbors(pref), options2: atDistance(pref, 2), options3: (s.settings.shinkansen ?? []).filter((c) => c !== pref), lure: true, challenge: pids.filter((id) => id !== pid) });
     case 'moving': {
       const to = atDistance(pref, 2)[0] ?? neighbors(pref)[0] ?? pref;
       return view({ t: 'moving', pid, from: pref, to, path: path(pref, to) });
@@ -134,6 +148,18 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       const players = [pid, other];
       return view({ t: 'rhythm' }, { duel: duel({ mode: 'rhythm' }), rhythm: { id: base.n, seed: 12345, bpm: 110, startAt: now + 2500, beats: 32, players, scores: Object.fromEntries(players.map((p) => [p, null])) } });
     }
+    case 'duelBet': {
+      const spect = pids.filter((id) => id !== pid && id !== other);
+      const bets = Object.fromEntries(spect.map((id, i) => [id, i % 2 ? { [other]: 500 } : { [pid]: 100 * (i + 1) }]));
+      return view({ t: 'duelBet', deadline: now + (s.settings.betTime ?? 15) * 1000, done: [] }, { duel: duel({ asker: null, mode: null, topic: null, bets }) });
+    }
+    case 'duelSteal': {
+      const spect = pids.filter((id) => id !== pid && id !== other);
+      const payouts = Object.fromEntries(spect.map((id, i) => [id, i % 2 ? -500 : 100 * (i + 1)]));
+      return view({ t: 'duelResult' }, { duel: duel({ over: true, winner: pid, ko: true, stolen: 340, payouts, lastHit: { to: other, dmg: 3, n: 1 } }) });
+    }
+    case 'find': return view({ t: 'find', pid, kind: (sub ?? 'coin') as any, ...(sub === 'wallet' || sub === 'kitsune' ? { amount: 400 } : {}), ...(sub === 'kitsune' ? { from: other } : {}) });
+    case 'epoch': return view({ t: 'epoch', epoch: Number(sub) || 1 });
     case 'end': return view({ t: 'end' });
   }
   return null;

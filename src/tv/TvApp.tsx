@@ -20,7 +20,10 @@ import { DragonTv } from './DragonTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { groupTableId, hasCustom, playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
+import { BetBoard, DuelSpoils, EpochBanner, EpochChip, FindPopup } from './EconTv';
+import { epochOf, rewardYen } from '../shared/economy';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
+import { pixelIconUrl } from '../shared/sprites';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -52,6 +55,17 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'hit': playSound('hit'); m?.hit(d.pid); break;
         case 'reward': playSound('reward'); break;
         case 'rail': playSound('rail'); break;
+        case 'find': playSound('reward'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
+        case 'bet': playSound('coinToss'); break;
+        case 'steal': playSound('reward'); break;
+        case 'epoch': playSound('prize'); break;
+        case 'challenge': {
+          // свиток-вызов летит через карту к сопернику
+          const a = host.state.players[d.pid]?.pref, b = host.state.players[d.to]?.pref;
+          playSound('challenge');
+          if (m && a && b) { m.focus([a, b], true, 2.6); m.fly(a, b, pixelIconUrl('bonus_scroll')); }
+          break;
+        }
         case 'lure': playSound('lure'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
         case 'bonusUsed': if (d.b === 'coin') playSound('coinToss'); break;
         case 'duel': playSound('duel'); break;
@@ -168,6 +182,10 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   useEffect(() => { prewarmBgs(); }, []);
   useEffect(() => { if (st.t === 'moving') prewarmBg(st.to); }, [st.t === 'moving' ? st.to : null]);
 
+  // эпоха перекрашивает интерфейс (фон, панели, рамки)
+  const ep = epochOf(s);
+  useEffect(() => { document.documentElement.dataset.epoch = String(ep); }, [ep]);
+
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
 
   // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
@@ -217,6 +235,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} <PixIcon id="ui_right" size={28} /> <b>{s.prefs[st.to]?.rev ? `${PREF[st.to].ru} ${PREF[st.to].ja}` : '???'}</b></Prompt>}
       {inDuel && !(st.t === 'question' && s.q?.context === 'duel') && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
+      {st.t === 'duelBet' && <BetBoard s={s} />}
+      {st.t === 'find' && <FindPopup s={s} />}
+      {st.t === 'epoch' && <EpochBanner s={s} />}
       {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer icons={prefIcons(s.settings, st.code, s.prefs[st.code])} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
@@ -298,6 +319,7 @@ function TopBar({ s }: { s: GameState }) {
     <div class="topbar">
       <TvLogo />
       <div class="chip">{phase}</div>
+      {s.phase !== 'lobby' && <EpochChip s={s} />}
       {s.phase !== 'lobby' && <div class="chip">Комната {s.room}</div>}
     </div>
   );
@@ -560,8 +582,8 @@ function DuelResult({ s }: { s: GameState }) {
     <div class="banner">
       <div class="banner-inner pop">
         {d.over ? (
-          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает!</div><div class="banner-sub">+¥{s.settings.reward.duelWinYen} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div></>
-            : <div class="banner-text">Дуэль окончена</div>
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает{d.ko ? ' нокаутом!' : ' по очкам!'}</div>{d.ko && <div class="banner-sub">+¥{rewardYen(s.settings.reward.duelWinYen, epochOf(s))} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div>}<DuelSpoils s={s} /></>
+            : <><div class="banner-text">Ничья</div><DuelSpoils s={s} /></>
         ) : d.mode === 'rhythm' && s.rhythm ? (
           <>
             <div class="banner-text">Ритм: итог</div>

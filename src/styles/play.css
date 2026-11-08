@@ -301,3 +301,4 @@
 .topic-grid { display: flex; flex-wrap: wrap; gap: 6px; }
 .topic-grid .btn { opacity: 0.75; }
 .topic-grid .btn.picked { opacity: 1; outline: 3px solid #fff; outline-offset: 2px; transform: translateY(-2px); }
+.shelf-items > :only-child { grid-column: 2; }
