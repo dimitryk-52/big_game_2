@@ -240,8 +240,8 @@ function Catalog() {
       </Section>
 
       <Section title="Интро префектуры">
-        <div class="ui-intro"><PrefIntro code={13} who={A} reward="stars" /></div>
-        <div class="ui-intro"><PrefIntro code={46} who={B} reward="money" /></div>
+        <div class="ui-intro"><PrefIntro code={13} who={A} icons={['stars', 'onsen', 'shop']} /></div>
+        <div class="ui-intro"><PrefIntro code={46} who={B} icons={['money']} /></div>
       </Section>
 
       <Section title="Поля ввода">

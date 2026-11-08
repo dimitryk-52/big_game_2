@@ -5,7 +5,7 @@ import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
 import { Avatar, BonusIcon, BONUS_IDS, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
-import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf } from '../shared/settings';
+import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf, prefIcons } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
@@ -214,7 +214,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'moving' && <Prompt><Avatar p={s.players[st.pid]} size={40} /> {s.players[st.pid]?.name} <PixIcon id="ui_right" size={28} /> <b>{s.prefs[st.to]?.rev ? `${PREF[st.to].ru} ${PREF[st.to].ja}` : '???'}</b></Prompt>}
       {inDuel && !(st.t === 'question' && s.q?.context === 'duel') && <DuelHud s={s} />}
       {st.t === 'bonus' && <BonusPrompt s={s} />}
-      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer reward={s.prefs[st.code]?.taken ? undefined : s.prefs[st.code]?.reward} />}
+      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer icons={prefIcons(s.settings, st.code, s.prefs[st.code])} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
         <div class="duel-pick pop">

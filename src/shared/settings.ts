@@ -220,6 +220,17 @@ export function soloAt(st: Settings, code: number | null | undefined): SoloGameI
   return (Object.keys(SOLO_GAMES) as SoloGameId[]).filter((g) => (st[SOLO_GAMES[g].key] ?? DEFAULT_SETTINGS[SOLO_GAMES[g].key]).includes(code));
 }
 
+/** что есть в префектуре — иконки для плашки интро: награда (пока не забрали), соло-игры, магазин, групповая игра (пока не сыграна) */
+export function prefIcons(st: Settings, code: number, ps?: { reward: RewardType; taken?: boolean; groupDone?: boolean } | null): string[] {
+  const out: string[] = [];
+  if (ps && !ps.taken) out.push(ps.reward);
+  out.push(...soloAt(st, code));
+  if ((st.shopPrefs ?? []).includes(code)) out.push('shop');
+  const g = st.groupPrefs?.[code];
+  if (g && !ps?.groupDone) out.push('group_' + g);
+  return out;
+}
+
 /** настройки джа-одори (в старых сохранённых настройках их нет) */
 export function dragonSettings(st: Settings): DragonSettings {
   return { ...DEFAULT_SETTINGS.group.dragon!, ...(st.group.dragon ?? {}) };

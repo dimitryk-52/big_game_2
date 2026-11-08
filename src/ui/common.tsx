@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import type { BonusId, GameState, Player, RewardType, Topic } from '../shared/types';
-import { BONUS_INFO, REWARD_INFO } from '../shared/settings';
+import type { BonusId, GameState, Player, Topic } from '../shared/types';
+import { BONUS_INFO } from '../shared/settings';
 import { CHAR_H, CHAR_W, characterUrl, pixelIconUrl, topicIconUrl, type LookSrc } from '../shared/sprites';
 import { prefBgUrl, useSmoothBg } from '../shared/prefBg';
 import { PREF } from '../map/mapData';
@@ -152,7 +152,8 @@ export function SkillChips({ topics, stats, size = 16, grid }: { topics: Topic[]
 /** интро префектуры при первом входе: фон (если нарисован) и название по-русски и по-японски */
 /** bgLayer — фон рисует общий слой под интро (ТВ), здесь только заглушка, если фона нет */
 /** still — без анимаций (телефон): тот же фон и та же плашка с названием, что на ТВ */
-export function PrefIntro({ code, who, reward, bgLayer, still }: { code: number; who?: Player; reward?: RewardType; bgLayer?: boolean; still?: boolean }) {
+/** icons — что есть в префектуре (prefIcons): награда, соло-игры, магазин, групповая игра */
+export function PrefIntro({ code, who, icons, bgLayer, still }: { code: number; who?: Player; icons?: string[]; bgLayer?: boolean; still?: boolean }) {
   const bg = prefBgUrl(code);
   const smooth = useSmoothBg(bgLayer || still ? null : bg);
   const p = PREF[code];
@@ -162,7 +163,7 @@ export function PrefIntro({ code, who, reward, bgLayer, still }: { code: number;
       <div class="pref-intro-title">
         <div class="pref-intro-ja">{p?.ja}</div>
         <div class="pref-intro-ru">{p?.ru}</div>
-        {reward && <div class="pref-intro-reward">Награда: <PixIcon id={reward} size={32} /> {REWARD_INFO[reward].name}</div>}
+        {!!icons?.length && <div class="pref-intro-reward">{icons.map((id) => <PixIcon id={id} size={40} />)}</div>}
         {who && <div class="pref-intro-who"><Avatar p={who} size={36} /> {who.name}</div>}
       </div>
     </div>

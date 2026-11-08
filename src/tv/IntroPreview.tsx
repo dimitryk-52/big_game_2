@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { GameState, GroupGameId, GroupPublic, Player, SoloGameId } from '../shared/types';
 import { PrefIntro } from '../ui/common';
-import { DEFAULT_SETTINGS, groupTasksFor } from '../shared/settings';
+import { DEFAULT_SETTINGS, groupTasksFor, prefIcons } from '../shared/settings';
 import { prefBgUrl } from '../shared/prefBg';
 import { GroupScroll } from './GroupTv';
 import { DragonTv } from './DragonTv';
@@ -12,7 +12,8 @@ import { PnPLayer } from '../games/PnP';
 import { getParam } from '../shared/util';
 import mapUrl from '../img/map_wide.png';
 
-export interface PreviewMsg { type: 'bg-preview'; kind: 'pref' | 'group' | 'solo'; id: string; pref?: number; n: number }
+/** icons — что есть в префектуре по раскладке админки (prefIcons) */
+export interface PreviewMsg { type: 'bg-preview'; kind: 'pref' | 'group' | 'solo'; id: string; pref?: number; n: number; icons?: string[] }
 
 const mk = (id: string, name: string, color: string, hat: number, extra: Partial<Player> = {}): Player => ({
   id, name, color, hat, pref: 13, hp: 7, maxHp: 10, yen: 1200, stars: 3, stats: {}, calib: {},
@@ -51,7 +52,7 @@ export function IntroPreview() {
 }
 
 function Scene({ m }: { m: PreviewMsg }) {
-  if (m.kind === 'pref') return <PrefIntro code={Number(m.id)} who={PLAYERS[0]} reward="money" />;
+  if (m.kind === 'pref') return <PrefIntro code={Number(m.id)} who={PLAYERS[0]} icons={m.icons ?? prefIcons(DEFAULT_SETTINGS, Number(m.id), { reward: 'money' })} />;
   if (m.kind === 'group') {
     const game = m.id as GroupGameId;
     const pref = m.pref ?? 13;

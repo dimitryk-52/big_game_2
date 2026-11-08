@@ -6,7 +6,7 @@ import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
 import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
-import { BONUS_INFO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt } from '../shared/settings';
+import { BONUS_INFO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
@@ -246,7 +246,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         )}
         {/* интро префектуры — как на ТВ, но без анимации; вопрос потом появится поверх */}
         {s.stage.t === 'prefIntro' && (
-          <div class="phone-intro"><PrefIntro code={s.stage.code} who={s.players[s.stage.pid]} still reward={s.prefs[s.stage.code]?.taken ? undefined : s.prefs[s.stage.code]?.reward} /></div>
+          <div class="phone-intro"><PrefIntro code={s.stage.code} who={s.players[s.stage.pid]} still icons={prefIcons(s.settings, s.stage.code, s.prefs[s.stage.code])} /></div>
         )}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}

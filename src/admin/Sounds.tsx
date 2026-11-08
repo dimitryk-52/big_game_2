@@ -8,7 +8,7 @@ import {
   type IntroKind, type SoundCfg, type SoundMap,
 } from '../shared/sounds';
 import { unlockAudio } from '../shared/sound';
-import { GROUP_GAMES, SOLO_GAMES, soloAt } from '../shared/settings';
+import { GROUP_GAMES, SOLO_GAMES, prefIcons, soloAt } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { PixIcon } from '../ui/common';
 
@@ -367,7 +367,7 @@ const SECTIONS: { kind: IntroKind; name: string; hint: string }[] = [
 ];
 
 /** фрейм 1600×900 с настоящим ТВ, уменьшенный под ширину колонки */
-function PreviewFrame({ kind, id, pref, n }: { kind: IntroKind; id: string; pref?: number; n: number }) {
+function PreviewFrame({ kind, id, pref, n, icons }: { kind: IntroKind; id: string; pref?: number; n: number; icons?: string[] }) {
   const box = useRef<HTMLDivElement>(null);
   const fr = useRef<HTMLIFrameElement>(null);
   const [k, setK] = useState(0.5);
@@ -378,8 +378,8 @@ function PreviewFrame({ kind, id, pref, n }: { kind: IntroKind; id: string; pref
     return () => ro.disconnect();
   }, []);
   useEffect(() => {
-    if (ready) fr.current?.contentWindow?.postMessage({ type: 'bg-preview', kind, id, pref, n }, location.origin);
-  }, [kind, id, pref, n, ready]);
+    if (ready) fr.current?.contentWindow?.postMessage({ type: 'bg-preview', kind, id, pref, n, icons }, location.origin);
+  }, [kind, id, pref, n, ready, icons?.join()]);
   const src = useMemo(() => `tv.html?preview=1&kind=${kind}&id=${id}${pref ? '&pref=' + pref : ''}`, []);
   return (
     <div class="intro-frame" ref={box} style={{ height: 900 * k }}>
@@ -482,7 +482,8 @@ export function IntrosTab({ settings }: { settings: Settings }) {
         </div>
         {sel.kind === 'pref' && prefInfo(+sel.id) && <div class="muted small">Здесь: {prefInfo(+sel.id)}</div>}
         {sel.kind === 'group' && <div class="muted small">{GROUP_GAMES[sel.id as keyof typeof GROUP_GAMES].how}{pref ? ` · фон: ${PREF[pref]?.ru}` : ''}</div>}
-        <PreviewFrame kind={sel.kind} id={sel.id} pref={pref} n={n} />
+        <PreviewFrame kind={sel.kind} id={sel.id} pref={pref} n={n}
+          icons={sel.kind === 'pref' ? prefIcons(settings, +sel.id, { reward: settings.prefRewards[+sel.id] ?? 'money' }) : undefined} />
         <div class="row wrap">
           <button class="btn primary" onClick={() => play()}>▶ Интро со звуком <span class="muted small">(пробел)</span></button>
           <button class="btn small" onClick={() => play(false)}>↻ Только анимация</button>
