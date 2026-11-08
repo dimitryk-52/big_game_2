@@ -454,7 +454,10 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
           <span class="qtitle">{q.title}</span>
           {topic && <span class="chip" style={{ '--frame': topic.color, color: topic.color } as any}>{topic.name}</span>}
           {q.special && <span class="chip special"><PixIcon id="special" size={18} /> СПЕЦВОПРОС</span>}
+          {q.prize ? <span class="chip prize-chip">🏆 ПРИЗОВОЙ{q.prize > 1 ? ` · ранг ${q.prize}` : ''}</span> : null}
+          {q.cycle && <span class="chip">🔁 до верного ответа</span>}
         </div>
+        {q.prize && !q.revealed ? <div class="qnote">Отвечает только {s.players[q.participants[0]]?.name ?? 'ходящий'} — приз не делится</div> : null}
         {q.media?.type === 'image' && <img class="qmedia" src={resolveMedia(q.media.url)} alt="" />}
         {q.media?.type === 'audio' && <audio class="qaudio" src={resolveMedia(q.media.url)} autoPlay controls />}
         {q.media?.type === 'video' && <video class="qmedia" src={resolveMedia(q.media.url)} autoPlay playsInline />}
@@ -475,6 +478,7 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
           })}
         </div>}
         {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
+        {q.revealed && q.correct === undefined && <div class="qnote">Верного ответа нет — правильный не показываем, вопрос вернётся</div>}
         {!duel && <div class="qparts">
           {q.participants.map((id) => {
             const p = s.players[id];

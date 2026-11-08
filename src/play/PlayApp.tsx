@@ -400,7 +400,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     <>
     {bg && <img class="q-bg" src={bg} alt="" draggable={false} />}
     <div class={'question scroll pad col' + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (bg ? ' has-bg' : '')}>
-      <div class="q-title">{q.title}{q.special ? <> · <PixIcon id="special" size={18} /></> : ''}</div>
+      <div class="q-title">{q.title}{q.special ? <> · <PixIcon id="special" size={18} /></> : ''}{q.prize ? ' · 🏆 призовой' : ''}{q.cycle ? ' · 🔁' : ''}</div>
       {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={() => client.hostNow()} />}
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
       {q.media?.type === 'audio' && <div class="q-tv"><PixIcon id="ui_note" /> Слушай на ТВ</div>}
@@ -437,6 +437,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
         <div class="q-result pop">
           {ok ? <><PixIcon id="ui_check" size={28} /> Верно!</> : choice === null ? <><PixIcon id="ui_timer" size={28} /> Без ответа</> : <><PixIcon id="ui_cross" size={28} /> Неверно</>}
           {q.results?.[me.id] && <div class="q-res-sub"><ResText text={q.results[me.id]} topics={s.settings.topics} size={24} /></div>}
+          {q.correct === undefined && <div class="q-res-sub muted small">Правильный ответ не показываем — вопрос вернётся</div>}
         </div>
       )}
     </div>

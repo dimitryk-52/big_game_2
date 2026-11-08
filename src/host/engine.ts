@@ -14,6 +14,7 @@ import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/lo
 import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
+import { FLAG_CODES, flagUrl } from '../shared/flags';
 
 export interface HostIO {
   now(): number;
@@ -47,6 +48,14 @@ interface Secrets {
   sudoku?: Record<string, { level: number; puzzle: number[] }>;
   /** онсэн: где игрок уже вылечился (до ухода из префектуры) */
   onsen?: Record<string, number>;
+  /** вопросы префектур, которые больше не задаются (одноразовые заданы, цикличные решены) */
+  qDone?: string[];
+  /** вопросы-флаги: текущие неверные варианты и уже выбранные (их больше не показываем) */
+  flags?: Record<string, { decoys: number[]; banned: number[] }>;
+  /** префектуры, чей флаг уже угадали, — по порядку (первые угаданные игроки скорее забыли) */
+  flagSolved?: number[];
+  /** выданные призы по рангам: чтобы один и тот же приз не выпал дважды */
+  prizesGiven?: string[];
 }
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
@@ -416,7 +425,11 @@ export class GameEngine {
     for (let i = this.sec.calibIdx; i < total; i++) {
       await this.gate(epoch);
       const topic = topics[i % topics.length];
-      const q = this.pickQuestion((x) => x.topic === topic.id && !x.special) ?? this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
+      const q =
+        this.pickQuestion((x) => x.topic === topic.id && !x.special && !x.pref) ??
+        this.pickQuestion((x) => x.topic === topic.id && !x.special) ??
+        this.pickQuestion((x) => !x.special && x.topic !== 'okinawa' && !x.pref) ??
+        this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
       if (!q) break;
       const pids = this.alivePids();
       const res = await this.ask(epoch, q, 'calib', `Калибровка ${i + 1}/${total} · ${topic.name}`, pids, this.s.settings.questionTime);
@@ -579,39 +592,114 @@ export class GameEngine {
     }
   }
 
-  /** вопрос префектуры, куда пришёл (или высадился) игрок p: отвечают все, у p награда больше */
+  /** вопросы префектуры по порядку, которые ещё можно задать */
+  private prefQueue(code: number): Question[] {
+    const done = this.sec.qDone ?? [];
+    return this.questions
+      .filter((q) => q.pref === code && !isSpecialQ(this.s.settings, q) && !done.includes(q.id) && (q.kind === 'flag' || q.answers?.length === 4))
+      .sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
+  }
+
+  /** вопрос «выбери флаг»: правильный + 3 неверных; выбранные ранее неверные и уже угаданные флаги не показываем */
+  private buildFlagQuestion(q: Question): Question & { flagOpts: number[] } {
+    const code = q.pref!;
+    const fs = ((this.sec.flags ??= {})[q.id] ??= { decoys: [], banned: [] });
+    const solved = this.sec.flagSolved ?? [];
+    const others = FLAG_CODES.filter((c) => c !== code);
+    const ok = (c: number) => !fs.banned.includes(c) && !solved.includes(c);
+    // прежние неверные варианты, которые никто не выбирал, остаются; выбранные заменяются новыми
+    const decoys = fs.decoys.filter((c) => others.includes(c) && ok(c));
+    decoys.push(...shuffle(others.filter((c) => !decoys.includes(c) && ok(c))).slice(0, 3 - decoys.length));
+    // вариантов мало — берём самые первые угаданные флаги (вдруг забыли), в крайнем случае уже выбранные
+    for (const c of [...solved, ...fs.banned]) {
+      if (decoys.length >= 3) break;
+      if (c !== code && others.includes(c) && !decoys.includes(c)) decoys.push(c);
+    }
+    fs.decoys = decoys.slice(0, 3);
+    const opts = shuffle([code, ...fs.decoys]);
+    return {
+      ...q,
+      text: q.text?.trim() || `Какой флаг у префектуры ${PREF[code]?.ru ?? ''}?`,
+      answers: opts.map((c) => ({ image: flagUrl(c) })),
+      answerImages: true,
+      correct: opts.indexOf(code),
+      flagOpts: opts,
+    };
+  }
+
+  /** вопрос префектуры, куда пришёл (или высадился) игрок p: свои вопросы префектуры по порядку, один за приход.
+   *  Обычный — отвечают все, у p награда больше; призовой — только p, за верный ответ приз своего ранга. */
   private async prefQuestion(epoch: number, p: Player, to: number) {
     const st = this.s.settings;
     const pid = p.id;
-    const q =
-      this.pickQuestion((x) => x.pref === to && !x.special) ??
+    const own = this.prefQueue(to)[0];
+    const base =
+      own ??
       this.pickQuestion((x) => x.topic === 'general' && !x.pref && !x.special) ??
+      this.pickQuestion((x) => !x.special && x.topic !== 'okinawa' && !x.pref) ??
       this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
-    if (q) {
-      const pids = this.s.joinOrder.filter((id) => this.s.players[id]);
-      // бонусы «убрать неверные» — кнопками под ответами, прямо во время вопроса
-      const res = await this.ask(epoch, q, 'pref', `${PREF[to].ru} ${PREF[to].ja}`, pids, q.time ?? st.questionTime, {}, to);
-      const results: Record<string, string> = {};
-      const moverOk = res[pid] === q.correct;
-      for (const id of pids) {
-        const pl = this.s.players[id];
-        if (id === pid) {
-          if (moverOk) {
-            pl.yen += st.reward.moverCorrectYen;
-            pl.stars += st.reward.moverCorrectStars;
-            results[id] = `+¥${st.reward.moverCorrectYen} +${st.reward.moverCorrectStars}★`;
-          } else {
-            pl.yen += st.reward.moverWrongYen;
-            results[id] = `+¥${st.reward.moverWrongYen}`;
-          }
-        } else if (res[id] === q.correct) {
-          pl.yen += st.reward.otherCorrectYen;
-          results[id] = `+¥${st.reward.otherCorrectYen}`;
+    if (!base) return;
+    const flag = base.kind === 'flag' ? this.buildFlagQuestion(base) : null;
+    const q: Question = flag ?? base;
+    const prize = own && q.prize ? q.prize : 0;
+    const cycle = !!own && q.mode === 'cycle';
+    const pids = prize ? [pid] : this.s.joinOrder.filter((id) => this.s.players[id]);
+    const title = `${PREF[to].ru} ${PREF[to].ja}`;
+    // бонусы «убрать неверные» — кнопками под ответами, прямо во время вопроса
+    const res = await this.ask(epoch, q, 'pref', title, pids, q.time ?? st.questionTime, {}, to, { prize, cycle });
+    const results: Record<string, string> = {};
+    const moverOk = res[pid] === q.correct;
+    const solved = prize ? moverOk : pids.some((id) => res[id] === q.correct);
+    for (const id of pids) {
+      const pl = this.s.players[id];
+      if (prize) continue;
+      if (id === pid) {
+        if (moverOk) {
+          pl.yen += st.reward.moverCorrectYen;
+          pl.stars += st.reward.moverCorrectStars;
+          results[id] = `+¥${st.reward.moverCorrectYen} +${st.reward.moverCorrectStars}★`;
+        } else {
+          pl.yen += st.reward.moverWrongYen;
+          results[id] = `+¥${st.reward.moverWrongYen}`;
         }
+      } else if (res[id] === q.correct) {
+        pl.yen += st.reward.otherCorrectYen;
+        results[id] = `+¥${st.reward.otherCorrectYen}`;
       }
-      await this.reveal(epoch, results);
-      if (moverOk) await this.prefReward(epoch, p, to);
     }
+    if (own) {
+      // одноразовый больше не задаётся; цикличный — пока не ответят верно (призовой — пока не выиграет ходящий)
+      if (!cycle || solved) (this.sec.qDone ??= []).push(own.id);
+      if (flag) {
+        const fs = this.sec.flags![own.id];
+        for (const id of pids) {
+          const c = res[id];
+          if (c != null && c !== q.correct && !fs.banned.includes(flag.flagOpts[c])) fs.banned.push(flag.flagOpts[c]);
+        }
+        if (solved && !(this.sec.flagSolved ??= []).includes(to)) this.sec.flagSolved.push(to);
+      }
+    }
+    // цикличный без верного ответа: правильный не показываем — вопрос вернётся
+    await this.reveal(epoch, results, cycle && !solved);
+    if (prize) {
+      if (moverOk) await this.prizeWin(epoch, p, prize);
+    } else if (moverOk) await this.prefReward(epoch, p, to);
+  }
+
+  /** приз ранга rank (1 — главный): из списка призов этого ранга, ещё не выданный */
+  private async prizeWin(epoch: number, p: Player, rank: number) {
+    const st = this.s.settings;
+    const tier = (st.prizeTiers?.[rank - 1] ?? []).filter(Boolean);
+    const pool = tier.length ? tier : st.prizeNames;
+    const given = (this.sec.prizesGiven ??= []);
+    const free = pool.filter((x) => !given.includes(x));
+    const name = free[0] ?? (pool.length ? pick(pool) : rank === 1 ? 'Главный приз' : `Приз ${rank}-го ранга`);
+    given.push(name);
+    p.prizes.push(name);
+    this.log(`🏆 ${p.name} получает ПРИЗ: ${name}`);
+    this.io.fx?.('prize', { pid: p.id });
+    this.setStage({ t: 'prize', pid: p.id, text: name });
+    await this.sleep(epoch, 7000);
   }
 
   private async prefReward(epoch: number, p: Player, code: number) {
@@ -1237,7 +1325,8 @@ export class GameEngine {
   private pickQuestion(f: (q: Question) => boolean): Question | null {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
     const st = this.s.settings;
-    const all = this.questions.filter((q) => q.answers?.length === 4 && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
+    const done = this.sec.qDone ?? [];
+    const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
     if (!all.length) return null;
     const fresh = all.filter((q) => !this.sec.used.includes(q.id));
     const q = pick(fresh.length ? fresh : all);
@@ -1246,7 +1335,7 @@ export class GameEngine {
     return q;
   }
 
-  private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}, pref: number | null = null): Promise<Record<string, number | null>> {
+  private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}, pref: number | null = null, extra: { prize?: number; cycle?: boolean } = {}): Promise<Record<string, number | null>> {
     const n = ++this.sec.qn;
     this.curCorrect = q.correct;
     const reading = this.hostPaced;
@@ -1256,6 +1345,8 @@ export class GameEngine {
       orders: answerOrders(Object.keys(this.s.players)),
       ...(reading ? { reading } : {}),
       ...(pref ? { pref } : {}),
+      ...(extra.prize ? { prize: extra.prize } : {}),
+      ...(extra.cycle ? { cycle: true } : {}),
     };
     this.s.q = pq;
     this.choices = {};
@@ -1303,10 +1394,10 @@ export class GameEngine {
     if (q.participants.every((id) => id in this.choices || !this.s.players[id])) this.qDone?.();
   }
 
-  private async reveal(epoch: number, results: Record<string, string>) {
+  private async reveal(epoch: number, results: Record<string, string>, hideCorrect = false) {
     const q = this.s.q!;
     q.revealed = true;
-    q.correct = this.curCorrect;
+    if (!hideCorrect) q.correct = this.curCorrect;
     q.choices = Object.fromEntries(q.participants.map((id) => [id, this.choices[id] ?? null]));
     q.results = results;
     this.emit();

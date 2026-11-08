@@ -105,6 +105,8 @@
 .qpanel { width: min(1200px, 100%); background: rgba(27, 31, 58, 0.97); border: 4px solid #fff; box-shadow: 8px 8px 0 var(--shadow); padding: 1.2em 1.4em; display: flex; flex-direction: column; gap: 0.8em; max-height: 94vh; }
 .qpanel.special { border-color: var(--pink); }
 .qhead { display: flex; gap: 10px; align-items: center; }
+.qhead .prize-chip { color: var(--yellow); border-color: var(--yellow); }
+.qnote { text-align: center; color: var(--yellow); font-size: 0.9em; }
 .qtitle { flex: 1; color: var(--muted); }
 .chip.special { border-color: var(--pink); color: var(--pink); }
 .qtext { font-size: 2.1em; font-weight: 600; line-height: 1.25; text-align: center; padding: 0.2em 0; }

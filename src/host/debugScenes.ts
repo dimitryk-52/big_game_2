@@ -3,12 +3,16 @@
 // сам сценарий игры при этом не трогается — «Закрыть» возвращает всё как было.
 import type { BonusId, DebugView, GameState, PublicQuestion, Question, RewardType, Stage } from '../shared/types';
 import { PREF, PREF_CODES, neighbors, atDistance, path } from '../map/mapData';
+import { FLAG_CODES, flagUrl } from '../shared/flags';
 
 export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'prefIntro', name: 'Интро префектуры', group: 'Префектура' },
   { id: 'question', name: 'Вопрос префектуры', group: 'Префектура' },
   { id: 'questionReveal', name: 'Ответ на вопрос', group: 'Префектура' },
   { id: 'questionImages', name: 'Вопрос с картинками', group: 'Префектура' },
+  { id: 'flagQuestion', name: 'Флаговый вопрос', group: 'Префектура' },
+  { id: 'flagWrong', name: 'Цикличный: все ошиблись (ответ скрыт)', group: 'Префектура' },
+  { id: 'prizeQuestion', name: 'Призовой вопрос', group: 'Префектура' },
   { id: 'reward:money', name: 'Награда: йены', group: 'Награды' },
   { id: 'reward:stars', name: 'Награда: звёзды', group: 'Награды' },
   { id: 'reward:bonus', name: 'Награда: бонус', group: 'Награды' },
@@ -74,6 +78,17 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     case 'prefIntro': return view({ t: 'prefIntro', code: pref, pid });
     case 'question': return view({ t: 'question' }, { q: mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), {}) });
     case 'questionImages': return view({ t: 'question' }, { q: mkQ(findQ((q) => !!q.answerImages), {}) });
+    case 'flagQuestion':
+    case 'flagWrong': {
+      const opts = [pref, ...FLAG_CODES.filter((c) => c !== pref).sort(() => Math.random() - 0.5).slice(0, 3)].sort(() => Math.random() - 0.5);
+      const q = mkQ(questions[0], { text: `Какой флаг у префектуры ${PREF[pref].ru}?`, answers: opts.map((c) => ({ image: flagUrl(c) })), answerImages: true, topic: 'geo', cycle: true });
+      if (!q || kind === 'flagQuestion') return view({ t: 'question' }, { q });
+      const right = opts.indexOf(pref);
+      const wrongs = [0, 1, 2, 3].filter((i) => i !== right);
+      const choices = Object.fromEntries(pids.map((id, i) => [id, i % 3 === 2 ? null : wrongs[i % 3]]));
+      return view({ t: 'question' }, { q: { ...q, revealed: true, choices, results: { [pid]: `+¥${s.settings.reward.moverWrongYen}` }, answered: pids } });
+    }
+    case 'prizeQuestion': return view({ t: 'question' }, { q: mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), { prize: 1, participants: [pid] }) });
     case 'questionReveal': {
       const q = mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), {});
       return view({ t: 'question' }, { q: revealed(q, (id, ok) => (ok ? (id === pid ? `+¥${s.settings.reward.moverCorrectYen} +1★` : `+¥${s.settings.reward.otherCorrectYen}`) : undefined)) });

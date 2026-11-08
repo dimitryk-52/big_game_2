@@ -14,6 +14,7 @@ import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ, withRecommendedLayout } from
 import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
+import { Questions } from './Questions';
 import { GroupEditor } from './GroupEditor';
 import { PrefMap } from './PrefMap';
 import { IntrosTab, SoundsTab } from './Sounds';
@@ -64,190 +65,6 @@ function App() {
           {tab === 'remote' && <Remote settings={settings} onSave={async (s) => { await store.saveSettings(s); setSettings(s); }} />}
         </>
       )}
-    </div>
-  );
-}
-
-// ───────── вопросы ─────────
-
-function emptyQuestion(topic: string): Question {
-  return { id: uid(12), text: '', answers: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correct: 0, topic };
-}
-
-function Questions({ questions, settings, onChange, newIn }: { questions: Question[]; settings: Settings; onChange: () => void; newIn?: { topic: string; n: number } | null }) {
-  const store = getStore();
-  const [filter, setFilter] = useState({ topic: '', q: '', pref: '' });
-  const [edit, setEdit] = useState<Question | null>(null);
-  const [busy, setBusy] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const newQ = (topic: string) => ({ ...emptyQuestion(topic), ...(settings.topics.find((t) => t.id === topic)?.special ? { special: true } : {}) });
-  useEffect(() => { if (newIn) { setFilter((f) => ({ ...f, topic: newIn.topic })); setEdit(newQ(newIn.topic)); } }, [newIn?.n]);
-  const firstSpecial = settings.topics.find((t) => t.special);
-  // база пуста — показываем стартовый набор; после первой записи он уже в базе, и пересохранять его нельзя (затрёт правки)
-  const isSeed = questions === SEED_QUESTIONS;
-  const list = useMemo(() => questions.filter((q) =>
-    (!filter.topic || q.topic === filter.topic) &&
-    (!filter.pref || String(q.pref ?? '') === filter.pref || (filter.pref === 'special' && isSpecialQ(settings, q))) &&
-    (!filter.q || q.text.toLowerCase().includes(filter.q.toLowerCase()))), [questions, filter]);
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
-    questions.forEach((q) => (c[q.topic] = (c[q.topic] ?? 0) + 1));
-    return c;
-  }, [questions]);
-  const save = async (q: Question) => {
-    setBusy(true);
-    try {
-      // первый ручной вопрос — сначала сохраняем стартовый набор, чтобы он не пропал
-      if (isSeed) await store.saveQuestions(SEED_QUESTIONS);
-      await store.saveQuestions([{ ...q, special: isSpecialQ(settings, q) || undefined }]);
-      setEdit(null);
-      onChange();
-    } catch (e: any) { alert(e.message); }
-    setBusy(false);
-  };
-  const del = async (q: Question) => {
-    if (!confirm('Удалить вопрос?')) return;
-    if (isSeed) await store.saveQuestions(SEED_QUESTIONS);
-    await store.deleteQuestion(q.id);
-    onChange();
-  };
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(questions, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'questions.json';
-    a.click();
-  };
-  const importJson = async (f: File) => {
-    try {
-      const arr = JSON.parse(await f.text());
-      if (!Array.isArray(arr)) throw new Error('Ожидается массив вопросов');
-      const qs: Question[] = arr.map((q: any) => ({ ...q, id: q.id ?? uid(12) }));
-      await store.saveQuestions(qs);
-      alert(`Импортировано: ${qs.length}`);
-      onChange();
-    } catch (e: any) { alert(e.message); }
-  };
-  return (
-    <div class="pad col">
-      <div class="row wrap">
-        <button class="btn primary small" onClick={() => setEdit(newQ(filter.topic || 'general'))}>+ Новый вопрос</button>
-        <button class="btn small rainbow" title={firstSpecial ? 'Вопрос в спецтему' : 'Сначала создай спецтему на вкладке «Темы»'} onClick={() => { const sp = settings.topics.find((t) => t.id === filter.topic && t.special) ?? firstSpecial; if (sp) setEdit(newQ(sp.id)); else alert('Сначала создай спецтему на вкладке «Темы»'); }}>+ Спецвопрос</button>
-        <select value={filter.topic} onChange={(e) => setFilter({ ...filter, topic: (e.target as HTMLSelectElement).value })}>
-          <option value="">Все темы ({questions.length})</option>
-          {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name} ({counts[t.id] ?? 0})</option>)}
-          {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы">
-            {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name} ({counts[t.id] ?? 0})</option>)}
-          </optgroup>}
-        </select>
-        <select value={filter.pref} onChange={(e) => setFilter({ ...filter, pref: (e.target as HTMLSelectElement).value })}>
-          <option value="">Любая префектура</option>
-          <option value="special">🌈 Только спецвопросы</option>
-          {PREFS.map((p) => <option value={String(p.code)}>{p.ru}</option>)}
-        </select>
-        <input class="inp-s" placeholder="Поиск" value={filter.q} onInput={(e) => setFilter({ ...filter, q: (e.target as HTMLInputElement).value })} />
-        <span class="grow" />
-        <button class="btn small" onClick={exportJson}>Экспорт JSON</button>
-        <button class="btn small" onClick={() => fileRef.current?.click()}>Импорт JSON</button>
-        <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) void importJson(f); }} />
-      </div>
-      {isSeed && <div class="note">Сейчас используется стартовый набор вопросов. Как только ты добавишь или изменишь вопрос, набор сохранится в базу.</div>}
-      <table class="qtable">
-        <thead><tr><th>Тема</th><th>Вопрос</th><th>Ответ</th><th>Пр.</th><th></th></tr></thead>
-        <tbody>
-          {list.map((q) => {
-            const t = settings.topics.find((x) => x.id === q.topic);
-            const sp = isSpecialQ(settings, q);
-            return (
-              <tr>
-                <td><span class={'chip topic-chip' + (sp ? ' rainbow' : '')} style={{ borderColor: t?.color }}>{t && <SkillIcon t={t} size={18} />}{t?.name ?? q.topic}</span></td>
-                <td>{q.media && `[${q.media.type}] `}{q.text}</td>
-                <td class="muted">{q.answers[q.correct]?.text ?? (q.answers[q.correct]?.image ? '[картинка]' : '')}</td>
-                <td>{q.pref ? PREF[q.pref]?.ru : ''}</td>
-                <td class="nowrap">
-                  <button class="btn small" onClick={() => setEdit(structuredClone(q))}>✎</button>
-                  <button class="btn small" onClick={() => setEdit({ ...structuredClone(q), id: uid(12) })}>⧉</button>
-                  <button class="btn small" onClick={() => del(q)}>🗑</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {edit && <QuestionEditor q={edit} settings={settings} busy={busy} onSave={save} onClose={() => setEdit(null)} />}
-    </div>
-  );
-}
-
-function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Question; settings: Settings; busy: boolean; onSave: (q: Question) => void; onClose: () => void }) {
-  const [q, setQ] = useState<Question>(q0);
-  const [uploading, setUploading] = useState(false);
-  // файлы из папки media/ (раздаёт локальный сервер) — для подсказок в поле имени
-  const [mediaFiles, setMediaFiles] = useState<string[]>([]);
-  useEffect(() => {
-    fetch('media-list.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : [])).then(setMediaFiles).catch(() => {});
-  }, []);
-  const set = (p: Partial<Question>) => setQ({ ...q, ...p });
-  const upload = async (f: File, apply: (url: string) => void) => {
-    setUploading(true);
-    try { apply(await getStore().uploadImage(f)); } catch (e: any) { alert('Не удалось загрузить: ' + e.message); }
-    setUploading(false);
-  };
-  const valid = q.text.trim() && q.answers.every((a) => (q.answerImages ? a.image : a.text?.trim()));
-  return (
-    <div class="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div class="modal panel col">
-        <h3 style={{ margin: 0 }}>Вопрос</h3>
-        <textarea rows={3} value={q.text} placeholder="Текст вопроса" onInput={(e) => set({ text: (e.target as HTMLTextAreaElement).value })} />
-        <div class="row wrap">
-          <label>Тема <select value={q.topic} onChange={(e) => { const id = (e.target as HTMLSelectElement).value; set({ topic: id, special: settings.topics.find((t) => t.id === id)?.special ? true : undefined }); }}>
-            {settings.topics.filter((t) => !t.special).map((t) => <option value={t.id}>{t.name}</option>)}
-            {settings.topics.some((t) => t.special) && <optgroup label="Спецтемы">
-              {settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>🌈 {t.name}</option>)}
-            </optgroup>}
-          </select></label>
-          <label>Префектура <select value={String(q.pref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ pref: v ? Number(v) : undefined }); }}>
-            <option value="">—</option>
-            {PREFS.map((p) => <option value={String(p.code)}>{p.ru} {p.ja}</option>)}
-          </select></label>
-          {settings.topics.find((t) => t.id === q.topic)?.special && <span class="chip rainbow"><PixIcon id="special" size={16} /> спецвопрос</span>}
-          <label>Время, сек <input class="inp-s num" type="number" min={5} max={120} value={q.time ?? ''} placeholder="авто" onInput={(e) => { const v = (e.target as HTMLInputElement).value; set({ time: v ? Number(v) : undefined }); }} /></label>
-        </div>
-        <div class="row wrap">
-          <label>Медиа <select value={q.media?.type ?? ''} onChange={(e) => { const v = (e.target as HTMLSelectElement).value as any; set({ media: v ? { type: v, url: q.media?.url ?? '' } : undefined }); }}>
-            <option value="">нет</option>
-            <option value="image">картинка (ТВ + телефон)</option>
-            <option value="audio">аудио (только ТВ)</option>
-            <option value="video">видео (только ТВ)</option>
-          </select></label>
-          {q.media && <input class="inp-s grow" placeholder={q.media.type === 'image' ? 'URL картинки или загрузи файл →' : 'Имя файла из папки media, например kurenai.mp4'} list={q.media.type === 'image' ? undefined : 'media-files'} value={q.media.url} onInput={(e) => set({ media: { ...q.media!, url: (e.target as HTMLInputElement).value } })} />}
-          {(q.media?.type === 'audio' || q.media?.type === 'video') && <input type="file" accept={q.media.type + '/*'} title="Файл не загружается — берётся только имя. Сам файл положи в папку media проекта." onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) set({ media: { type: q.media!.type, url: f.name } }); }} />}
-          {q.media?.type === 'image' && <input type="file" accept="image/*" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) void upload(f, (url) => set({ media: { type: 'image', url } })); }} />}
-        </div>
-        {q.media?.type === 'image' && q.media.url && <img src={q.media.url} class="preview" />}
-        {(q.media?.type === 'audio' || q.media?.type === 'video') && <datalist id="media-files">{mediaFiles.map((f) => <option value={f} />)}</datalist>}
-        {(q.media?.type === 'audio' || q.media?.type === 'video') && <div class="muted small">Аудио и видео играют только на ТВ из папки <b>media</b> в проекте. Никуда не загружаются — в вопросе хранится только имя файла. Телефоны видят только текст и ответы.</div>}
-        <label><input type="checkbox" checked={!!q.answerImages} onChange={(e) => set({ answerImages: (e.target as HTMLInputElement).checked })} /> Ответы — картинки (сетка 2×2 на телефоне)</label>
-        {q.answers.map((a, i) => (
-          <div class={'ans-row' + (q.correct === i ? ' right' : '')}>
-            <label class="nowrap"><input type="radio" name="correct" checked={q.correct === i} onChange={() => set({ correct: i })} /> {'ABCD'[i]}</label>
-            {q.answerImages ? (
-              <>
-                <input class="inp-s grow" placeholder="URL картинки" value={a.image ?? ''} onInput={(e) => { const ans = [...q.answers]; ans[i] = { ...a, image: (e.target as HTMLInputElement).value }; set({ answers: ans }); }} />
-                <input type="file" accept="image/*" onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) void upload(f, (url) => { const ans = [...q.answers]; ans[i] = { ...a, image: url }; setQ((cur) => ({ ...cur, answers: ans })); }); }} />
-                {a.image && <img src={a.image} class="thumb" />}
-              </>
-            ) : (
-              <input class="inp-s grow" placeholder={`Ответ ${'ABCD'[i]}`} value={a.text ?? ''} onInput={(e) => { const ans = [...q.answers]; ans[i] = { ...a, text: (e.target as HTMLInputElement).value }; set({ answers: ans }); }} />
-            )}
-          </div>
-        ))}
-        <div class="muted small">Отметь кружком правильный ответ. Порядок ответов сохраняется как есть.</div>
-        <div class="row">
-          <button class="btn primary" disabled={!valid || busy || uploading} onClick={() => onSave(q)}>{uploading ? 'Загрузка…' : 'Сохранить'}</button>
-          <button class="btn" onClick={onClose}>Отмена</button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -383,6 +200,21 @@ function SettingsEditor({ settings, onSave }: { settings: Settings; onSave: (s: 
       <h3>Названия призов</h3>
       <textarea rows={4} value={s.prizeNames.join('\n')} onInput={(e) => upd((c) => (c.prizeNames = (e.target as HTMLTextAreaElement).value.split('\n').map((x) => x.trim()).filter(Boolean)))} />
       <div class="muted small">По одному на строку. При выигрыше приза выбирается случайное название.</div>
+      <h3>Призы призовых вопросов — по рангам</h3>
+      <div class="note small">Призовой вопрос (вкладка «Вопросы») выдаёт приз своего ранга: первый ещё не выданный из списка. Если список ранга пуст — берётся из «Названий призов».</div>
+      <div class="settings-grid">
+        {[0, 1, 2, 3].map((i) => (
+          <label class="col" style={{ alignItems: 'stretch' }}>
+            <span>Ранг {i + 1}{i === 0 ? ' — главный' : ''}</span>
+            <textarea rows={3} value={(s.prizeTiers?.[i] ?? []).join('\n')} placeholder="по одному на строку" onInput={(e) => upd((c) => {
+              const t = [...(c.prizeTiers ?? [])];
+              while (t.length <= i) t.push([]);
+              t[i] = (e.target as HTMLTextAreaElement).value.split('\n').map((x) => x.trim()).filter(Boolean);
+              c.prizeTiers = t;
+            })} />
+          </label>
+        ))}
+      </div>
     </div>
   );
 }

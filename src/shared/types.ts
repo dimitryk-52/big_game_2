@@ -38,7 +38,18 @@ export interface Question {
   special?: boolean;
   /** своё время на ответ, сек (например, для видео) */
   time?: number;
+  /** 'once' (по умолчанию) — задаётся один раз, даже при неверном ответе;
+   *  'cycle' — повторяется, пока не ответят верно; правильный ответ при ошибке не показывается */
+  mode?: QMode;
+  /** призовой: отвечает только ходящий игрок, за верный ответ — приз этого ранга (1 — главный) */
+  prize?: number;
+  /** порядок среди вопросов префектуры (меньше — раньше) */
+  order?: number;
+  /** 'flag' — «выбери флаг префектуры»: варианты собирает игра, answers пустые */
+  kind?: 'flag';
 }
+
+export type QMode = 'once' | 'cycle';
 
 export interface Player {
   id: string;
@@ -200,6 +211,10 @@ export interface PublicQuestion {
   answerImages: boolean;
   topic: TopicId;
   special: boolean;
+  /** призовой вопрос: ранг приза */
+  prize?: number;
+  /** цикличный: при ошибке правильный ответ не показывается */
+  cycle?: boolean;
   /** ведущий читает вопрос вслух: текст уже на экране, ответов и таймера ещё нет */
   reading?: boolean;
   startAt: number; // время хоста
@@ -354,6 +369,8 @@ export interface Settings {
   /** ручные награды префектур: код → тип */
   prefRewards: Record<number, RewardType>;
   prizeNames: string[];
+  /** призы по рангам для призовых вопросов: [0] — ранг 1 (главный), [1] — ранг 2… */
+  prizeTiers?: string[][];
 }
 
 export interface DragonSettings {
