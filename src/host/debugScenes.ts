@@ -111,7 +111,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       return view({ t: 'landing', pid, deadline: now + s.settings.landingTime * 1000, blocked: occupied.flatMap((o) => [o, ...neighbors(o)]) });
     }
     case 'turnStart': return view({ t: 'turnStart', pid });
-    case 'move': return view({ t: 'move', pid, options: neighbors(pref), options2: atDistance(pref, 2) });
+    case 'move': return view({ t: 'move', pid, options: neighbors(pref), options2: atDistance(pref, 2), options3: (s.settings.shinkansen ?? []).filter((c) => c !== pref), lure: true });
     case 'moving': {
       const to = atDistance(pref, 2)[0] ?? neighbors(pref)[0] ?? pref;
       return view({ t: 'moving', pid, from: pref, to, path: path(pref, to) });

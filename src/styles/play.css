@@ -80,6 +80,9 @@
 .mappick-foot { padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg2); }
 .opt-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .btn.two { border-color: #ff9df0; }
+.btn.rail { border-color: #7ad8ff; }
+.lure-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 8px; }
+.q-coin { display: flex; align-items: center; justify-content: center; gap: 6px; }
 .freemap { flex: 1; min-height: 0; position: relative; }
 
 /* магазин */

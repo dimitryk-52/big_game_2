@@ -9,12 +9,17 @@ import {
 } from './render';
 import { AKITA_H, CHAR_H, akitaCanvas, characterCanvas, pixelBadge, type BadgePart } from '../shared/sprites';
 import { TOKYO_PREF } from '../shared/look';
+import { SHINKANSEN_LINES } from '../shared/settings';
 
 export interface MapUpdate {
   prefs: Record<number, PrefState>;
   players: Player[];
   highlight?: number[];
   highlight2?: number[];
+  /** станции, куда можно уехать по билету на синкансэн (голубые) */
+  highlight3?: number[];
+  /** станции синкансэна: рисуем линии и кружки станций */
+  rail?: number[];
   /** розовая заливка без ограничения нажатий (админка: префектуры с групповой игрой) */
   marked?: number[];
   /** групповые игры: код префектуры → id игры (выноска только в админке — в игре они одноразовые) */
@@ -73,6 +78,8 @@ export class MapView {
   /** туман и затемнение недоступных — спрайты по форме префектур поверх рисунка */
   private fogLayer = new Container();
   private hiLayer = new Container();
+  private railLayer = new Graphics();
+  private railKey = '';
   private arrowLayer = new Container();
   private arrow: (Sprite & { base: { x: number; y: number }; dir: { x: number; y: number } }) | null = null;
   private arrowKey = '';
@@ -135,7 +142,7 @@ export class MapView {
     this.mapSprite = new Sprite(new Texture({ source: src }));
     this.mapSprite.scale.set(SCALE);
     // фишки и их имена — поверх подписей префектур и выносок
-    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.iconLayer, this.arrowLayer, this.labelLayer, this.tokenLayer, this.fxLayer);
+    this.world.addChild(this.mapSprite, this.fogLayer, this.hiLayer, this.railLayer, this.iconLayer, this.arrowLayer, this.labelLayer, this.tokenLayer, this.fxLayer);
     this.app.stage.addChild(this.world);
 
     this.fitAll(false);
@@ -184,6 +191,7 @@ export class MapView {
       this.updateFog(u);
     }
     this.updateHighlights(u);
+    this.updateRail(u);
     this.arrowPts = u.arrow && u.arrow.length >= 2 ? u.arrow.map((c) => prefAnchorWorld(c)) : null;
     this.updateLabels(u);
     this.updateIcons(u);
@@ -222,6 +230,40 @@ export class MapView {
     }
   }
 
+  /** линии синкансэна: белая колея в тёмной обводке, кружки на станциях. Хвосты линий без станций обрезаем */
+  private updateRail(u: MapUpdate) {
+    const key = (u.rail ?? []).join(',');
+    if (key === this.railKey) return;
+    this.railKey = key;
+    const g = this.railLayer;
+    g.clear();
+    const st = new Set(u.rail ?? []);
+    if (!st.size) return;
+    const count = new Map<number, number>();
+    for (const l of SHINKANSEN_LINES) for (const c of l) count.set(c, (count.get(c) ?? 0) + 1);
+    const keep = (c: number) => st.has(c) || (count.get(c) ?? 0) > 1;
+    const lines = SHINKANSEN_LINES.map((l) => {
+      let a = 0, b = l.length - 1;
+      while (a <= b && !keep(l[a])) a++;
+      while (b >= a && !keep(l[b])) b--;
+      return l.slice(a, b + 1);
+    }).filter((l) => l.length > 1 && l.some((c) => st.has(c)));
+    for (const [w, color] of [[6, 0x101020], [2.5, 0xffffff]] as const) {
+      for (const l of lines) {
+        const pts = l.map((c) => prefAnchorWorld(c));
+        g.moveTo(pts[0].x, pts[0].y);
+        for (const p of pts.slice(1)) g.lineTo(p.x, p.y);
+        g.stroke({ width: w, color, cap: 'round', join: 'round' });
+      }
+    }
+    for (const c of st) {
+      if (!PREF[c]) continue;
+      const a = prefAnchorWorld(c);
+      g.circle(a.x, a.y, 5).fill(0xffffff).stroke({ width: 2, color: 0x101020 });
+      g.circle(a.x, a.y, 2).fill(0x2a5bd7);
+    }
+  }
+
   private updateHighlights(u: MapUpdate) {
     this.hiSprites.forEach((s) => s.destroy());
     this.hiSprites = [];
@@ -239,6 +281,7 @@ export class MapView {
     };
     add(u.highlight, 0xfff27a);
     add(u.highlight2, 0xff9df0);
+    add(u.highlight3, 0x7ad8ff);
     add(u.marked, 0xff9df0);
     if (this.outline) { this.outline.destroy(); this.outline = null; }
     if (u.selected) {
@@ -252,7 +295,7 @@ export class MapView {
     const want = new Map<number, 'opt' | 'rev'>();
     for (const c of PREF_CODES) if (u.prefs[c]?.rev) want.set(c, 'rev');
     // под туманом подписи нет вовсе: имя появится, когда префектуру откроют
-    for (const c of [...(u.highlight ?? []), ...(u.highlight2 ?? [])]) if (u.prefs[c]?.rev) want.set(c, 'opt');
+    for (const c of [...(u.highlight ?? []), ...(u.highlight2 ?? []), ...(u.highlight3 ?? [])]) if (u.prefs[c]?.rev) want.set(c, 'opt');
     if (u.selected && u.prefs[u.selected]?.rev) want.set(u.selected, 'opt');
     for (const [c, l] of this.labels) if (!want.has(c)) { l.destroy(); this.labels.delete(c); }
     for (const [c, kind] of want) {
@@ -549,7 +592,7 @@ export class MapView {
 
   private codeAtWorld(wx: number, wy: number) {
     const p = worldToImage(wx, wy);
-    const opts = [...(this.last?.highlight ?? []), ...(this.last?.highlight2 ?? [])];
+    const opts = [...(this.last?.highlight ?? []), ...(this.last?.highlight2 ?? []), ...(this.last?.highlight3 ?? [])];
     const code = codeAt(this.regions, p.x, p.y);
     if (code && (!opts.length || opts.includes(code))) return code;
     // промах мимо — ищем ближайшую подсвеченную префектуру в радиусе ~20px экрана (удобно пальцем)

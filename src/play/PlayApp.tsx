@@ -6,7 +6,7 @@ import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
 import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
-import { BONUS_INFO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
+import { BONUS_INFO, COIN_DMG, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
@@ -323,11 +323,11 @@ function stageText(s: GameState, me: Player): string {
     case 'bonus': return 'Игроки выбирают бонусы…';
     case 'question': return s.q ? 'Вопрос на ТВ: ' + s.q.title : 'Вопрос';
     case 'prefIntro': return PREF[st.code]?.ru ?? '';
-    case 'reward': return `${n(st.pid)}: ${st.text}`;
+    case 'reward': return `${n(st.pid)}: ${st.pid === me.id && st.secret ? st.secret : st.text}`;
     case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине {ico:shop}`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
     case 'dragon': return '{ico:group_dragon} Джа-одори — смотри на ТВ!';
-    case 'extraTurn': return `${n(st.pid)} решает, ходить ли ещё раз`;
+    case 'extraTurn': return `${n(st.pid)} заканчивает ход…`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
     case 'duelResult': return 'Итоги дуэли';
@@ -393,6 +393,13 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     try { await client.req('qBonus', { n: q.n, b }); vibrate(30); } catch { /* время вышло или уже использован */ }
     setUsingBonus(false);
   };
+  const coinsHave = (['coin'] as const).filter((b) => (me.bonuses[b] ?? 0) > 0);
+  const myCoin = q.coins?.[me.id];
+  const throwCoin = async (b: 'coin') => {
+    setUsingBonus(true);
+    try { await client.req('coin', { n: q.n, b }); vibrate([20, 40, 20]); } catch { /* время вышло */ }
+    setUsingBonus(false);
+  };
   const ok = q.revealed && q.correct === (choice ?? q.choices?.[me.id]);
   const imgs = q.answerImages;
   const bg = prefBgUrl(q.pref);
@@ -431,6 +438,14 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           ))}
         </div>
       )}
+      {q.context === 'duel' && !q.reading && !q.revealed && !expired && !myCoin && coinsHave.length > 0 && q.participants.includes(me.id) && (
+        <div class="q-bonuses">
+          {coinsHave.map((b) => (
+            <button class="btn small yellow" disabled={usingBonus} onClick={() => throwCoin(b)}><BonusIcon b={b} size={22} /> +{COIN_DMG[b]} к удару ×{me.bonuses[b]}</button>
+          ))}
+        </div>
+      )}
+      {q.context === 'duel' && myCoin && !q.revealed && <div class="q-coin muted"><BonusIcon b={myCoin} size={20} /> Монетка брошена: удар +{COIN_DMG[myCoin]}, если пройдёт</div>}
       {!q.revealed && choice !== null && <div class="center muted">Ответ принят. Ждём остальных…</div>}
       {!q.revealed && choice === null && expired && <div class="center muted">Время вышло</div>}
       {q.revealed && (
@@ -521,9 +536,11 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
   const [sel, setSel] = useState<number | null>(null);
   const [sent, setSent] = useState(false);
   const st = s.stage;
-  const allowed: number[] = st.t === 'move' ? [...st.options, ...st.options2]
+  const rail = st.t === 'move' ? (st.options3 ?? []) : [];
+  const allowed: number[] = st.t === 'move' ? [...st.options, ...st.options2, ...rail]
     : st.t === 'landing' ? Object.keys(s.prefs).map(Number).filter((c) => !st.blocked.includes(c)) : [];
   const allowedRef = useRef(allowed);
+  const [lureSent, setLureSent] = useState(false);
   allowedRef.current = allowed;
 
   useEffect(() => {
@@ -547,9 +564,11 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       players: s.joinOrder.map((id) => s.players[id]).filter(Boolean),
       highlight: st.t === 'move' ? st.options : undefined,
       highlight2: st.t === 'move' ? st.options2 : undefined,
+      highlight3: rail.length ? rail : undefined,
+      rail: mode === 'move' ? s.settings.shinkansen : undefined,
       blocked: st.t === 'landing' ? st.blocked : undefined,
       selected: sel,
-      arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
+      arrow: st.t === 'move' && sel && me.pref ? (st.options.includes(sel) || byRail(sel) ? [me.pref, sel] : prefPath(me.pref, sel)) : null,
       activePid: me.id,
       // при высадке значки магазинов и автоматов не нужны — только место
       machines: mode === 'move' ? machinesOf(s.settings) : undefined,
@@ -562,10 +581,12 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
   const optName = (c: number) => (s.prefs[c]?.rev ? PREF[c].ru : me.pref ? `? ${dirName(me.pref, c)}` : '?');
 
   useEffect(() => { const u = prefBgUrl(sel); if (u) new Image().src = u; }, [sel]);
+  // на станцию, куда можно и пешком, идём пешком — билет не тратим
+  function byRail(c: number) { return st.t === 'move' && rail.includes(c) && !st.options.includes(c) && !st.options2.includes(c); }
   const confirm = () => {
     if (!sel || sent) return;
     setSent(true);
-    client.pick(mode, sel);
+    client.pick(mode, byRail(sel) ? 'rail:' + sel : sel);
     vibrate(40);
   };
   return (
@@ -576,16 +597,24 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       </div>
       <div class="mappick-map" ref={el} />
       <div class="mappick-foot">
+        {/* корм: кнопка появляется, только когда акита у соседа — так игрок и узнаёт, зачем он */}
+        {st.t === 'move' && st.lure && !sent && !lureSent && (
+          <button class="btn yellow lure-btn pop" onClick={() => { setLureSent(true); client.pick('move', 'lure'); vibrate([30, 60, 30]); }}>
+            <BonusIcon b="food" size={26} /> Кто-то рядом принюхивается… Достать корм?
+          </button>
+        )}
         {st.t === 'move' && (
           <div class="opt-list">
             {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{optName(c)}</button>)}
             {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {optName(c)}</button>)}
+            {rail.filter(byRail).map((c) => <button class={'btn small rail' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="ticket" size={18} /> {PREF[c].ru}</button>)}
           </div>
         )}
         {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text"><BonusIcon b="move2" size={16} /> — ход на 2 префектуры (потратит сапог)</div>}
+        {rail.length > 0 && <div class="muted small-text"><BonusIcon b="ticket" size={16} /> — синкансэн до станции (потратит билет)</div>}
         {st.t === 'landing' && <div class="muted small-text">Высадка — только на побережье. Тёмные префектуры заняты, рядом с соперниками или без выхода к морю. Тапни по карте.</div>}
         <button class="btn primary big-btn" disabled={!sel || sent} onClick={confirm}>
-          <ResText text={!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться${s.prefs[sel]?.rev ? ': ' + PREF[sel].ru : ' сюда'}`} size={22} />
+          <ResText text={!sel ? 'Выбери префектуру' : mode === 'move' ? (sent ? '✔ Идём!' : byRail(sel) ? 'Поехать ➜' : 'Пойти ➜') : `${sent ? '✔ ' : ''}Высадиться${s.prefs[sel]?.rev ? ': ' + PREF[sel].ru : ' сюда'}`} size={22} />
         </button>
       </div>
     </div>

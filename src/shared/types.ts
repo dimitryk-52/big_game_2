@@ -4,7 +4,7 @@
 import type { Look } from './look';
 
 export type TopicId = string;
-export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2';
+export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
 
 export interface Topic {
@@ -222,6 +222,8 @@ export interface PublicQuestion {
   participants: string[];
   answered: string[];
   removed: Record<string, number[]>;
+  /** дуэль: монетка, брошенная игроком на этот вопрос (+урон, если его удар пройдёт) */
+  coins?: Record<string, 'coin'>;
   /** порядок кнопок на телефоне игрока (позиция → индекс ответа), у всех разный — от подглядывания */
   orders?: Record<string, number[]>;
   revealed: boolean;
@@ -262,13 +264,15 @@ export type Stage =
   | { t: 'calibResult' }
   | { t: 'landing'; pid: string; deadline: number; blocked: number[] }
   | { t: 'turnStart'; pid: string }
-  | { t: 'move'; pid: string; options: number[]; options2: number[] }
+  /** options3 — станции синкансэна, куда можно уехать по билету */
+  | { t: 'move'; pid: string; options: number[]; options2: number[]; options3?: number[]; /** корм: акита у соседа — её можно переманить (видит только ходящий на телефоне) */ lure?: boolean }
   | { t: 'moving'; pid: string; from: number | null; to: number; path: number[] }
   | { t: 'bonus'; pids: string[]; deadline: number; offers: Record<string, BonusId[]>; picked: Record<string, BonusId | 'none'> }
   | { t: 'question' }
   /** интро префектуры при первом входе: фон и название по центру */
   | { t: 'prefIntro'; code: number; pid: string }
-  | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number }
+  /** secret — что именно получено (видит только сам игрок); text — для всех */
+  | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number; secret?: string }
   /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
   | { t: 'shop'; pid: string; deadline: number; entered: boolean }
   | { t: 'group' }
@@ -329,7 +333,12 @@ export interface Settings {
     fifty1: { yen: number; stars: number };
     fifty2: { yen: number; stars: number };
     move2: { yen: number; stars: number };
+    coin: { yen: number; stars: number };
+    food: { yen: number; stars: number };
+    ticket: { yen: number; stars: number };
   };
+  /** станции синкансэна (коды префектур): билет перевозит с одной на любую другую */
+  shinkansen: number[];
   pachinkoPrefs: number[];
   /** префектуры с магазином: покупки только здесь, после вопроса */
   shopPrefs: number[];

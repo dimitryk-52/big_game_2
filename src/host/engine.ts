@@ -5,7 +5,7 @@
 import type {
   BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
+import { BONUS_INFO, COIN_DMG, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
@@ -525,23 +525,54 @@ export class GameEngine {
     const free = (c: number) => this.occupants(c, pid).length < 2;
     const options = neighbors(from).filter(free);
     const options2 = p.bonuses.move2 > 0 ? atDistance(from, 2).filter(free) : [];
-    if (!options.length && !options2.length) {
+    // билет на синкансэн: со станции — на любую другую станцию, где есть место
+    const rail = st.shinkansen ?? [];
+    const options3 = (p.bonuses.ticket ?? 0) > 0 && rail.includes(from) ? rail.filter((c) => c !== from && free(c)) : [];
+    if (!options.length && !options2.length && !options3.length) {
       this.setStage({ t: 'banner', text: `${p.name}: некуда идти`, sub: 'Ход пропущен' });
       await this.sleep(epoch, 2500);
       return;
     }
-    this.setStage({ t: 'move', pid, options, options2 });
-    const choice = await this.waitInput(epoch, (m) => {
-      if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
-      const c = Number(m.value);
-      return options.includes(c) || options2.includes(c) ? c : undefined;
-    }, p.bot ? 20000 : p.online ? null : 15000); // без связи — случайный ход через 15 c
-    const to = choice ?? pick(options.length ? options : options2);
-    if (!options.includes(to)) {
+    // корм: до хода можно переманить акиту, если её хозяин стоит в соседней префектуре
+    const dogNear = () => (p.bonuses.food ?? 0) > 0 && Object.values(this.s.players).some((x) => x.akita && x.id !== pid && x.pref != null && neighbors(from).includes(x.pref));
+    const moveStage = () => this.setStage({ t: 'move', pid, options, options2, ...(options3.length ? { options3 } : {}), ...(dogNear() ? { lure: true } : {}) });
+    moveStage();
+    // выбор: код префектуры; 'rail:<код>' — поездка по билету (на соседнюю станцию можно и пешком, и поездом); 'lure' — корм
+    let choice: number | string | null | undefined;
+    for (;;) {
+      choice = await this.waitInput(epoch, (m) => {
+        if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
+        if (m.value === 'lure') return dogNear() ? 'lure' : undefined;
+        if (typeof m.value === 'string' && m.value.startsWith('rail:')) {
+          const c = Number(m.value.slice(5));
+          return options3.includes(c) ? m.value : undefined;
+        }
+        const c = Number(m.value);
+        return options.includes(c) || options2.includes(c) ? c : undefined;
+      }, p.bot ? 20000 : p.online ? null : 15000); // без связи — случайный ход через 15 c
+      if (choice !== 'lure') break;
+      const owner = Object.values(this.s.players).find((x) => x.akita)!;
+      owner.akita = false;
+      p.akita = true;
+      p.bonuses.food--;
+      this.log(`${p.name} переманил акиту-ину кормом у ${owner.name}`);
+      this.io.fx?.('lure', { pid, from: owner.id });
+      this.setStage({ t: 'banner', text: 'Акита-ину убежала!', sub: `${owner.name} → ${p.name}: на запах корма`, big: true });
+      await this.sleep(epoch, 3000);
+      moveStage();
+    }
+    const byRail = typeof choice === 'string' && choice.startsWith('rail:');
+    const to = byRail ? Number((choice as string).slice(5)) : (choice as number | undefined) ?? pick(options.length ? options : options2.length ? options2 : options3);
+    const rode = byRail || (!options.includes(to) && !options2.includes(to));
+    if (rode) {
+      p.bonuses.ticket--;
+      this.log(`${p.name} едет на синкансэне: ${PREF[from]?.ru ?? from} → ${PREF[to]?.ru ?? to}`);
+      this.io.fx?.('rail', { pid });
+    } else if (!options.includes(to)) {
       p.bonuses.move2--;
       this.log(`${p.name} использует «${BONUS_INFO.move2.short}»`);
     }
-    this.setStage({ t: 'moving', pid, from, to, path: options.includes(to) ? [from, to] : path(from, to) });
+    this.setStage({ t: 'moving', pid, from, to, path: rode || options.includes(to) ? [from, to] : path(from, to) });
     await this.sleep(epoch, 1500);
     await this.arrive(epoch, p, to);
   }
@@ -711,13 +742,16 @@ export class GameEngine {
     let reward = ps.reward;
     if (reward === 'prize' && ps.prizeTaken) reward = 'money';
     let text = '';
+    let secret: string | undefined;
     switch (reward) {
       case 'money': p.yen += st.reward.prefMoney; text = `+¥${st.reward.prefMoney}`; break;
       case 'stars': p.stars += st.reward.prefStars; text = `+${st.reward.prefStars} ★`; break;
       case 'bonus': {
-        const b = pick<BonusId>(['fifty1', 'fifty1', 'fifty2', 'move2']);
+        const b = pick<BonusId>(['fifty1', 'fifty1', 'fifty2', 'move2', 'coin', 'coin', 'ticket']);
         p.bonuses[b]++;
-        text = `Бонус: ${BONUS_INFO[b].name}`;
+        // какой именно бонус — секрет: на ТВ просто «Бонус», подробности на телефоне получателя
+        text = 'Бонус';
+        secret = `Бонус: ${BONUS_INFO[b].name}`;
         break;
       }
       case 'special': p.specials++; text = 'Спецвопрос (сила ' + st.specialPower + ')'; break;
@@ -734,7 +768,7 @@ export class GameEngine {
         return;
       }
     }
-    this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code });
+    this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, ...(secret ? { secret } : {}) });
     this.io.fx?.('reward', { pid: p.id, reward });
     await this.sleep(epoch, 2600);
   }
@@ -750,9 +784,9 @@ export class GameEngine {
     const results: Record<string, string> = {};
     if (res[p.id] === q.correct) {
       p.yen += st.reward.reviveYen;
-      const b = pick<BonusId>(['fifty1', 'fifty2', 'move2']);
+      const b = pick<BonusId>(['fifty1', 'fifty2', 'move2', 'coin']);
       p.bonuses[b]++;
-      results[p.id] = `+¥${st.reward.reviveYen} и ${BONUS_INFO[b].short}`;
+      results[p.id] = `+¥${st.reward.reviveYen} и бонус`; // какой — секрет, видно в инвентаре
     } else results[p.id] = 'Ожил';
     await this.reveal(epoch, results);
   }
@@ -830,10 +864,13 @@ export class GameEngine {
           const win = okA ? asker : target;
           const lose = okA ? target : asker;
           // спецвопрос бьёт с силой specialPower, если правильно ответил задавший
-          const dmg = d.special && win === asker ? st.specialPower : win.stats[q.topic] ?? st.baseStrength;
+          // монетка победителя добавляет урон (брошенная, но не сработавшая — просто потрачена)
+          const coin = this.s.q?.coins?.[win.id];
+          const extra = coin ? COIN_DMG[coin] : 0;
+          const dmg = (d.special && win === asker ? st.specialPower : win.stats[q.topic] ?? st.baseStrength) + extra;
           this.hit(lose, dmg);
           results[lose.id] = `−${dmg} HP`;
-          results[win.id] = `удар ${dmg}`;
+          results[win.id] = `удар ${dmg}` + (extra ? ` (монетка +${extra})` : '');
         }
         await this.reveal(epoch, results);
       }
@@ -1421,7 +1458,7 @@ export class GameEngine {
     for (const t of st.topics.filter((x) => x.combat)) { stats[t.id] = st.baseStrength; calib[t.id] = 0; }
     return {
       id: uid(10), name, color, hat: Number.isInteger(hat) && hat >= 0 && hat < HATS.length ? hat : 0, look, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
-      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
+      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
     };
   }
 
@@ -1506,7 +1543,7 @@ export class GameEngine {
         if (item === 'special') { p.specials++; if (a.topic) (p.specialTopics ??= []).push(a.topic); }
         else if (item === 'hp') { p.maxHp += st.shop.hp.amount; p.hp += st.shop.hp.amount; }
         else if (item === 'stat') p.stats[a.topic]++;
-        else p.bonuses[item as BonusId]++;
+        else p.bonuses[item as BonusId] = (p.bonuses[item as BonusId] ?? 0) + 1;
         this.log(`${p.name} купил: ${shopName(item, st, a.topic)}`);
         this.emit();
         return reply(true);
@@ -1526,6 +1563,22 @@ export class GameEngine {
         this.io.fx?.('bonusUsed', { pid: p.id, b });
         this.emit();
         return reply(true, { removed: q.removed[p.id] });
+      }
+      case 'coin': {
+        // монетка в дуэли: бросить на текущий вопрос, пока не показан ответ; одна на вопрос
+        const q = this.s.q;
+        const b = a.b as 'coin';
+        if (!q || q.n !== a.n || q.context !== 'duel' || q.revealed || q.reading || !q.participants.includes(p.id)) return reply(false, null, 'Сейчас нельзя');
+        if (b !== 'coin') return reply(false, null, 'Нет такой монеты');
+        if (q.coins?.[p.id]) return reply(false, null, 'Монетка уже брошена');
+        if (!((p.bonuses[b] ?? 0) > 0)) return reply(false, null, 'Нет монеты');
+        if (this.now > q.deadline) return reply(false, null, 'Время вышло');
+        p.bonuses[b]--;
+        q.coins = { ...(q.coins ?? {}), [p.id]: b };
+        this.log(`${p.name} бросает монетку`);
+        this.io.fx?.('bonusUsed', { pid: p.id, b });
+        this.emit();
+        return reply(true);
       }
       case 'pachiBuy': {
         if (!soloAt(st, p.pref).includes('pachinko')) return reply(false, null, 'Здесь нет пачинко');
@@ -1587,7 +1640,7 @@ export class GameEngine {
         p.busy = null;
         p.yen += info.yen ?? 0;
         p.stars += info.stars ?? 0;
-        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
+        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
         if (res === 'special') p.specials++;
         if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
         if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });

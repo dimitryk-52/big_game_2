@@ -20,7 +20,7 @@ const topics = DEFAULT_SETTINGS.topics;
 const combat = topics.filter((t) => t.combat);
 const mk = (name: string, color: string, hat: number, extra: Partial<Player> = {}): Player => ({
   id: name, name, color, hat, pref: 13, hp: 7, maxHp: 10, yen: 1200, stars: 3,
-  stats: { music: 3, culture: 1, geo: 2 }, calib: {}, bonuses: { fifty1: 1, fifty2: 0, move2: 1, turn2: 1 }, specials: 1, prizes: [],
+  stats: { music: 3, culture: 1, geo: 2 }, calib: {}, bonuses: { fifty1: 1, fifty2: 0, move2: 1, turn2: 1, coin: 2, ticket: 1, food: 1 }, specials: 1, prizes: [],
   online: true, busy: null, ...extra,
 });
 const A = mk('Дима', '#4dabff', 0);

@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, BonusIcon, BONUS_IDS, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
+import { Avatar, BonusIcon, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
 import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf, prefIcons } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
@@ -51,6 +51,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'arrive': playSound('arrive'); m?.puff(d.code, d.firstVisit ? 0xffffff : 0xfff27a); break;
         case 'hit': playSound('hit'); m?.hit(d.pid); break;
         case 'reward': playSound('reward'); break;
+        case 'rail': playSound('rail'); break;
+        case 'lure': playSound('lure'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
+        case 'bonusUsed': if (d.b === 'coin') playSound('coinToss'); break;
         case 'duel': playSound('duel'); break;
         case 'iaiCut': playSound('iaiCut'); break;
         case 'iaiEarly': playSound('iaiEarly'); break;
@@ -109,7 +112,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       prefs: s.prefs,
       players,
       highlight: st.t === 'move' ? st.options : undefined,
-      highlight2: st.t === 'move' ? st.options2 : undefined,
+      // сапог и билет — секрет до выбора: на ТВ подсвечиваем только обычные ходы
+      rail: s.settings.shinkansen,
       blocked: st.t === 'landing' ? st.blocked : undefined,
       arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
@@ -128,7 +132,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       }
       case 'move': {
         const p = pref(st.pid)!;
-        m.focus([p, ...st.options, ...st.options2], true, 2.6);
+        m.focus([p, ...st.options], true, 2.6);
         break;
       }
       case 'moving':
@@ -206,7 +210,6 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> выбирает, куда идти
           <div class="prompt-opts">
             {st.options.map((c) => <span class="chip">{s.prefs[c]?.rev ? PREF[c].ru : '?'}</span>)}
-            {st.options2.map((c) => <span class="chip two"><BonusIcon b="move2" size={18} /> {s.prefs[c]?.rev ? PREF[c].ru : '?'}</span>)}
           </div>
           {!s.players[st.pid]?.online && <div class="muted" style={{ fontSize: '0.7em' }}>Игрок не на связи — случайный ход через 15 c (или Пробел)</div>}
         </Prompt>
@@ -236,8 +239,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       )}
       {st.t === 'extraTurn' && (
         <Prompt>
-          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> может сходить ещё раз <BonusIcon b="turn2" size={32} />
-          <div class="prompt-timer"><TimerBar start={st.deadline - 15000} end={st.deadline} now={now} /></div>
+          {/* доп. ход — секрет, пока игрок не решил им воспользоваться */}
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> заканчивает ход…
         </Prompt>
       )}
       {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} iaiSignal={host.engine.iaiSignal} />}
@@ -325,9 +328,8 @@ function PlayerList({ s }: { s: GameState }) {
                 <div class="pc-money">
                   <span>{fmtYen(p.yen)}</span>
                   <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
-                  {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
                   {p.prizes.length > 0 && <span><PixIcon id="prize" />{p.prizes.length}</span>}
-                  {BONUS_IDS.map((b) => (p.bonuses[b] ?? 0) > 0 && <span class="pc-stars"><BonusIcon b={b} size={16} />{p.bonuses[b]}</span>)}
+                  {/* бонусы и спецвопросы секретны: на ТВ их не показываем, раскрываются только при использовании */}
                 </div>
               </div>
             </div>
@@ -534,7 +536,6 @@ function DuelHud({ s }: { s: GameState }) {
         <HpBar hp={p.hp} max={p.maxHp} />
         <div class="row small-stats">
           <SkillChips topics={s.settings.topics.filter((t) => t.combat)} stats={p.stats} size={18} />
-          {p.specials > 0 && <span class="pc-stars"><PixIcon id="special" size={18} />{p.specials}</span>}
         </div>
       </div>
       {d.lastHit?.to === p.id && <div class="dmg" key={hitKey}>−{d.lastHit.dmg}</div>}

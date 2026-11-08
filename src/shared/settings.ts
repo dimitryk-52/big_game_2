@@ -3,6 +3,23 @@ import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardT
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
 export const ECON_VERSION = 1;
 
+/**
+ * Линии синкансэна по префектурам — в том порядке, как их проходит поезд (по реальным линиям).
+ * Нужны, чтобы нарисовать путь на карте; ехать по билету можно только между станциями (settings.shinkansen).
+ */
+export const SHINKANSEN_LINES: number[][] = [
+  // Кюсю → Санъё → Токайдо → Тохоку → Хоккайдо
+  [46, 43, 40, 35, 34, 33, 28, 27, 26, 23, 22, 14, 13, 11, 9, 7, 4, 3, 2, 1], // Сига и Гифу пропущены — иначе на карте зигзаг
+  [11, 10, 15], // Дзёэцу: Омия → Такасаки → Ниигата
+  [10, 20, 16, 17, 18], // Хокурику: Такасаки → Нагано → Тояма → Канадзава → Цуруга
+  [40, 41, 42], // Ниси-Кюсю
+  [3, 5], // Акита
+  [7, 6], // Ямагата
+];
+/** станции по умолчанию: Хакодате (Хоккайдо), Аомори, Сэндай (Мияги), Токио, Ниигата, Канадзава (Исикава),
+ *  Нагоя (Айти), Осака, Хиросима, Хаката (Фукуока), Кагосима — концы линий и большие узлы, 11 из 47 */
+export const SHINKANSEN_STATIONS = [1, 2, 4, 13, 15, 17, 23, 27, 34, 40, 46];
+
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
     { id: 'music', name: 'Музыка', combat: true, color: '#ff6b8b' },
@@ -44,7 +61,12 @@ export const DEFAULT_SETTINGS: Settings = {
     fifty1: { yen: 600, stars: 0 },
     fifty2: { yen: 1200, stars: 0 },
     move2: { yen: 800, stars: 0 },
+    coin: { yen: 500, stars: 0 },
+    food: { yen: 600, stars: 0 },
+    ticket: { yen: 1000, stars: 0 },
   },
+  // станции синкансэна (см. SHINKANSEN_LINES): 11 из 47, по одной на крупный город линии
+  shinkansen: [...SHINKANSEN_STATIONS],
   // соло-игры и групповые по префектурам: см. RECOMMENDED_LAYOUT
   pachinkoPrefs: [23, 27, 11],
   // сеть магазинов: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин;
@@ -183,7 +205,13 @@ export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: st
   fifty2: { name: 'Убрать 2 неверных ответа', short: '50/50', icon: '🎯' },
   move2: { name: 'Ход на 2 префектуры', short: '×2 ход', icon: '👟' },
   turn2: { name: 'Дополнительный ход', short: 'доп. ход', icon: '🔁' },
+  coin: { name: 'Монета', short: '+1 удар', icon: '🪙' },
+  food: { name: 'Корм', short: 'корм', icon: '🥡' },
+  ticket: { name: 'Билет на синкансэн', short: 'синкансэн', icon: '🚄' },
 };
+
+/** монетка: сколько урона добавляет к удару в дуэли */
+export const COIN_DMG = { coin: 1 } as const;
 
 export const REWARD_INFO: Record<RewardType, { name: string; icon: string }> = {
   money: { name: 'Йены', icon: '💴' },

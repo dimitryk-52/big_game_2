@@ -86,7 +86,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
         }}>🗾 Рекомендуемая раскладка игр</button>
       </div>
       <table class="qtable">
-        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th><PixIcon id="pachinko" size={16} /> Пачинко</th><th><PixIcon id="ring" size={16} /> Призовая машина</th><th><PixIcon id="onsen" size={16} /> Онсэн</th><th><PixIcon id="chohan" size={16} /> Чо-хан</th><th><PixIcon id="sudoku" size={16} /> Судоку</th><th><PixIcon id="shop" size={16} /> Магазин</th><th>Групповая игра (номер задания)</th><th>Своих вопросов</th></tr></thead>
+        <thead><tr><th>#</th><th>Префектура</th><th>Награда</th><th><PixIcon id="pachinko" size={16} /> Пачинко</th><th><PixIcon id="ring" size={16} /> Призовая машина</th><th><PixIcon id="onsen" size={16} /> Онсэн</th><th><PixIcon id="chohan" size={16} /> Чо-хан</th><th><PixIcon id="sudoku" size={16} /> Судоку</th><th><PixIcon id="shop" size={16} /> Магазин</th><th title="Станция синкансэна: с билетом отсюда можно уехать на любую другую станцию"><PixIcon id="bonus_ticket" size={16} /> Синкансэн</th><th>Групповая игра (номер задания)</th><th>Своих вопросов</th></tr></thead>
         <tbody>
           {PREFS.map((p) => (
             <tr>
@@ -109,6 +109,7 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
               <td><input type="checkbox" checked={(s.chohanPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, chohanPrefs: toggle(s.chohanPrefs ?? [], p.code) })} /></td>
               <td><input type="checkbox" checked={(s.sudokuPrefs ?? []).includes(p.code)} onChange={() => setS({ ...s, sudokuPrefs: toggle(s.sudokuPrefs ?? [], p.code) })} /></td>
               <td><input type="checkbox" checked={s.shopPrefs.includes(p.code)} onChange={() => setS({ ...s, shopPrefs: toggle(s.shopPrefs, p.code) })} /></td>
+              <td><input type="checkbox" checked={(s.shinkansen ?? []).includes(p.code)} onChange={() => setS({ ...s, shinkansen: toggle(s.shinkansen, p.code) })} /></td>
               <td><GroupPick s={s} code={p.code} setS={setS} /></td>
               <td class={qCount(p.code) ? '' : 'muted'}>{qCount(p.code)}</td>
             </tr>
@@ -154,6 +155,9 @@ const NUM_FIELDS: [string, string][] = [
   ['shop.fifty1.yen', 'Магазин: −1 ответ, ¥'],
   ['shop.fifty2.yen', 'Магазин: 50/50, ¥'],
   ['shop.move2.yen', 'Магазин: ход ×2, ¥'],
+  ['shop.coin.yen', 'Магазин: монета (+1 удар), ¥'],
+  ['shop.food.yen', 'Магазин: корм (переманить акиту у соседа), ¥'],
+  ['shop.ticket.yen', 'Магазин: билет на синкансэн, ¥'],
   ['pachinko.yenPerBall', 'Пачинко: ¥ за шарик'],
   ['pachinko.pack', 'Пачинко: шариков в пачке'],
   ['ring.cost', 'Призовая машина: цена, ¥'],

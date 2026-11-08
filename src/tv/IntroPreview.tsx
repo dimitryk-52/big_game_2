@@ -17,7 +17,7 @@ export interface PreviewMsg { type: 'bg-preview'; kind: 'pref' | 'group' | 'solo
 
 const mk = (id: string, name: string, color: string, hat: number, extra: Partial<Player> = {}): Player => ({
   id, name, color, hat, pref: 13, hp: 7, maxHp: 10, yen: 1200, stars: 3, stats: {}, calib: {},
-  bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0 } as any, specials: 0, prizes: [], online: true, busy: null, ...extra,
+  bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0 } as any, specials: 0, prizes: [], online: true, busy: null, ...extra,
 });
 const PLAYERS = [mk('a', 'Дима', '#4dabff', 0), mk('b', 'Тануки', '#ff4d6d', 2), mk('c', 'Кицунэ', '#ffd23f', 1), mk('d', 'Нэко', '#5ce16b', 3)];
 

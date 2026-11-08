@@ -66,6 +66,7 @@
 .prompt-timer { width: 320px; }
 .prompt-opts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; font-size: 0.8em; }
 .chip.two { border-color: #ff9df0; }
+.chip.rail { border-color: #7ad8ff; }
 
 .overlay-center { position: absolute; inset: 0; display: grid; place-items: center; z-index: 20; }
 .calib { min-width: 50vw; }

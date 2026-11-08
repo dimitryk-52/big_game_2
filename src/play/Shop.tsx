@@ -6,6 +6,7 @@ import { useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player, Settings } from '../shared/types';
 import { BONUS_INFO } from '../shared/settings';
+import { PREF } from '../map/mapData';
 import { sfx } from '../shared/sound';
 import { fmtYen, vibrate } from '../shared/util';
 import { BonusIcon, PixIcon, ResText, SkillIcon, TimerBar } from '../ui/common';
@@ -18,7 +19,7 @@ const BG = artUrl('shop_bg.png');
 const SHELF = artUrl('shelf.png');
 
 /** порядок на полках: по три товара */
-const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2']];
+const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2'], ['coin', 'ticket', 'food']];
 
 export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const [msg, setMsg] = useState('');
@@ -43,6 +44,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
   const shop = s.settings.shop;
   const combat = s.settings.topics.filter((t) => t.combat && t.id in me.stats);
   const specials = s.settings.topics.filter((t) => t.special);
+  const stations = (s.settings.shinkansen ?? []).map((c) => PREF[c]?.ru).filter(Boolean).join(', ');
   const can = (c: { yen: number; stars: number }) => me.yen >= c.yen && me.stars >= c.stars;
   const needsTopic = (item: Item) => item === 'stat' || (item === 'special' && specials.length > 0);
 
@@ -57,6 +59,10 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     fifty1: { name: BONUS_INFO.fifty1.name, tag: '−1 ответ', icon: <BonusIcon b="fifty1" size={44} />, desc: 'Кнопка под вариантами ответа: убирает один неверный.', have: `Есть: ${me.bonuses.fifty1}` },
     fifty2: { name: BONUS_INFO.fifty2.name, tag: '50/50', icon: <BonusIcon b="fifty2" size={44} />, desc: 'Кнопка под вариантами ответа: убирает два неверных.', have: `Есть: ${me.bonuses.fifty2}` },
     move2: { name: BONUS_INFO.move2.name, tag: 'сапог', icon: <BonusIcon b="move2" size={44} />, desc: 'Один раз шагнуть через префектуру — сразу на две.', have: `Есть: ${me.bonuses.move2}` },
+    coin: { name: BONUS_INFO.coin.name, tag: '+1 удар', icon: <BonusIcon b="coin" size={44} />, desc: 'В дуэли брось монетку на вопрос: если твой удар пройдёт, он сильнее на 1. Монетка тратится в любом случае.', have: `Есть: ${me.bonuses.coin ?? 0}` },
+    // что это собачий корм, не говорим: игрок сам поймёт, когда окажется рядом с акитой
+    food: { name: BONUS_INFO.food.name, tag: 'корм', icon: <BonusIcon b="food" size={44} />, desc: 'Пахнет вкусно. Кому-нибудь обязательно понравится — главное, оказаться рядом.', have: `Есть: ${me.bonuses.food ?? 0}` },
+    ticket: { name: BONUS_INFO.ticket.name, tag: 'билет', icon: <BonusIcon b="ticket" size={44} />, desc: `Стоишь на станции синкансэна — в свой ход уезжаешь на любую другую станцию, где есть место. Станции: ${stations}.`, have: `Есть: ${me.bonuses.ticket ?? 0}` },
   };
 
   const buy = async (item: Item) => {

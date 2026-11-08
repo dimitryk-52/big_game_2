@@ -5,10 +5,10 @@ import type { DragonPublic } from '../shared/types';
 // ───── Призовое кольцо ─────
 // Кольцо из 24 секторов, в каждом свой приз. Порядок секторов перемешивается от seed попытки.
 export const RING_CELLS = 24;
-export type RingPrize = 'miss' | 'yen200' | 'yen500' | 'yen1500' | 'star1' | 'star3' | 'fifty1' | 'fifty2' | 'move2' | 'special' | 'turn2';
-/** набор секторов: девять пустых, мелочь почаще, крупное — по одному */
+export type RingPrize = 'miss' | 'yen200' | 'yen500' | 'yen1500' | 'star1' | 'star3' | 'fifty1' | 'fifty2' | 'move2' | 'special' | 'turn2' | 'coin' | 'ticket';
+/** набор секторов: семь пустых, монетка и билет, мелочь почаще, крупное — по одному */
 export const RING_SET: RingPrize[] = [
-  'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss',
+  'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'coin', 'ticket',
   'yen200', 'yen200', 'yen200', 'yen500', 'yen500', 'yen500', 'yen1500',
   'star1', 'star1', 'star3', 'fifty1', 'fifty2', 'move2', 'special', 'turn2',
 ];
@@ -24,6 +24,8 @@ export const RING_PRIZE_INFO: Record<RingPrize, { name: string; icon: string; co
   move2: { name: 'Ход на 2', icon: 'bonus_move2', color: '#b8673a' },
   special: { name: 'Спецвопрос', icon: 'special', color: '#e04dff' },
   turn2: { name: 'Доп. ход', icon: 'bonus_turn2', color: '#ff4d6d' },
+  coin: { name: 'Монета', icon: 'bonus_coin', color: '#a8582a' },
+  ticket: { name: 'Синкансэн', icon: 'bonus_ticket', color: '#2a5bd7' },
 };
 export interface RingLayout {
   cells: RingPrize[];
