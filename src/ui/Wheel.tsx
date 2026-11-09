@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { useDpr, useFrame } from './common';
 import { sfx } from '../shared/sound';
+import { makeWheelSpin, wheelBounds, wheelFinalRot, type WheelSpin } from '../shared/spin';
 
 export interface WheelSeg {
   id: string;
@@ -20,19 +21,7 @@ export interface WheelSeg {
   rainbow?: boolean;
 }
 
-export interface WheelSpin {
-  /** время хоста начала вращения, мс */
-  startAt: number;
-  dur: number;
-  /** индекс выпавшего сектора */
-  result: number;
-  /** полных оборотов до остановки */
-  turns: number;
-  /** где внутри сектора остановится стрелка: 0..1 */
-  offset: number;
-  /** угол покоя до вращения, рад (конец прошлого вращения) */
-  from: number;
-}
+export type { WheelSpin } from '../shared/spin';
 
 const TAU = Math.PI * 2;
 const R = 56; // радиус в пикселях холста
@@ -43,30 +32,15 @@ const BULBS = 16;
 const N = R * 2 + 2;
 
 /** границы секторов по часовой от верха, в долях оборота */
-function bounds(segs: WheelSeg[]) {
-  const total = segs.reduce((a, s) => a + (s.weight ?? 1), 0) || 1;
-  const b = [0];
-  for (const s of segs) b.push(b[b.length - 1] + (s.weight ?? 1) / total);
-  return b;
-}
+const bounds = (segs: WheelSeg[]) => wheelBounds(segs.map((s) => s.weight ?? 1));
 
 /** хост: выбрать сектор по весам и собрать вращение (rnd — Math.random или свой генератор) */
 export function makeSpin(segs: WheelSeg[], startAt: number, from = 0, rnd: () => number = Math.random, dur = 5200): WheelSpin {
-  const b = bounds(segs);
-  const x = rnd();
-  let result = segs.length - 1;
-  for (let i = 0; i < segs.length; i++) if (x < b[i + 1]) { result = i; break; }
-  return { startAt, dur, result, turns: 4 + Math.floor(rnd() * 2), offset: 0.15 + rnd() * 0.7, from };
+  return makeWheelSpin(segs.map((s) => s.weight ?? 1), startAt, from, rnd, dur);
 }
 
 /** итоговый угол поворота */
-function finalRot(segs: WheelSeg[], sp: WheelSpin) {
-  const b = bounds(segs);
-  const at = (b[sp.result] + (b[sp.result + 1] - b[sp.result]) * sp.offset) * TAU; // точка под стрелкой
-  const target = (((TAU - at) % TAU) + TAU) % TAU;
-  const delta = (((target - sp.from) % TAU) + TAU) % TAU;
-  return sp.from + sp.turns * TAU + delta;
-}
+const finalRot = (segs: WheelSeg[], sp: WheelSpin) => wheelFinalRot(segs.map((s) => s.weight ?? 1), sp);
 
 /** угол поворота диска в момент t; done — уже остановился */
 export function wheelRot(segs: WheelSeg[], sp: WheelSpin | null, t: number): { rot: number; done: boolean; spinning: boolean } {

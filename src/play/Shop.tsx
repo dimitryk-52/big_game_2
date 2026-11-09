@@ -9,7 +9,7 @@ import { BONUS_INFO } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { sfx } from '../shared/sound';
 import { vibrate } from '../shared/util';
-import { epochOf, shopCost } from '../shared/economy';
+import { ratesOf, shopCost } from '../shared/economy';
 import { BonusIcon, PixIcon, ResText, SkillIcon, TimerBar } from '../ui/common';
 
 type Item = keyof Settings['shop'];
@@ -48,7 +48,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
   const stations = (s.settings.shinkansen ?? []).map((c) => PREF[c]?.ru).filter(Boolean).join(', ');
   // цены растут с эпохой; купон — −50% по йенам на одну покупку
   const coupon = (me.bonuses.coupon ?? 0) > 0;
-  const price = (item: Item) => shopCost(s.settings, item, epochOf(s), coupon && shop[item].yen > 0);
+  const price = (item: Item) => shopCost(s.settings, item, ratesOf(s), coupon && shop[item].yen > 0);
   const can = (c: { yen: number; stars: number }) => me.yen >= c.yen && me.stars >= c.stars;
   const needsTopic = (item: Item) => item === 'stat' || (item === 'special' && specials.length > 0);
 

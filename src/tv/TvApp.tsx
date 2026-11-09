@@ -23,7 +23,8 @@ import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { groupTableId, hasCustom, playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
 import { BetBoard, DuelSpoils, EpochBanner, EpochChip, FindPopup } from './EconTv';
-import { epochOf, rewardYen } from '../shared/economy';
+import { TopicReelTv, WheelTv } from './ReelTv';
+import { epochOf, ratesOf, rewardYen } from '../shared/economy';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 import { pixelIconUrl } from '../shared/sprites';
 
@@ -149,6 +150,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       activePid: s.phase === 'turns' ? activePid : null,
       machines: machinesOf(s.settings),
       shops: s.settings.shopPrefs,
+      // награды префектур видны только с начала охоты за призами
+      huntRewards: !!s.endgame && s.endgame.step !== 'open',
     });
     const key = st.t + ':' + ('pid' in st ? (st as any).pid : '') + ':' + (st.t === 'moving' ? st.to : '');
     if (key === lastStageKey.current) return;
@@ -228,7 +231,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         ? <img class={'tv-qbg' + (sceneZoom.current ? ' zoom' : '') + (sceneBg.smooth ? ' smooth' : '')} key="scene-bg" src={sceneBg.src} alt="" draggable={false} />
         : st.t === 'question' && <div class="tv-qdim" />}
       <TopBar s={s} />
-      {s.phase !== 'lobby' && <PlayerList s={s} />}
+      {s.phase !== 'lobby' && st.t !== 'wheel' && <PlayerList s={s} />}
       {st.t === 'lobby' && <Lobby s={s} host={host} />}
       {st.t === 'banner' && <Banner key={st.text} text={st.text} sub={st.sub} big={st.big} />}
       {st.t === 'calibResult' && <CalibResult s={s} />}
@@ -268,6 +271,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         </div>
       )}
       {st.t === 'duelResult' && s.duel && <DuelResult s={s} />}
+      {st.t === 'reel' && <TopicReelTv s={s} />}
+      {st.t === 'wheel' && <WheelTv s={s} />}
       {st.t === 'shop' && (
         <Prompt>
           <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> {st.entered ? 'в магазине' : 'у магазина'} <PixIcon id="shop" size={32} />
@@ -336,10 +341,15 @@ function TopBar({ s }: { s: GameState }) {
       <TvLogo />
       <div class="chip">{phase}</div>
       {s.phase !== 'lobby' && <EpochChip s={s} />}
+      {s.endgame?.step === 'hunt' && <div class="chip hunt-chip">Охота за призами</div>}
+      {s.endgame?.step === 'final' && s.phase === 'turns' && <div class="chip hunt-chip">{finalLeft(s) === 1 ? 'Последний круг' : `Финал: осталось ${finalLeft(s)}`}</div>}
       {s.phase !== 'lobby' && <div class="chip">Комната {s.room}</div>}
     </div>
   );
 }
+
+/** финальных кругов осталось (вместе с текущим) */
+const finalLeft = (s: GameState) => Math.max(1, Math.min(4, s.settings.finalRounds ?? 3) - (s.endgame?.played ?? 0));
 
 function PlayerList({ s }: { s: GameState }) {
   const order = s.turnOrder.length ? s.turnOrder : s.joinOrder;
@@ -596,7 +606,7 @@ function DuelResult({ s }: { s: GameState }) {
     <div class="banner">
       <div class="banner-inner pop">
         {d.over ? (
-          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает{d.ko ? ' нокаутом!' : ' по очкам!'}</div>{d.ko && <div class="banner-sub">+¥{rewardYen(s.settings.reward.duelWinYen, epochOf(s))} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div>}<DuelSpoils s={s} /></>
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает{d.ko ? ' нокаутом!' : ' по очкам!'}</div>{d.ko && <div class="banner-sub">+¥{rewardYen(s.settings.reward.duelWinYen, ratesOf(s))} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div>}<DuelSpoils s={s} /></>
             : <><div class="banner-text">Ничья</div><DuelSpoils s={s} /></>
         ) : d.mode === 'rhythm' && s.rhythm ? (
           <>
@@ -620,6 +630,7 @@ function RewardPopup({ s }: { s: GameState }) {
         <div class="banner-text">{p?.name}</div>
         <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: <ResText text={st.text} size={32} /></div>
         {st.pickTopic && <div class="banner-sub muted">Выбирает спецтему на телефоне…</div>}
+        {st.reward === 'bonus' && <div class="banner-sub muted">Крутит барабан бонуса на телефоне…</div>}
       </div>
     </div>
   );

@@ -17,8 +17,9 @@ import { RHYTHM_LEAD_BEATS, RING_CELLS, RING_PRIZE_INFO, RING_SLOW_MAX, RING_SLO
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
-import { EPOCHS, FIND_INFO, epochFor, epochOf, median, netWorth, rewardYen, shopCost, type FindId } from '../shared/economy';
+import { EPOCHS, FIND_INFO, PRIZE_TIERS, TIER_INFO, epochFor, epochOf, epochRatesFor, fmtMul, median, netWorth, ratesOf, rewardYen, shopCost, tokensFor, tokensValue, type FindId, type PrizeTier } from '../shared/economy';
 import { computeTitles, placePoints, type Tally } from '../shared/titles';
+import { makeReelSpin, makeWheelSpin, wheelFinalRot } from '../shared/spin';
 
 export interface HostIO {
   now(): number;
@@ -70,7 +71,16 @@ interface Secrets {
   findsRound?: { round: number; n: number };
   /** счётчики для титулов в финале (shared/titles.ts) */
   tally?: Tally;
+  /** последний круг: кому выпадет жетон (аутсайдеры) */
+  outsiders?: string[];
+  /** титулы финала — чтобы вернуться к ним после колеса призов */
+  titles?: Record<string, string[]>;
 }
+
+/** барабан бонуса: одинаковые ячейки, повторы задают вероятность (как прежний пул наград «Бонус») */
+const BONUS_REEL: BonusId[] = ['fifty1', 'coin', 'fifty2', 'move2', 'fifty1', 'ticket', 'coin'];
+
+const plural = (n: number, one: string, few: string, many: string) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
 
@@ -126,6 +136,10 @@ export class GameEngine {
       this.s.g = null;
       this.s.dr = null;
       this.s.paused = false;
+      // ТВ перезагрузился посреди вращения: таймеров больше нет — выдаём выпавшее сразу
+      for (const p of Object.values(this.s.players)) if (p.reel?.spin && !p.reel.done) this.grantReel(p, p.reel);
+      const w = this.s.wheel;
+      if (w?.spinner && w.spin) this.wheelDone(w, w.spinner, w.segs[w.spin.result]?.id);
     } else {
       this.s = {
         v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
@@ -222,9 +236,25 @@ export class GameEngine {
         const st = this.s.settings;
         if (typeof args?.autoIntro === 'boolean') st.autoIntro = args.autoIntro;
         if (typeof args?.autoReading === 'boolean') st.autoReading = args.autoReading;
+        // пульт: финальные круги, множители эпох, жетоны, аутсайдер — сразу в игру
+        if (Number.isInteger(args?.finalRounds)) st.finalRounds = Math.max(1, Math.min(4, args.finalRounds));
+        if (Array.isArray(args?.epochRates)) st.epochRates = args.epochRates;
+        if (args?.tokens) st.tokens = args.tokens;
+        if (typeof args?.outsiderToken === 'boolean') st.outsiderToken = args.outsiderToken;
+        if (typeof args?.outsiderTwo === 'boolean') st.outsiderTwo = args.outsiderTwo;
         this.emit();
         break;
       }
+      case 'wheelStart':
+        // колесо призов — после конца игры; reset — заново: жетоны и призы по текущим настройкам
+        if (this.s.phase !== 'end') break;
+        if (!this.s.wheel || args?.reset) this.wheelInit();
+        this.setStage({ t: 'wheel' });
+        this.snapshot();
+        break;
+      case 'wheelEnd':
+        if (this.s.phase === 'end') this.setStage({ t: 'end', titles: this.sec.titles });
+        break;
       case 'questions':
         if (Array.isArray(args)) this.questions = args;
         break;
@@ -295,10 +325,8 @@ export class GameEngine {
         break;
       }
       case 'end':
-        this.s.phase = 'end';
-        this.setStage({ t: 'end', titles: computeTitles(this.alivePids().map((id) => this.s.players[id]), this.sec.tally ?? {}) });
         this.abort();
-        this.snapshot();
+        this.finish();
         break;
     }
   }
@@ -424,6 +452,8 @@ export class GameEngine {
         if (!this.s.joinOrder.length) return this.run(epoch);
         this.s.phase = 'calib';
         this.initPrefs();
+        this.s.epoch = 0;
+        this.s.rates = epochRatesFor(this.s.settings, 0);
         this.snapshot();
       }
       if (this.s.phase === 'calib') await this.calibration(epoch);
@@ -536,6 +566,7 @@ export class GameEngine {
         // редкий бонус: после хода можно сходить ещё раз
         while (this.s.players[pid] && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
         await this.checkEpoch(epoch);
+        this.checkEndgame();
         this.s.turnIdx++;
         this.snapshot();
       }
@@ -543,7 +574,87 @@ export class GameEngine {
       this.s.round++;
       this.log(`Круг ${this.s.round}`);
       this.snapshot();
+      if (await this.roundEnd(epoch)) return;
+      this.snapshot();
     }
+  }
+
+  // ───────── конец игры: охота за призами и финальные круги ─────────
+
+  /** сколько наград префектур ещё никто не забрал */
+  private rewardsLeft() {
+    return PREF_CODES.filter((c) => this.s.prefs[c] && !this.s.prefs[c].taken).length;
+  }
+
+  private finalRounds() {
+    return Math.max(1, Math.min(4, this.s.settings.finalRounds ?? 3));
+  }
+
+  /** после хода: открылась вся карта / разыграны все призы — доигрываем круг */
+  private checkEndgame() {
+    const eg = this.s.endgame;
+    if (!eg) {
+      if (PREF_CODES.every((c) => this.s.prefs[c]?.rev)) {
+        this.s.endgame = { step: 'open' };
+        this.log('Вся карта открыта — доигрываем круг');
+      }
+    } else if (eg.step === 'hunt' && !this.rewardsLeft()) {
+      eg.step = 'huntDone';
+      this.log('Все призы разыграны — доигрываем круг');
+    }
+  }
+
+  /** конец круга: начало охоты, финальные круги («осталось N»), конец игры. true — игра окончена */
+  private async roundEnd(epoch: number): Promise<boolean> {
+    const eg = this.s.endgame;
+    if (!eg) return false;
+    if (eg.step === 'open') {
+      const n = this.rewardsLeft();
+      if (n) {
+        eg.step = 'hunt';
+        this.log(`Охота за призами: ${n}`);
+        this.io.fx?.('hunt', { n });
+        this.setStage({ t: 'banner', text: 'Охота за призами!', sub: `Над префектурами — ${n} ${plural(n, 'награда', 'награды', 'наград')}, которые ещё никто не забрал. Ответь верно первым — и она твоя!`, big: true });
+        await this.sleep(epoch, this.hostPaced ? 36e5 : 6000);
+        return false;
+      }
+      eg.step = 'huntDone';
+    }
+    if (eg.step === 'huntDone') { eg.step = 'final'; eg.played = 0; }
+    else if (eg.step === 'final') eg.played = (eg.played ?? 0) + 1;
+    else return false;
+    const left = this.finalRounds() - (eg.played ?? 0);
+    if (left <= 0) { this.finish(); return true; }
+    if (left === 1) this.pickOutsiders();
+    this.io.fx?.('finalRound', { left });
+    this.setStage({
+      t: 'banner', big: true,
+      text: left === 1 ? 'Последний круг!' : `Осталось ${left} ${plural(left, 'круг', 'круга', 'кругов')}`,
+      sub: eg.played === 0 ? 'Призы разыграны — финал: свободное перемещение по карте' : left === 1 ? 'После этого круга — итоги игры' : 'Финал игры',
+    });
+    await this.sleep(epoch, 5000);
+    return false;
+  }
+
+  /** игра окончена: титулы */
+  private finish() {
+    this.s.phase = 'end';
+    this.sec.titles = computeTitles(this.alivePids().map((id) => this.s.players[id]), this.sec.tally ?? {});
+    this.setStage({ t: 'end', titles: this.sec.titles });
+    this.snapshot();
+  }
+
+  /** последний круг: жетон аутсайдеру — у кого меньше всего звёзд и денег в пересчёте на жетоны (ничья — всем) */
+  private pickOutsiders() {
+    const st = this.s.settings;
+    this.sec.outsiders = [];
+    if (st.outsiderToken === false) return;
+    const ids = this.alivePids();
+    if (ids.length < 2) return;
+    const val = (id: string) => tokensValue(this.s.players[id], st) + (this.s.players[id].tokens ?? 0);
+    const sorted = [...ids].sort((a, b) => val(a) - val(b));
+    const edge = val(sorted[Math.min(sorted.length - 1, st.outsiderTwo ? 1 : 0)]);
+    this.sec.outsiders = ids.filter((id) => val(id) <= edge + 1e-9);
   }
 
   private occupants(code: number, except?: string) {
@@ -560,6 +671,19 @@ export class GameEngine {
     await this.sleep(epoch, 1800);
     // крутит призовое кольцо — ход начнётся, когда огонёк остановится (но не дольше 25 с)
     for (const t0 = Date.now(); (this.sec.ring[pid] || (this.ringSettle[pid] ?? 0) > Date.now()) && Date.now() - t0 < 25000;) await this.sleep(epoch, 300);
+    // барабан бонуса так и не покрутили — крутится сам (виден у игрока на телефоне)
+    if (p.reel?.done) delete p.reel;
+    else if (p.reel && !p.reel.spin) this.spinBonusReel(p);
+
+    // последний круг: аутсайдер находит жетон финальной игры
+    let token = false;
+    if (this.sec.outsiders?.includes(pid)) {
+      this.sec.outsiders = this.sec.outsiders.filter((x) => x !== pid);
+      if (this.s.settings.outsiderToken !== false && p.pref != null) {
+        await this.giveFind(epoch, p, 2, undefined, 'token');
+        token = true;
+      }
+    }
 
     // восстановился на Окинаве — получил деньги и бонус, ходит уже в следующий раз
     if (p.hp <= 0) {
@@ -570,7 +694,7 @@ export class GameEngine {
     }
 
     // ── находка под ногами (тайная помощь отстающим) ──
-    const found = await this.maybeFind(epoch, p);
+    const found = token ? (this.countTurn(p), null) : await this.maybeFind(epoch, p);
     const rickshaw = found === 'rickshaw';
 
     // ── выбор хода ──
@@ -803,11 +927,15 @@ export class GameEngine {
     const st = this.s.settings;
     const pid = p.id;
     const own = this.prefQueue(to)[0];
-    const base =
-      own ??
-      this.pickQuestion((x) => x.topic === 'general' && !x.pref && !x.special) ??
-      this.pickQuestion((x) => !x.special && x.topic !== 'okinawa' && !x.pref) ??
-      this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
+    let base: Question | null = own ?? this.pickQuestion((x) => x.topic === 'general' && !x.pref && !x.special, true) ?? null;
+    if (!base) {
+      // кончились и общие вопросы — тему выбирает барабан (крутит ходящий, не успел — крутится сам)
+      const topic = await this.topicReel(epoch, p, 'pref');
+      base =
+        (topic ? this.pickQuestion((x) => x.topic === topic && !x.pref && !x.special) : null) ??
+        this.pickQuestion((x) => !x.special && x.topic !== 'okinawa' && !x.pref) ??
+        this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
+    }
     if (!base) return;
     const flag = base.kind === 'flag' ? this.buildFlagQuestion(base) : null;
     const q: Question = flag ?? base;
@@ -820,7 +948,7 @@ export class GameEngine {
     const results: Record<string, string> = {};
     const moverOk = res[pid] === q.correct;
     const solved = prize ? moverOk : pids.some((id) => res[id] === q.correct);
-    const ep = epochOf(this.s);
+    const ep = ratesOf(this.s);
     // манэки-нэко: за правильный ответ — вдвое больше йен (срабатывает сама и тратится)
     const neko = (pl: Player, yen: number) => {
       if (!((pl.bonuses.neko ?? 0) > 0)) return { yen, tag: '' };
@@ -895,15 +1023,14 @@ export class GameEngine {
     let secret: string | undefined;
     let bonus: BonusId | undefined;
     switch (reward) {
-      case 'money': { const y = rewardYen(st.reward.prefMoney, epochOf(this.s)); p.yen += y; text = `+¥${y}`; break; }
+      case 'money': { const y = rewardYen(st.reward.prefMoney, ratesOf(this.s)); p.yen += y; text = `+¥${y}`; break; }
       case 'stars': p.stars += st.reward.prefStars; text = `+${st.reward.prefStars} ★`; break;
       case 'bonus': {
-        const b = pick<BonusId>(['fifty1', 'fifty1', 'fifty2', 'move2', 'coin', 'coin', 'ticket']);
-        p.bonuses[b]++;
-        // какой именно бонус — секрет: на ТВ просто «Бонус», подробности на телефоне получателя
+        // бонус игрок крутит на барабане у себя на телефоне; ТВ тем временем идёт дальше.
+        // Что выпало — секрет: на ТВ просто «Бонус»
+        p.reel = { segs: [...BONUS_REEL] };
         text = 'Бонус';
-        secret = `Бонус: ${BONUS_INFO[b].name}`;
-        bonus = b;
+        secret = 'Крути барабан бонуса!';
         break;
       }
       case 'special': {
@@ -964,7 +1091,7 @@ export class GameEngine {
     const res = await this.ask(epoch, q, 'revive', 'Окинава · 沖縄', [p.id], q.time ?? st.questionTime);
     const results: Record<string, string> = {};
     if (res[p.id] === q.correct) {
-      const y = rewardYen(st.reward.reviveYen, epochOf(this.s));
+      const y = rewardYen(st.reward.reviveYen, ratesOf(this.s));
       p.yen += y;
       const b = pick<BonusId>(['fifty1', 'fifty2', 'move2', 'coin']);
       p.bonuses[b]++;
@@ -1008,7 +1135,8 @@ export class GameEngine {
           if (m.value === 'rhythm' && st.rhythmInDuel) return 'rhythm';
           return topics.includes(m.value) ? (m.value as string) : undefined;
         }, ms + 400);
-        const pickV = choice ?? pick(topics);
+        // не выбрал за время — тему решает барабан (без спецвопроса)
+        const pickV = choice ?? (await this.topicReel(epoch, asker, 'duel')) ?? pick(topics);
 
         if (pickV === 'rhythm') {
           d.mode = 'rhythm';
@@ -1082,7 +1210,7 @@ export class GameEngine {
       this.bump('stolen', win.id, stolen);
       if (ko) {
         d.ko = true;
-        win.yen += rewardYen(st.reward.duelWinYen, epochOf(this.s));
+        win.yen += rewardYen(st.reward.duelWinYen, ratesOf(this.s));
         win.stars += st.reward.duelWinStars;
         this.log(`${win.name} побеждает в дуэли! ${loser.name} без сил`);
       } else this.log(`${win.name} побеждает в дуэли по очкам`);
@@ -1140,11 +1268,13 @@ export class GameEngine {
     d.payouts = payouts;
   }
 
-  /** новая эпоха наступает, когда открыто достаточно префектур: объявляем на ТВ */
+  /** новая эпоха наступает, когда открыто достаточно префектур: объявляем на ТВ.
+   *  Множители берутся из настроек (пульт) в момент наступления и дальше не меняются */
   private async checkEpoch(epoch: number) {
     const e = epochFor(this.s);
     if (e <= epochOf(this.s)) return;
     this.s.epoch = e;
+    this.s.rates = epochRatesFor(this.s.settings, e);
     this.log(`Наступила эпоха ${EPOCHS[e].name}`);
     this.io.fx?.('epoch', { epoch: e });
     this.setStage({ t: 'epoch', epoch: e });
@@ -1158,10 +1288,16 @@ export class GameEngine {
    * остальные изредка находят мелочь (4%) — чтобы находки не выглядели подачкой.
    * Между находками игрока — минимум 2 своих хода, за круг — не больше двух находок на всех.
    */
-  private async maybeFind(epoch: number, p: Player): Promise<FindId | null> {
-    const st = this.s.settings;
+  /** свой ход игрока (для находок и защиты от фарма) */
+  private countTurn(p: Player) {
     const turns = (this.sec.ownTurns ??= {});
     turns[p.id] = (turns[p.id] ?? 0) + 1;
+    return turns;
+  }
+
+  private async maybeFind(epoch: number, p: Player): Promise<FindId | null> {
+    const st = this.s.settings;
+    const turns = this.countTurn(p);
     const ids = this.alivePids();
     if (ids.length < 2 || this.s.round < 2 || p.pref == null) return null;
     const fr = (this.sec.findsRound ??= { round: this.s.round, n: 0 });
@@ -1186,7 +1322,8 @@ export class GameEngine {
     nw ??= Object.fromEntries(ids.map((id) => [id, netWorth(this.s.players[id], st)]));
     const from = p.pref!;
     const free = (c: number) => this.occupants(c, p.id).length < 2;
-    const fog = [...neighbors(from), ...atDistance(from, 2)].filter((c) => !this.s.prefs[c]?.rev);
+    // старая карта: что в тумане вокруг и где лежат награды префектур (их на карте не видно до охоты за призами)
+    const fog = [...neighbors(from), ...atDistance(from, 2)].filter((c) => !this.s.prefs[c]?.rev || (!this.s.prefs[c]?.taken && !this.s.endgame));
     const top = Math.max(...Object.values(nw));
     const leader = this.s.players[ids.find((id) => nw![id] === top && id !== p.id) ?? ''];
     const gap = Math.max(0, median(Object.values(nw)) - nw[p.id]);
@@ -1215,13 +1352,14 @@ export class GameEngine {
       p.yen += amount;
     }
     if (kind === 'kitsune') {
-      amount = Math.min(leader.yen, rewardYen(pick([300, 400, 500]), epochOf(this.s)));
+      amount = Math.min(leader.yen, rewardYen(pick([300, 400, 500]), ratesOf(this.s)));
       leader.yen -= amount;
       p.yen += amount;
       fromPid = leader.id;
       this.log(`Кицунэ утащила ¥${amount} у ${leader.name} и принесла ${p.name}`);
     }
     if (kind === 'map') p.scouted = fog;
+    if (kind === 'token') p.tokens = (p.tokens ?? 0) + 1;
     this.bump('finds', p.id);
     const turns = (this.sec.ownTurns ??= {});
     this.sec.findAt = { ...(this.sec.findAt ?? {}), [p.id]: turns[p.id] ?? 0 };
@@ -1279,6 +1417,75 @@ export class GameEngine {
     r.scores[m.pid] = Math.max(0, Math.min(100000, Math.round(m.score)));
     this.emit();
     this.rhythmDone?.();
+  }
+
+  // ───────── барабаны ─────────
+
+  /**
+   * Барабан темы вопроса (без спецвопроса). why 'pref' — кончились вопросы префектуры и общие; 'duel' — не выбрал
+   * тему дуэли за время. Никто его не запускает: показывается на ТВ и сразу крутится сам.
+   */
+  private async topicReel(epoch: number, p: Player, why: 'pref' | 'duel'): Promise<TopicId | null> {
+    const topics = this.combatTopics().map((t) => t.id);
+    if (!topics.length) return null;
+    // на ленте не меньше 6 ячеек, иначе одна и та же тема видна в окошке дважды
+    const segs = topics.length < 4 ? [...topics, ...topics] : topics;
+    // вращение начинается почти сразу — после короткой паузы, чтобы барабан успел появиться
+    const spin = makeReelSpin(segs.map(() => 1), this.now + 900);
+    this.setStage({ t: 'reel', pid: p.id, why, segs, deadline: 0, spin });
+    await this.sleep(epoch, 600);
+    this.io.fx?.('reel', { pid: p.id });
+    const topic = segs[spin.result];
+    await this.sleep(epoch, 300 + spin.dur + 1800);
+    this.log(`Барабан выбрал тему: ${this.s.settings.topics.find((t) => t.id === topic)?.name ?? topic}`);
+    return topic;
+  }
+
+  /** барабан бонуса на телефоне: хост решает, что выпадет, и выдаёт, когда лента остановится */
+  private spinBonusReel(p: Player) {
+    const r = p.reel;
+    if (!r || r.spin) return;
+    r.spin = makeReelSpin(r.segs.map(() => 1), this.now + 400);
+    this.emit();
+    setT(() => this.grantReel(p, r), 400 + r.spin.dur);
+  }
+
+  private grantReel(p: Player, r: NonNullable<Player['reel']>) {
+    if (p.reel !== r || r.done || !r.spin) return;
+    const b = r.segs[r.spin.result];
+    p.bonuses[b] = (p.bonuses[b] ?? 0) + 1;
+    r.done = true;
+    this.emit();
+  }
+
+  // ───────── колесо призов (финальная игра) ─────────
+
+  private wheelSegs(left: Record<PrizeTier, number>) {
+    return PRIZE_TIERS.filter((k) => left[k] > 0).map((k) => ({ id: k, w: left[k] * TIER_INFO[k].mul }));
+  }
+
+  /** жетоны: звёзды и деньги по курсу + найденные; призы — из настроек пульта (берутся один раз, при запуске) */
+  private wheelInit() {
+    const st = this.s.settings;
+    const pr = st.tokens?.prizes;
+    const left = Object.fromEntries(PRIZE_TIERS.map((k) => [k, Math.max(0, Math.floor(Number(pr?.[k] ?? 0)) || 0)])) as Record<PrizeTier, number>;
+    const tokens = Object.fromEntries(this.alivePids().map((id) => [id, tokensFor(this.s.players[id], st) + (this.s.players[id].tokens ?? 0)]));
+    this.s.wheel = { left, tokens, segs: this.wheelSegs(left), spin: null, spinner: null, last: null, history: [] };
+    this.log(`Колесо призов: жетонов ${Object.values(tokens).reduce((a, b) => a + b, 0)}, призов ${Object.values(left).reduce((a, b) => a + b, 0)}`);
+  }
+
+  private wheelDone(w: NonNullable<GameState['wheel']>, pid: string, tier: PrizeTier | undefined) {
+    if (this.s.wheel !== w || w.spinner !== pid) return;
+    w.spinner = null;
+    if (tier) {
+      w.left[tier] = Math.max(0, w.left[tier] - 1);
+      w.history.push({ pid, tier });
+      w.last = { pid, tier };
+      this.log(`${this.s.players[pid]?.name ?? '?'}: ${TIER_INFO[tier].name.toLowerCase()} приз`);
+      this.io.fx?.('prize', { pid });
+    }
+    this.emit();
+    this.snapshot();
   }
 
   // ───────── доп. ход ─────────
@@ -1474,7 +1681,7 @@ export class GameEngine {
       places[id] = lv + 1;
       this.bump('group:' + g.game, id, placePoints(lv + 1));
       const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
-      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
+      const pr = { yen: rewardYen(pr0.yen, ratesOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
       p.stars += pr.stars;
       awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
@@ -1773,7 +1980,7 @@ export class GameEngine {
       places[id] = lv + 1;
       this.bump('group:dragon', id, placePoints(lv + 1));
       const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
-      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
+      const pr = { yen: rewardYen(pr0.yen, ratesOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
       p.stars += pr.stars;
       awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
@@ -1846,13 +2053,15 @@ export class GameEngine {
 
   // ───────── вопросы ─────────
 
-  private pickQuestion(f: (q: Question) => boolean): Question | null {
+  /** freshOnly — только ещё не заданные (иначе, когда свежие кончились, вопросы идут по второму кругу) */
+  private pickQuestion(f: (q: Question) => boolean, freshOnly = false): Question | null {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
     const st = this.s.settings;
     const done = this.sec.qDone ?? [];
     const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
     if (!all.length) return null;
     const fresh = all.filter((q) => !this.sec.used.includes(q.id));
+    if (freshOnly && !fresh.length) return null;
     const q = pick(fresh.length ? fresh : all);
     if (!fresh.length) this.sec.used = this.sec.used.filter((id) => !all.some((x) => x.id === id));
     this.sec.used.push(q.id);
@@ -2026,7 +2235,7 @@ export class GameEngine {
         if (!st.shop[item]) return reply(false, null, 'Нет такого товара');
         // купон: −50% по йенам на одну покупку
         const coupon = (p.bonuses.coupon ?? 0) > 0 && st.shop[item].yen > 0;
-        const cost = shopCost(st, item, epochOf(this.s), coupon);
+        const cost = shopCost(st, item, ratesOf(this.s), coupon);
         if (item === 'stat' && !(a.topic in p.stats)) return reply(false, null, 'Выбери тему');
         const sTopics = st.topics.filter((t) => t.special).map((t) => t.id);
         if (item === 'special' && sTopics.length && !sTopics.includes(a.topic)) return reply(false, null, 'Выбери тему спецвопроса');
@@ -2073,6 +2282,38 @@ export class GameEngine {
         this.log(`${p.name} бросает монетку`);
         this.io.fx?.('bonusUsed', { pid: p.id, b });
         this.emit();
+        return reply(true);
+      }
+      case 'reelSpin': {
+        // барабан бонуса: игрок крутит у себя на телефоне
+        if (!p.reel || p.reel.spin) return reply(false, null, 'Барабан уже крутится');
+        this.spinBonusReel(p);
+        return reply(true);
+      }
+      case 'reelClose': {
+        if (p.reel?.done) delete p.reel;
+        this.emit();
+        return reply(true);
+      }
+      case 'wheelSpin': {
+        // колесо призов: опустил жетон — колесо крутится (одно вращение за раз)
+        const w = this.s.wheel;
+        if (!w || this.s.stage.t !== 'wheel') return reply(false, null, 'Колесо ещё не запущено');
+        if (w.spinner) return reply(false, null, 'Колесо крутится — подожди');
+        if (!((w.tokens[p.id] ?? 0) > 0)) return reply(false, null, 'Жетонов больше нет');
+        const segs = this.wheelSegs(w.left);
+        if (!segs.length) return reply(false, null, 'Призы закончились');
+        // колесо продолжает с того места, где остановилось
+        const from = w.spin ? wheelFinalRot(w.segs.map((x) => x.w), w.spin) % (Math.PI * 2) : 0;
+        w.tokens[p.id]--;
+        w.segs = segs;
+        w.spin = makeWheelSpin(segs.map((x) => x.w), this.now + 500, from);
+        w.spinner = p.id;
+        w.last = null;
+        const tier = segs[w.spin.result].id;
+        this.emit();
+        this.io.fx?.('wheel', { pid: p.id });
+        setT(() => this.wheelDone(w, p.id, tier), 500 + w.spin.dur);
         return reply(true);
       }
       case 'pachiBuy': {
@@ -2257,6 +2498,14 @@ export class GameEngine {
       // свиток-вызов бот тратит иногда (или когда идти некуда)
       const value = st.challenge?.length && (!walk.length || Math.random() < 0.4) ? 'duel:' + pick(st.challenge) : pick(walk);
       this.botLater('move', 1500, () => this.handle({ t: 'pick', pid: st.pid, kind: 'move', value }));
+    }
+
+    for (const b of bots) if (b.reel && !b.reel.spin) this.botLater('breel' + b.id, 1500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'reelSpin' }));
+    for (const b of bots) if (b.reel?.done) this.botLater('breelc' + b.id, 2500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'reelClose' }));
+    const w = this.s.wheel;
+    if (st.t === 'wheel' && w && !w.spinner) {
+      const b = bots.find((x) => (w.tokens[x.id] ?? 0) > 0);
+      if (b) this.botLater('wheel' + w.history.length, 2500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'wheelSpin' }));
     }
     if (st.t === 'extraTurn' && isBot(st.pid)) {
       this.botLater('extra', 1200, () => this.handle({ t: 'pick', pid: st.pid, kind: 'extra', value: Math.random() < 0.7 }));

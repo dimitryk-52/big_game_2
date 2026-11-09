@@ -2,7 +2,8 @@
 // публичное состояние и отправляют только действия игрока.
 
 import type { Look } from './look';
-import type { FindId } from './economy';
+import type { EpochRates, FindId, PrizeTier } from './economy';
+import type { ReelSpin, WheelSpin } from './spin';
 
 export type TopicId = string;
 export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food' | 'cheat' | 'neko' | 'coupon' | 'scroll';
@@ -81,6 +82,10 @@ export interface Player {
   busy: null | SoloGameId;
   /** защита от фарма: денежная соло-игра здесь закрыта для игрока на этот приход (left — через сколько своих ходов откроется) */
   closed?: { code: number; game: SoloGameId; left: number };
+  /** жетоны финальной призовой игры, найденные в игре (редкая находка аутсайдеру) */
+  tokens?: number;
+  /** барабан бонуса: игрок крутит его у себя на телефоне, игра тем временем идёт дальше */
+  reel?: { segs: BonusId[]; spin?: ReelSpin; done?: boolean };
   bot?: boolean;
 }
 
@@ -324,6 +329,10 @@ export type Stage =
   | { t: 'find'; pid: string; kind: FindId; amount?: number; from?: string }
   /** наступила новая эпоха */
   | { t: 'epoch'; epoch: number }
+  /** барабан темы вопроса: никто не запускает — показывается на ТВ и сразу крутится сам; pid — кому вопрос; segs — id тем */
+  | { t: 'reel'; pid: string; why: 'pref' | 'duel'; segs: TopicId[]; deadline: number; spin: ReelSpin | null }
+  /** финальная призовая игра: колесо жетонов (s.wheel) */
+  | { t: 'wheel' }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
   | { t: 'duelResult' }
@@ -435,6 +444,36 @@ export interface Settings {
   prizeNames: string[];
   /** призы по рангам для призовых вопросов: [0] — ранг 1 (главный), [1] — ранг 2… */
   prizeTiers?: string[][];
+  /** пульт: множители эпох (цены, награды); эпоха берёт свои в момент наступления */
+  epochRates?: EpochRates[];
+  /** пульт: сколько кругов свободного перемещения в финале (1–4) */
+  finalRounds?: number;
+  /** пульт: курс обмена звёзд и денег на жетоны и призы колеса по редкости */
+  tokens?: { starsPer: number; yenPer: number; prizes: Record<PrizeTier, number> };
+  /** пульт: в последнем круге дать жетон аутсайдеру (тому, у кого меньше всего на жетоны) */
+  outsiderToken?: boolean;
+  /** …и не одному, а двум последним */
+  outsiderTwo?: boolean;
+}
+
+/** конец игры: вся карта открыта → доигрываем круг → охота за призами → доигрываем круг → финальные круги */
+export interface EndgameState {
+  step: 'open' | 'hunt' | 'huntDone' | 'final';
+  /** сыграно финальных кругов */
+  played?: number;
+}
+
+/** колесо призов: сектор = призов этой редкости (обычные и необычные ×3), выпавший приз убирается */
+export interface WheelState {
+  left: Record<PrizeTier, number>;
+  tokens: Record<string, number>;
+  /** сектора колеса для текущего (последнего) вращения */
+  segs: { id: PrizeTier; w: number }[];
+  spin: WheelSpin | null;
+  spinner: string | null;
+  /** что выпало в последнем вращении (когда колесо остановилось) */
+  last?: { pid: string; tier: PrizeTier } | null;
+  history: { pid: string; tier: PrizeTier }[];
 }
 
 export interface DragonSettings {
@@ -469,6 +508,12 @@ export interface GameState {
   phase: 'lobby' | 'calib' | 'landing' | 'turns' | 'end';
   /** эпоха (0 — Эдо, 1 — Мэйдзи, 2 — Сёва): цены и награды, цвета интерфейса */
   epoch?: number;
+  /** множители текущей эпохи — запомнены при её наступлении */
+  rates?: EpochRates;
+  /** конец игры (охота за призами, финальные круги) */
+  endgame?: EndgameState | null;
+  /** финальная призовая игра */
+  wheel?: WheelState | null;
   /** отладочная сцена поверх игры (меню 🐞); сценарий при этом не трогается */
   debug?: DebugView | null;
 }
@@ -479,11 +524,12 @@ export interface DebugView {
   q?: PublicQuestion | null;
   duel?: DuelPublic | null;
   rhythm?: RhythmPublic | null;
+  wheel?: WheelState | null;
 }
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic' | 'reel';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

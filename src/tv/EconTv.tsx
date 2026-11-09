@@ -1,7 +1,7 @@
 // ТВ: эпохи, ставки на дуэль, находки, итог дуэли с кражей и ставками.
 import type { GameState } from '../shared/types';
 import { Avatar, PixIcon, TimerBar } from '../ui/common';
-import { EPOCHS, epochOf } from '../shared/economy';
+import { EPOCHS, epochOf, fmtMul, ratesOf } from '../shared/economy';
 import { fmtYen, now } from '../shared/util';
 
 /** плашка эпохи в верхней строке */
@@ -20,7 +20,7 @@ export function EpochBanner({ s }: { s: GameState }) {
       <div class="banner-inner epoch-banner pop">
         <div class="epoch-kanji">{E.ja}</div>
         <div class="banner-text">Наступила эпоха {E.name}</div>
-        <div class="banner-sub">Цены в магазинах ×{E.price} · награды ×{E.reward}</div>
+        <div class="banner-sub">Цены в магазинах {fmtMul(ratesOf(s).price)} · награды {fmtMul(ratesOf(s).reward)}</div>
       </div>
     </div>
   );

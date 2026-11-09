@@ -6,6 +6,7 @@ import { OKINAWA, PREF, PREF_CODES, neighbors, atDistance, path } from '../map/m
 import { OKINAWA_NOTE } from '../shared/settings';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { TITLES } from '../shared/titles';
+import { makeReelSpin, makeWheelSpin } from '../shared/spin';
 
 export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'prefIntro', name: 'Интро префектуры', group: 'Префектура' },
@@ -48,6 +49,12 @@ export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'find:kitsune', name: 'Находка: кицунэ (видят все)', group: 'Находки и эпохи' },
   { id: 'epoch:1', name: 'Эпоха Мэйдзи', group: 'Находки и эпохи' },
   { id: 'epoch:2', name: 'Эпоха Сёва', group: 'Находки и эпохи' },
+  { id: 'find:token', name: 'Находка: жетон (аутсайдеру)', group: 'Находки и эпохи' },
+  { id: 'reel:spin', name: 'Барабан темы (крутится сам)', group: 'Барабаны и финал' },
+  { id: 'reel:bonus', name: 'Награда: бонус (барабан на телефоне)', group: 'Барабаны и финал' },
+  { id: 'hunt', name: 'Охота за призами', group: 'Барабаны и финал' },
+  { id: 'final', name: 'Осталось 3 круга', group: 'Барабаны и финал' },
+  { id: 'wheel', name: 'Колесо призов', group: 'Барабаны и финал' },
 ];
 
 export interface DebugArgs {
@@ -167,6 +174,25 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     }
     case 'find': return view({ t: 'find', pid, kind: (sub ?? 'coin') as any, ...(sub === 'wallet' || sub === 'kitsune' ? { amount: 400 } : {}), ...(sub === 'kitsune' ? { from: other } : {}) });
     case 'epoch': return view({ t: 'epoch', epoch: Number(sub) || 1 });
+    case 'reel': {
+      if (sub === 'bonus') return view({ t: 'reward', pid, reward: 'bonus', text: 'Бонус', pref, secret: 'Крути барабан бонуса!' });
+      const topics = s.settings.topics.filter((t) => t.combat).map((t) => t.id);
+      const segs = topics.length < 4 ? [...topics, ...topics] : topics;
+      return view({ t: 'reel', pid, why: 'pref', segs, deadline: 0, spin: makeReelSpin(segs.map(() => 1), now + 600) });
+    }
+    case 'hunt': return view({ t: 'banner', text: 'Охота за призами!', sub: 'Над префектурами — 12 наград, которые ещё никто не забрал. Ответь верно первым — и она твоя!', big: true });
+    case 'final': return view({ t: 'banner', text: 'Осталось 3 круга', sub: 'Призы разыграны — финал: свободное перемещение по карте', big: true });
+    case 'wheel': {
+      const left = { common: 6, uncommon: 4, rare: 2 };
+      const segs = [{ id: 'common' as const, w: 18 }, { id: 'uncommon' as const, w: 12 }, { id: 'rare' as const, w: 2 }];
+      return view({ t: 'wheel' }, {
+        wheel: {
+          left, segs, spinner: pid, spin: makeWheelSpin(segs.map((x) => x.w), now + 600), last: null,
+          tokens: Object.fromEntries(pids.map((id, i) => [id, (i * 2) % 5])),
+          history: [{ pid: other, tier: 'common' }, { pid: other, tier: 'uncommon' }, { pid, tier: 'rare' }],
+        },
+      });
+    }
     case 'end': {
       // пример титулов: Император — первому, последнему — «Турист», остальным 1–3 случайных
       const pool = TITLES.filter((t) => t.id !== 'emperor').map((t) => t.id).sort(() => Math.random() - 0.5);
@@ -182,7 +208,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
 export function viewState(s: GameState): GameState {
   const d = s.debug;
   if (!d) return s;
-  return { ...s, stage: d.stage, q: d.q !== undefined ? d.q : s.q, duel: d.duel !== undefined ? d.duel : s.duel, rhythm: d.rhythm !== undefined ? d.rhythm : s.rhythm, paused: false };
+  return { ...s, stage: d.stage, q: d.q !== undefined ? d.q : s.q, duel: d.duel !== undefined ? d.duel : s.duel, rhythm: d.rhythm !== undefined ? d.rhythm : s.rhythm, wheel: d.wheel !== undefined ? d.wheel : s.wheel, paused: false };
 }
 
 export const ALL_PREFS = PREF_CODES;

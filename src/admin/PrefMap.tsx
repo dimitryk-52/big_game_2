@@ -44,6 +44,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
       groupGames: s.groupPrefs,
       machines: machinesOf(s),
       shops: s.shopPrefs,
+      huntRewards: true,
     });
   }, [view, s, sel]);
 

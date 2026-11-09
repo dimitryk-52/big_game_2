@@ -15,6 +15,7 @@ import { DEFAULT_SETTINGS, PLAYER_COLORS } from '../shared/settings';
 import type { Player } from '../shared/types';
 import { Avatar, HpBar, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, useFrame, PixelImg } from './common';
 import { LOGO_TEXT_URL, LOGO_URL } from '../shared/logo';
+import { VsBadge } from './VsBadge';
 
 const topics = DEFAULT_SETTINGS.topics;
 const combat = topics.filter((t) => t.combat);
@@ -168,7 +169,7 @@ function Catalog() {
         <div class="panel ui-col" style={{ width: 380, padding: 14 }}>
           <b>Дуэль! Твой вопрос</b>
           {combat.map((t) => (
-            <button class="btn big-btn" style={{ '--c': t.color } as any}><SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <b>{A.stats[t.id]}</b> <span class="muted">против</span> <b>{B.stats[t.id]}</b></button>
+            <button class="btn big-btn" style={{ '--c': t.color } as any}><SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <span class="vs-stat"><b>{A.stats[t.id]}</b> <VsBadge size={20} /> <b>{B.stats[t.id]}</b></span></button>
           ))}
           <button class="btn big-btn rainbow"><SkillIcon t={SPECIAL_TOPIC as any} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>Спецвопрос</span> <b>сила 5</b> <span class="muted">· осталось 1</span></button>
         </div>

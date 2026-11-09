@@ -6,6 +6,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { useFrame } from './common';
 import { sfx } from '../shared/sound';
+import { REEL_MS, makeReelSpin, type ReelSpin } from '../shared/spin';
 
 export interface ReelSeg {
   id: string;
@@ -20,27 +21,11 @@ export interface ReelSeg {
   rainbow?: boolean;
 }
 
-export interface ReelSpin {
-  /** время хоста начала вращения, мс */
-  startAt: number;
-  dur: number;
-  /** индекс выпавшей ячейки */
-  result: number;
-  /** полных оборотов ленты до остановки */
-  turns: number;
-  /** положение ленты до вращения (конец прошлого вращения), в ячейках */
-  from: number;
-}
+export type { ReelSpin } from '../shared/spin';
 
 /** хост: выбрать ячейку по весам и собрать вращение (rnd — Math.random или свой генератор) */
-export function makeSpin(segs: ReelSeg[], startAt: number, from = 0, rnd: () => number = Math.random, dur = 4600): ReelSpin {
-  const total = segs.reduce((a, s) => a + (s.weight ?? 1), 0) || 1;
-  const x = rnd() * total;
-  let result = segs.length - 1;
-  for (let i = 0, acc = 0; i < segs.length; i++) { acc += segs[i].weight ?? 1; if (x < acc) { result = i; break; } }
-  // мимо окошка должно пролететь ~30 ячеек, сколько бы их ни было на ленте
-  const turns = Math.max(1, Math.ceil(28 / Math.max(1, segs.length))) + Math.floor(rnd() * 2);
-  return { startAt, dur, result, turns, from };
+export function makeSpin(segs: ReelSeg[], startAt: number, from = 0, rnd: () => number = Math.random, dur = REEL_MS): ReelSpin {
+  return makeReelSpin(segs.map((s) => s.weight ?? 1), startAt, from, rnd, dur);
 }
 
 const mod = (a: number, n: number) => ((a % n) + n) % n;

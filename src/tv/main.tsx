@@ -40,6 +40,7 @@ function Boot() {
   const start = async (resume: boolean) => {
     unlockAudio();
     const h = new Host(room);
+    if (import.meta.env.DEV) (window as any).__host = h; // отладка из консоли (только npm run dev)
     try {
       await h.start({ resume });
       setHost(h);

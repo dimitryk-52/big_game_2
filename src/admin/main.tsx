@@ -19,6 +19,7 @@ import { GroupEditor } from './GroupEditor';
 import { PrefMap } from './PrefMap';
 import { IntrosTab, SoundsTab } from './Sounds';
 import { fmtYen, uid } from '../shared/util';
+import { DEFAULT_TOKENS, EPOCHS, PRIZE_TIERS, TIER_INFO, epochOf, epochRatesFor, fmtMul, tokensFor } from '../shared/economy';
 
 type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'sounds' | 'intros' | 'settings' | 'remote';
 
@@ -293,6 +294,7 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
         })}
         {settings.hostPaced === false && <div class="muted small">Ведущий не управляет вопросами (галочка в «Настройках» снята) — всё и так идёт само.</div>}
       </div>
+      <RemoteTuning s={s} settings={settings} ctl={ctl} onSave={onSave} />
       {s && (
         <table class="qtable">
           <thead><tr><th>Игрок</th><th>Где</th><th>HP</th><th>¥</th><th>★</th><th>Связь</th><th>Выдать (¥ / ★ / HP / приз)</th><th></th></tr></thead>
@@ -325,6 +327,93 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+/** пульт: ручки темпа и экономики, которые ведущий крутит по ходу игры (сразу в игру и в сохранённые настройки) */
+function RemoteTuning({ s, settings, ctl, onSave }: { s: GameState | null; settings: Settings; ctl: (cmd: string, args?: any) => void; onSave: (s: Settings) => Promise<void> }) {
+  const live = s?.settings ?? settings;
+  const [tok, setTok] = useState(() => structuredClone(live.tokens ?? DEFAULT_TOKENS));
+  const [rates, setRates] = useState(() => [0, 1, 2].map((e) => epochRatesFor(live, e)));
+  const apply = (patch: Partial<Settings>) => {
+    ctl('auto', patch);
+    void onSave({ ...settings, ...patch });
+  };
+  const cur = s ? epochOf(s) : -1;
+  const finalRounds = live.finalRounds ?? 3;
+  const eg = s?.endgame;
+  const MULS = [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+  const prizes = PRIZE_TIERS.reduce((a, k) => a + (tok.prizes[k] || 0), 0);
+  const tokensNow = s ? s.joinOrder.map((id) => s.players[id]).filter(Boolean).map((p) => ({ p, n: tokensFor(p, { ...live, tokens: tok }) + (p.tokens ?? 0) })) : [];
+  return (
+    <div class="col remote-tuning">
+      <h3>Финал</h3>
+      <div class="muted small">
+        {!eg ? 'Когда откроется вся карта, игра доиграет круг и начнётся охота за призами (значки наград появятся над префектурами). Все призы разыграны → доигрываем круг → финальные круги.'
+          : eg.step === 'open' ? 'Вся карта открыта — доигрываем круг, потом охота за призами.'
+          : eg.step === 'hunt' ? 'Идёт охота за призами.'
+          : eg.step === 'huntDone' ? 'Призы разыграны — доигрываем круг, потом финальные круги.'
+          : `Финальные круги: сыграно ${eg.played ?? 0} из ${finalRounds}.`}
+      </div>
+      <div class="row wrap">
+        <span>Кругов свободного перемещения в финале:</span>
+        {[1, 2, 3, 4].map((n) => <button class={'btn small' + (finalRounds === n ? ' yellow' : '')} onClick={() => apply({ finalRounds: n })}>+{n}</button>)}
+      </div>
+
+      <h3>Эпохи: множители</h3>
+      <div class="muted small">Эпоха берёт множители в момент наступления — менять можно заранее, пока она не началась. Цены растут быстрее наград; звёзды не дорожают.</div>
+      <table class="qtable" style={{ maxWidth: 520 }}>
+        <thead><tr><th>Эпоха</th><th>Цены</th><th>Награды</th><th></th></tr></thead>
+        <tbody>
+          {EPOCHS.map((E, i) => {
+            const locked = cur >= i;
+            const sel = (k: 'price' | 'reward') => (
+              <select disabled={locked} value={String(rates[i][k])} onChange={(e) => { const r = rates.map((x) => ({ ...x })); r[i][k] = Number((e.target as HTMLSelectElement).value); setRates(r); apply({ epochRates: r }); }}>
+                {[...new Set([...MULS, rates[i][k]])].sort((a, b) => a - b).map((m) => <option value={String(m)}>{fmtMul(m)}</option>)}
+              </select>
+            );
+            return (
+              <tr>
+                <td>{E.ja} {E.name} <span class="muted small">с {Math.round(E.from * 100)}% карты</span></td>
+                <td>{sel('price')}</td>
+                <td>{sel('reward')}</td>
+                <td class="muted small">{cur === i ? `идёт: ${fmtMul(s!.rates?.price ?? rates[i].price)} / ${fmtMul(s!.rates?.reward ?? rates[i].reward)}` : locked ? 'прошла' : ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <h3>Жетоны финальной призовой игры</h3>
+      <div class="row wrap">
+        <label class="row">1 жетон = <input class="inp-s num" type="number" min={1} value={tok.starsPer} onInput={(e) => setTok({ ...tok, starsPer: Math.max(1, Number((e.target as HTMLInputElement).value) || 1) })} /> ★</label>
+        <label class="row">или <input class="inp-s num" style={{ width: 90 }} type="number" min={1} step={500} value={tok.yenPer} onInput={(e) => setTok({ ...tok, yenPer: Math.max(1, Number((e.target as HTMLInputElement).value) || 1) })} /> ¥</label>
+        <span class="muted small">(звёзды и деньги складываются, дробные части тоже)</span>
+      </div>
+      <div class="row wrap">
+        <span>Призов на колесе:</span>
+        {PRIZE_TIERS.map((k) => (
+          <label class="row"><span class="tier-dot" style={{ background: TIER_INFO[k].color }} /> {TIER_INFO[k].name} <input class="inp-s num" type="number" min={0} value={tok.prizes[k]} onInput={(e) => setTok({ ...tok, prizes: { ...tok.prizes, [k]: Math.max(0, Math.floor(Number((e.target as HTMLInputElement).value) || 0)) } })} /></label>
+        ))}
+        <span class="muted small">всего {prizes}; сектор = призов этой редкости (обычные и необычные ×3), выпавший приз убирается с колеса</span>
+      </div>
+      <div class="row wrap">
+        <button class="btn small primary" onClick={() => apply({ tokens: tok })}>Применить курс и призы</button>
+        {s && <span class="muted small">По этому курсу сейчас: {tokensNow.map(({ p, n }) => `${p.name} ${n}`).join(' · ')} — всего {tokensNow.reduce((a, x) => a + x.n, 0)} жетонов на {prizes} призов</span>}
+      </div>
+      <label class="set-row"><span>Дать жетон аутсайдеру — в последнем круге тому, у кого меньше всего звёзд и денег в пересчёте на жетоны (ничья — всем)</span><input type="checkbox" checked={live.outsiderToken !== false} onChange={(e) => apply({ outsiderToken: (e.target as HTMLInputElement).checked })} /></label>
+      <label class="set-row"><span>…двум последним (игра непредсказуема)</span><input type="checkbox" disabled={live.outsiderToken === false} checked={!!live.outsiderTwo} onChange={(e) => apply({ outsiderTwo: (e.target as HTMLInputElement).checked })} /></label>
+      <div class="row wrap">
+        {s?.phase === 'end' && !s.wheel && <button class="btn primary" onClick={() => { apply({ tokens: tok }); setTimeout(() => ctl('wheelStart'), 300); }}>🎡 Колесо призов: обменять звёзды и деньги на жетоны</button>}
+        {s?.phase === 'end' && s.wheel && s.stage.t !== 'wheel' && <button class="btn primary" onClick={() => ctl('wheelStart')}>🎡 Вернуться к колесу призов</button>}
+        {s?.phase === 'end' && s.wheel && s.stage.t === 'wheel' && <button class="btn" onClick={() => ctl('wheelEnd')}>Показать титулы</button>}
+        {s?.phase === 'end' && s.wheel && <button class="btn" onClick={() => { if (confirm('Начать колесо заново? Жетоны и призы пересчитаются по текущим настройкам, история выигрышей сотрётся.')) { apply({ tokens: tok }); setTimeout(() => ctl('wheelStart', { reset: true }), 300); } }}>Колесо заново</button>}
+        {s?.phase !== 'end' && <span class="muted small">Колесо призов запускается после конца игры.</span>}
+      </div>
+      {s?.wheel && (
+        <div class="muted small">Колесо: осталось {PRIZE_TIERS.map((k) => `${TIER_INFO[k].name.toLowerCase()} ${s.wheel!.left[k]}`).join(', ')} · жетонов у игроков {Object.values(s.wheel.tokens).reduce((a, b) => a + b, 0)}</div>
       )}
     </div>
   );

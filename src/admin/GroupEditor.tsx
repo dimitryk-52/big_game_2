@@ -8,6 +8,7 @@ import { NOODLES } from '../games/noodles';
 import { IAI_SCENES } from '../games/iaidoScenes';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
+import { EPOCHS, epochRatesFor, fmtMul, rewardYen } from '../shared/economy';
 
 export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: (s: Settings) => Promise<void> }) {
   const [s, setS] = useState<Settings>(structuredClone(settings));
@@ -115,6 +116,34 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
           num(`${i + 1} место, ★`, () => s.group.prizes[i]?.stars ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).stars = v; }),
         ])}
       </div>
+      <PrizeTable s={s} />
+    </div>
+  );
+}
+
+/** разброс наград групповой игры: сколько получает каждое место при N игроках и по эпохам */
+function PrizeTable({ s }: { s: Settings }) {
+  const [n, setN] = useState(7);
+  const rows = Array.from({ length: n }, (_, i) => s.group.prizes[i] ?? { yen: 0, stars: 0 });
+  const rates = EPOCHS.map((_, e) => epochRatesFor(s, e));
+  const total = (e: number) => rows.reduce((a, r) => a + rewardYen(r.yen, rates[e]), 0);
+  return (
+    <div class="col" style={{ marginTop: 16 }}>
+      <h3>Разброс наград</h3>
+      <div class="row wrap">
+        <span>Игроков:</span>
+        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => <button class={'btn small' + (k === n ? ' yellow' : '')} onClick={() => setN(k)}>{k}</button>)}
+      </div>
+      <table class="qtable" style={{ maxWidth: 640 }}>
+        <thead><tr><th>Место</th>{EPOCHS.map((E, e) => <th>{E.name} ({fmtMul(rates[e].reward)})</th>)}<th>★</th></tr></thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr><td>{i + 1}</td>{EPOCHS.map((_, e) => <td>{r.yen ? '¥' + rewardYen(r.yen, rates[e]) : '—'}</td>)}<td>{r.stars || '—'}</td></tr>
+          ))}
+          <tr><td><b>Всего за игру</b></td>{EPOCHS.map((_, e) => <td><b>¥{total(e)}</b></td>)}<td><b>{rows.reduce((a, r) => a + r.stars, 0)}</b></td></tr>
+        </tbody>
+      </table>
+      <div class="muted small">Ничья — общее место и приз (места идут 1, 1, 2…), поэтому денег может выйти чуть больше. Мест больше 7 нет: восьмой и дальше — без награды.</div>
     </div>
   );
 }

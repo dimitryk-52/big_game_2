@@ -1,7 +1,8 @@
+import { DEFAULT_TOKENS, EPOCHS } from './economy';
 import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
-export const ECON_VERSION = 2;
+export const ECON_VERSION = 3;
 /** версия раскладки игр по префектурам (см. mergeSettings) */
 export const LAYOUT_V = 2;
 
@@ -21,6 +22,9 @@ export const SHINKANSEN_LINES: number[][] = [
 /** станции по умолчанию: Хакодате (Хоккайдо), Аомори, Сэндай (Мияги), Токио, Ниигата, Канадзава (Исикава),
  *  Нагоя (Айти), Осака, Хиросима, Хаката (Фукуока), Кагосима — концы линий и большие узлы, 11 из 47 */
 export const SHINKANSEN_STATIONS = [1, 2, 4, 13, 15, 17, 23, 27, 34, 40, 46];
+
+/** награды групповых игр по местам (v3: звезда только за 1 место) */
+export const GROUP_PRIZES = [{ yen: 1200, stars: 1 }, { yen: 800, stars: 0 }, { yen: 600, stars: 0 }, { yen: 400, stars: 0 }, { yen: 300, stars: 0 }, { yen: 200, stars: 0 }, { yen: 100, stars: 0 }];
 
 export const DEFAULT_SETTINGS: Settings = {
   topics: [
@@ -111,8 +115,8 @@ export const DEFAULT_SETTINGS: Settings = {
     iaidoRounds: 3,
     voteTime: 20,
     showMs: 4000,
-    // звёзды — только тройке лидеров, йены — всем местам до 7-го
-    prizes: [{ yen: 1000, stars: 3 }, { yen: 700, stars: 2 }, { yen: 500, stars: 1 }, { yen: 350, stars: 0 }, { yen: 250, stars: 0 }, { yen: 150, stars: 0 }, { yen: 100, stars: 0 }],
+    // звезда — только победителю (звёзд в игре мало: их меняют на жетоны финала), йены — всем местам до 7-го
+    prizes: [...GROUP_PRIZES],
     dragon: { bpm: 90, accel: 8, maxBpm: 220, warm: 8, steps: 160, tapLag: 30, rounds: 3 },
     layoutV: LAYOUT_V,
   },
@@ -128,6 +132,11 @@ export const DEFAULT_SETTINGS: Settings = {
   prefRewards: {},
   prizeNames: ['Приз от ведущего'],
   econ: ECON_VERSION,
+  epochRates: EPOCHS.map((e) => ({ price: e.price, reward: e.reward })),
+  finalRounds: 3,
+  tokens: structuredClone(DEFAULT_TOKENS),
+  outsiderToken: true,
+  outsiderTwo: false,
 };
 
 /**
@@ -195,6 +204,10 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   }
   // v2: кража в дуэли 15% → 20% (если ведущий не менял)
   if (econ < 2 && out.reward.duelStealPct === 15) out.reward.duelStealPct = d.reward.duelStealPct;
+  // v3: звёзды в групповых играх — только победителю
+  if (econ < 3) out.group = { ...out.group, prizes: structuredClone(GROUP_PRIZES) };
+  out.tokens = { ...d.tokens!, ...(saved.tokens ?? {}), prizes: { ...d.tokens!.prizes, ...(saved.tokens?.prizes ?? {}) } };
+  out.epochRates = d.epochRates!.map((x, i) => ({ ...x, ...(saved.epochRates?.[i] ?? {}) }));
   out.econ = ECON_VERSION;
   // в старых настройках награды только за 3 места — остальные места берём стандартные
   out.group.prizes = d.group.prizes.map((x, i) => out.group.prizes[i] ?? x);

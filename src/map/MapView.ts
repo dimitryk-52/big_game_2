@@ -34,6 +34,8 @@ export interface MapUpdate {
   /** старая карта: префектуры под туманом, что в них лежит, видит только нашедший (его телефон) */
   scouted?: number[];
   showRewards?: boolean;
+  /** охота за призами: награды префектур видны всем (до неё — только на старой карте у нашедшего) */
+  huntRewards?: boolean;
   /** путь стрелки хода (коды префектур от текущей до цели) */
   arrow?: number[] | null;
 }
@@ -341,7 +343,7 @@ export class MapView {
     // магазин под туманом не виден
     for (const c of u.shops ?? []) if (shown(c)) add(c, { id: 'shop', kind: 'machine' });
     for (const c of PREF_CODES) {
-      if (u.showRewards !== false && shown(c) && !u.prefs[c].taken) add(c, { id: u.prefs[c].reward, kind: 'reward' });
+      if (u.showRewards !== false && shown(c) && !u.prefs[c].taken && (u.huntRewards || u.scouted?.includes(c))) add(c, { id: u.prefs[c].reward, kind: 'reward' });
     }
     for (const [c, g] of Object.entries(u.groupGames ?? {})) add(Number(c), { id: 'group_' + g, kind: 'group' });
     const sig = (parts: BadgePart[]) => parts.map((p) => p.id + ':' + p.kind).join(',');

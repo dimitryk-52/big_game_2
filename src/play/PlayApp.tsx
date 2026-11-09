@@ -23,7 +23,9 @@ import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
 import { BetPad, FindCard, ItemHelp, scoutNote } from './EconPad';
-import { BONUS_DESC, EPOCHS, epochOf } from '../shared/economy';
+import { BONUS_DESC, EPOCHS, epochOf, fmtMul, ratesOf } from '../shared/economy';
+import { BonusReelSheet, TopicReelPad, WheelPad } from './ReelPad';
+import { VsBadge } from '../ui/VsBadge';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -171,7 +173,7 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
 
-type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | null;
+type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -179,6 +181,8 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'find' && st.pid === me.id) return 'find';
   if (st.t === 'reward' && st.pid === me.id && (st.bonus || st.pickTopic || st.reward === 'special')) return 'reward';
   if (st.t === 'question' && s.q?.participants.includes(me.id)) return 'question';
+  if (st.t === 'reel' && (st.pid === me.id || (st.why === 'duel' && s.duel && (s.duel.attacker === me.id || s.duel.defender === me.id)))) return 'reel';
+  if (st.t === 'wheel' && s.wheel && me.id in s.wheel.tokens) return 'wheel';
   if (st.t === 'bonus' && st.pids.includes(me.id) && !(me.id in st.picked)) return 'bonus';
   if (st.t === 'landing' && st.pid === me.id) return 'landing';
   if (st.t === 'move' && st.pid === me.id) return 'move';
@@ -279,6 +283,10 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
         {(att === 'landing' || att === 'move') && <MapPick key={att} client={client} s={s} me={me} mode={att} />}
         {att === 'duelPick' && <DuelPick client={client} s={s} me={me} />}
+        {att === 'reel' && <TopicReelPad client={client} s={s} me={me} />}
+        {att === 'wheel' && <WheelPad client={client} s={s} me={me} />}
+        {/* барабан бонуса: крутится у игрока, пока игра идёт дальше; вопросы и прочее — поверх него не нужны */}
+        {!att && me.reel && <BonusReelSheet client={client} me={me} />}
         {att === 'shop' && <Shop client={client} s={s} me={me} />}
         {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
         {att === 'duelBet' && <BetPad client={client} s={s} me={me} />}
@@ -390,7 +398,9 @@ function stageText(s: GameState, me: Player): string {
     case 'end': return 'Игра окончена!';
     case 'duelBet': return 'Зрители делают ставки на дуэль';
     case 'find': return st.kind === 'kitsune' ? `Кицунэ принесла ${n(st.pid)} деньги лидера!` : `${n(st.pid)} что-то нашёл под ногами`;
-    case 'epoch': return `Наступила эпоха ${EPOCHS[st.epoch].name}: цены ×${EPOCHS[st.epoch].price}, награды ×${EPOCHS[st.epoch].reward}`;
+    case 'epoch': return `Наступила эпоха ${EPOCHS[st.epoch].name}: цены ${fmtMul(ratesOf(s).price)}, награды ${fmtMul(ratesOf(s).reward)}`;
+    case 'reel': return st.why === 'duel' ? 'Тему дуэли выбирает барабан' : `Тему вопроса для ${n(st.pid)} выбирает барабан`;
+    case 'wheel': return 'Колесо призов — смотри на ТВ!';
   }
   return '';
 }
@@ -409,7 +419,8 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {BONUS_IDS.some((b) => (me.bonuses[b] ?? 0) > 0) || me.specials > 0 || balls > 0 ? <Inventory p={me} size={36} balls={balls} /> : <div class="muted small-text">Пока пусто</div>}
         {balls > 0 && <div class="muted small-text">Шарики пачинко ({balls}) — сыграй ими или обменяй на ¥ у любого автомата пачинко.</div>}
         <ItemHelp me={me} />
-        <div class="muted small-text">Эпоха: {EPOCHS[epochOf(s)].ja} {EPOCHS[epochOf(s)].name} — цены ×{EPOCHS[epochOf(s)].price}, награды ×{EPOCHS[epochOf(s)].reward}</div>
+        <div class="muted small-text">Эпоха: {EPOCHS[epochOf(s)].ja} {EPOCHS[epochOf(s)].name} — цены {fmtMul(ratesOf(s).price)}, награды {fmtMul(ratesOf(s).reward)}</div>
+        {s.endgame?.step === 'final' && <div class="muted small-text">Финал: осталось кругов — {Math.max(1, (s.settings.finalRounds ?? 3) - (s.endgame.played ?? 0))}</div>}
       </div>
       <div class="panel col small-text">
         <div>Твой PIN для входа с другого устройства: <b class="pin">{client.pin ?? '—'}</b></div>
@@ -608,7 +619,7 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
         const t = s.settings.topics.find((x) => x.id === id)!;
         return (
           <button class="btn big-btn" style={{ '--c': t.color } as any} disabled={sent} onClick={() => send(id)}>
-            <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <b>{me.stats[id]}</b> <span class="muted">против</span> <b>{foe?.stats[id]}</b>
+            <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <span class="vs-stat"><b>{me.stats[id]}</b> <VsBadge size={20} /> <b>{foe?.stats[id]}</b></span>
           </button>
         );
       })}
@@ -675,6 +686,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       machines: mode === 'move' ? machinesOf(s.settings) : undefined,
       shops: mode === 'move' ? s.settings.shopPrefs : undefined,
       showRewards: mode === 'move',
+      huntRewards: !!s.endgame && s.endgame.step !== 'open',
       // старая карта: что под туманом — только на телефоне нашедшего
       ...(mode === 'move' && me.scouted?.length ? {
         scouted: me.scouted,
@@ -770,7 +782,8 @@ function FreeMap({ s, me }: { s: GameState; me: Player }) {
     players: s.joinOrder.map((id) => s.players[id]).filter(Boolean),
     activePid: me.id,
     machines: machinesOf(s.settings),
-      shops: s.settings.shopPrefs,
+    shops: s.settings.shopPrefs,
+    huntRewards: !!s.endgame && s.endgame.step !== 'open',
   });
   useEffect(upd, [s.v]);
   return <div class="freemap" ref={el} />;
