@@ -9,6 +9,8 @@ import { GROUP_GAMES } from '../shared/settings';
 import { FacePad, SenryuPad, SashimiPad, MyWork } from './GroupPads';
 import { IaidoPad } from './IaidoPad';
 import { NoodlePad } from './NoodlePad';
+import { CherryPad } from './CherryPad';
+import { meters } from '../games/cherry';
 import { noodleOf, plural } from '../games/noodles';
 
 export const CANVAS_W = 600;
@@ -41,6 +43,7 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
       {drawing && g.game === 'iaido' && <IaidoPad client={client} g={g} me={me} />}
       {drawing && g.game === 'sashimi' && <SashimiPad key={g.id} client={client} g={g} me={me} />}
       {drawing && g.game === 'noodles' && <NoodlePad key={g.id} client={client} g={g} me={me} />}
+      {drawing && g.game === 'cherry' && <CherryPad key={g.id} client={client} g={g} me={me} />}
       {g.phase === 'show' && g.showIdx >= 0 && g.game === 'sashimi' && (
         <div class="pad col center-screen">
           <h2>Взвешиваем на ТВ</h2>
@@ -308,7 +311,9 @@ function Results({ g, me }: { g: GroupPublic; me: Player }) {
   return (
     <div class="pad col center-screen">
       <h2>{place ? `${place} место!` : 'Итоги на ТВ'}</h2>
-      {g.game === 'noodles'
+      {g.game === 'cherry'
+        ? <div class="muted">{g.points?.[me.id] != null ? <>Лучший плевок: <b>{meters(g.points[me.id])}</b></> : 'Ты не плюнул ни разу'}</div>
+        : g.game === 'noodles'
         ? <div class="muted">{(() => {
             const d = noodleOf(g.noodle), n = g.bowls?.[me.id] ?? 0;
             return g.burst?.includes(me.id) ? <>Лопнул на {n + 1}-й: в зачёт половина — <b>{g.points?.[me.id] ?? 0}</b></> : <>Съедено: <b>{n} {plural(n, d.unit)}</b> · предел был {g.limits?.[me.id]}</>;
@@ -317,7 +322,7 @@ function Results({ g, me }: { g: GroupPublic; me: Player }) {
         ? <div class="muted">{g.grams?.[me.id] != null ? <>Твой кусок: <b>{g.grams[me.id]} г</b> из {g.target} г (промах {g.points?.[me.id]} г)</> : 'Ты не успел отрезать'}</div>
         : <div class="muted">Твои очки: <b>{g.points?.[me.id] ?? 0}</b></div>}
       {g.awards?.[me.id] && <div class="q-result pop"><ResText text={g.awards[me.id]} size={28} /></div>}
-      {g.game !== 'sashimi' && g.game !== 'noodles' && <MyNumber g={g} me={me} />}
+      {g.game !== 'sashimi' && g.game !== 'noodles' && g.game !== 'cherry' && <MyNumber g={g} me={me} />}
     </div>
   );
 }

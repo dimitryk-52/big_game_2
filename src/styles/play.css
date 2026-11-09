@@ -325,3 +325,26 @@
 .noodle-belly-fill { position: absolute; top: 0; bottom: 0; left: 0; background: rgba(236, 198, 90, 0.85); transition: width 0.2s; }
 .noodle-belly-mark { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--pink); }
 .noodle-belly-label { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; text-shadow: 1px 1px 0 #000; }
+
+/* ───── Косточки ───── */
+.cherry-pad { gap: 10px; flex: 1; overflow-y: auto; align-items: center; }
+.cherry-pad > .timer { width: 100%; align-self: stretch; }
+.cherry-task { text-align: center; font-size: 17px; }
+.cherry-tries { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.cherry-try { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border: 2px solid #555; background: #11142b; font-size: 15px; }
+.cherry-try.cur { border-color: var(--yellow); }
+.cherry-try img { width: 14px; image-rendering: pixelated; }
+.cherry-wind { display: flex; align-items: center; gap: 10px; font-size: 16px; min-height: 30px; }
+.cherry-wind img { image-rendering: pixelated; height: auto; }
+.cherry-aim { position: relative; display: flex; align-items: flex-end; gap: 14px; background: #11142b; border: 3px solid #fff; padding: 12px; touch-action: manipulation; user-select: none; -webkit-user-select: none; width: min(88vw, 380px); }
+.cherry-aim.live:active { border-color: var(--yellow); }
+.cherry-gauge { flex: 1; width: 100%; }
+.cherry-gauge-bg { fill: #1f6e3a; stroke: #fff; stroke-width: 1.5; }
+.cherry-gauge-tick { stroke: #fff; stroke-width: 1.5; opacity: 0.6; }
+.cherry-needle { stroke: var(--yellow); stroke-width: 3; stroke-linecap: round; }
+.cherry-needle.locked { stroke: #fff; }
+.cherry-power { position: relative; width: 34px; height: 170px; border: 3px solid #fff; background: #0b0d1f; overflow: hidden; }
+.cherry-power-red { position: absolute; top: 0; left: 0; right: 0; background: repeating-linear-gradient(45deg, #7a1f24 0 6px, #a63a4c 6px 12px); }
+.cherry-power-fill { position: absolute; bottom: 0; left: 0; right: 0; background: var(--yellow); }
+.cherry-angle { position: absolute; left: 14px; top: 8px; font-size: 22px; }
+.cherry-hint { font-size: 20px; color: var(--yellow); }

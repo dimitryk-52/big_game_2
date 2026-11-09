@@ -8,6 +8,7 @@ import type {
 import { BONUS_INFO, COIN_DMG, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { NOODLES, noodleOf, noodleScore, parseNoodle } from '../games/noodles';
+import { ANGLE_MAX, ANGLE_MIN, PIT_TRIES, parsePits, pitDistance, randomWind } from '../games/cherry';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -162,6 +163,7 @@ export class GameEngine {
       case 'ctl': return this.onCtl(m.cmd, m.args);
     }
     if (m.t === 'pick' && m.kind === 'noodle') return this.onNoodle(m.pid, m.value);
+    if (m.t === 'pick' && m.kind === 'cherry') return this.onPit(m.pid, m.value);
     this.feed(m);
   }
 
@@ -1224,8 +1226,9 @@ export class GameEngine {
         const limits = Object.fromEntries(players.map((id) => [id, d.min + randInt(d.max - d.min + 1)]));
         return { noodle, limits, bowls: Object.fromEntries(players.map((id) => [id, 0])), closed: [], burst: [] };
       })() : {}),
+      ...(game === 'cherry' ? { winds: Array.from({ length: PIT_TRIES }, randomWind), pits: Object.fromEntries(players.map((id) => [id, Array(PIT_TRIES).fill(null)])), throws: [] } : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
-      voteRounds: game === 'iaido' || game === 'noodles' ? 0 : Math.min(3, players.length - 1), voted: [],
+      voteRounds: game === 'iaido' || game === 'noodles' || game === 'cherry' ? 0 : Math.min(3, players.length - 1), voted: [],
     };
     this.groupImgs = {};
     this.drawParts = {};
@@ -1251,6 +1254,12 @@ export class GameEngine {
     g.deadline = g.startAt + groupTime(st, game) * 1000;
     this.emit();
     this.botDraw(g);
+    // косточки: боты плюются по ходу игры, чтобы на ТВ было на что смотреть
+    if (game === 'cherry') for (const id of g.players) if (this.s.players[id]?.bot) for (let i = 0; i < PIT_TRIES; i++) {
+      setT(() => {
+        if (this.s.g === g) this.onPit(id, { id: g.id, i, a: 25 + randInt(35), p: 0.55 + Math.random() * 0.42 });
+      }, g.startAt - this.now + 5000 + i * 9000 + randInt(4000));
+    }
     await new Promise<void>((resolve) => {
       const done = () => { clearT(t); this.skipCbs.delete(done); this.groupDone = null; resolve(); };
       // после конца времени ждём, пока рисунки долетят
@@ -1275,6 +1284,7 @@ export class GameEngine {
     for (const id of g.players) if (!(id in this.groupImgs)) this.groupImgs[id] = null;
 
     if (game === 'noodles') return this.noodleResults(epoch, g);
+    if (game === 'cherry') return this.pitResults(epoch, g);
     if (GROUP_GAMES[game].scored) return this.sashimiResults(epoch, g);
 
     // ── показ работ по одной ──
@@ -1494,6 +1504,37 @@ export class GameEngine {
     if (!this.noodleEmitT) this.noodleEmitT = setT(() => { this.noodleEmitT = null; this.emit(); }, 400);
   }
 
+  /** косточки: бросок (угол, сила) → дальность по ветру этой попытки; каждая попытка — один раз */
+  private throwPit(g: GroupPublic, pid: string, i: number, a: number, p: number): boolean {
+    const row = g.pits?.[pid];
+    if (!row || !(i >= 0 && i < PIT_TRIES) || row[i] != null || !Number.isFinite(a) || !Number.isFinite(p)) return false;
+    if (a < ANGLE_MIN - 1 || a > ANGLE_MAX + 1 || p < 0 || p > 1) return false;
+    const d = pitDistance(a, p, g.winds?.[i] ?? 0);
+    row[i] = d;
+    (g.throws ??= []).push({ pid, i, d });
+    return true;
+  }
+
+  private onPit(pid: string, v: any) {
+    const g = this.s.g;
+    if (!g || g.game !== 'cherry' || g.phase !== 'draw' || g.id !== v?.id || !g.players.includes(pid)) return;
+    if (!this.throwPit(g, pid, Number(v.i), Number(v.a), Number(v.p))) return;
+    this.io.fx?.('pit', { pid });
+    this.emit();
+  }
+
+  /** косточки: досчитываем броски из итогов телефонов (если живые сообщения потерялись), места — по лучшей дальности */
+  private async pitResults(epoch: number, g: GroupPublic) {
+    for (const id of g.players) parsePits(this.groupImgs[id])?.forEach((x, i) => { if (x) this.throwPit(g, id, i, x.a, x.p); });
+    const best: Record<string, number> = {};
+    for (const id of g.players) {
+      const ds = (g.pits?.[id] ?? []).filter((d): d is number => d != null);
+      if (ds.length) best[id] = Math.max(...ds);
+    }
+    this.emit();
+    await this.groupResults(epoch, g, best, (id) => Math.round(best[id] * 100), (id) => id in best);
+  }
+
   private onDraw(m: Extract<InputMsg, { t: 'draw' }>) {
     const g = this.s.g;
     if (!g || g.id !== m.id || !g.players.includes(m.pid) || g.submitted.includes(m.pid)) return;
@@ -1505,7 +1546,7 @@ export class GameEngine {
     if (parts.some((x) => !x)) return;
     const url = parts.join('');
     delete this.drawParts[m.pid];
-    this.groupImgs[m.pid] = url.startsWith('data:image/') || ((url.startsWith('text:') || url.startsWith('cut:') || url.startsWith('nood:')) && url.length < 300) ? url : null;
+    this.groupImgs[m.pid] = url.startsWith('data:image/') || ((url.startsWith('text:') || url.startsWith('cut:') || url.startsWith('nood:') || url.startsWith('pit:')) && url.length < 300) ? url : null;
     g.submitted.push(m.pid);
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
@@ -1520,6 +1561,7 @@ export class GameEngine {
         if (this.s.g !== g || g.submitted.includes(id)) return;
         this.groupImgs[id] = g.game === 'senryu' ? 'text:' + pick(lines)
           : g.game === 'sashimi' ? 'cut:' + cutForGrams(g.fish!, g.target! * (0.7 + Math.random() * 0.6)).toFixed(4)
+          : g.game === 'cherry' ? 'pit:' + Array.from({ length: PIT_TRIES }, () => `${25 + randInt(35)},${(0.55 + Math.random() * 0.42).toFixed(3)}`).join(';')
           : g.game === 'noodles' ? (() => { const d = noodleOf(g.noodle); const n = d.min + randInt(d.max - d.min + 4); return `nood:${n}:${n > (g.limits?.[id] ?? 0) ? 'burst' : 'lid'}`; })() : null;
         g.submitted.push(id);
         this.emit();

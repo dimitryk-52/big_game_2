@@ -97,7 +97,7 @@ export interface PrefState {
 export type SoloGameId = 'pachinko' | 'ring' | 'onsen' | 'chohan' | 'sudoku';
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon' | 'noodles';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon' | 'noodles' | 'cherry';
 /** какая лапша в «Лапше» */
 export type NoodleId = 'soba' | 'ramen' | 'udon';
 /** что режем в «Сашими» */
@@ -166,6 +166,10 @@ export interface GroupPublic {
   bowls?: Record<string, number>;
   closed?: string[];
   burst?: string[];
+  /** косточки: ветер каждой попытки (м/с, «+» в спину), дальности игроков по попыткам, броски по порядку (для полёта на ТВ) */
+  winds?: number[];
+  pits?: Record<string, (number | null)[]>;
+  throws?: { pid: string; i: number; d: number }[];
 }
 
 /** раунд иайдо: ready — ждём сигнала, done — итог раунда */
@@ -460,7 +464,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

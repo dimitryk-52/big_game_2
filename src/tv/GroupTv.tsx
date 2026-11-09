@@ -11,6 +11,7 @@ import { FishBoard, Scale } from '../games/FishBoard';
 import { FISH } from '../games/sashimi';
 import { NoodleResults, NoodleTv } from './NoodleTv';
 import { noodleOf } from '../games/noodles';
+import { CherryResults, CherryTv } from './CherryTv';
 
 let paperUrl: string | undefined;
 const paper = () => (paperUrl ??= washiCanvas(450, 600, 7).toDataURL());
@@ -79,7 +80,8 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
       {g.phase === 'intro' && <GroupScroll g={g} />}
       {g.game === 'iaido' && g.phase === 'draw' && <IaidoTv s={s} g={g} sig={iaiSignal ?? null} />}
       {g.game === 'noodles' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && <NoodleTv s={s} g={g} head={head} />}
-      {g.game !== 'iaido' && g.game !== 'noodles' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
+      {g.game === 'cherry' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && <CherryTv s={s} g={g} head={head} />}
+      {g.game !== 'iaido' && g.game !== 'noodles' && g.game !== 'cherry' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
           {g.game === 'sashimi'
@@ -111,7 +113,7 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
       )}
       {g.phase === 'results' && (g.game === 'iaido'
         ? <div class="group-results iai-final"><div class="group-head"><span class="group-game">Итоги · {info.name} <span class="jp">{info.ja}</span></span><span class="group-task">{g.prompt}</span></div><IaidoResults s={s} g={g} /></div>
-        : g.game === 'sashimi' ? <SashimiResults s={s} g={g} /> : g.game === 'noodles' ? <NoodleResults s={s} g={g} /> : <Results s={s} g={g} imgs={imgs} />)}
+        : g.game === 'sashimi' ? <SashimiResults s={s} g={g} /> : g.game === 'noodles' ? <NoodleResults s={s} g={g} /> : g.game === 'cherry' ? <CherryResults s={s} g={g} /> : <Results s={s} g={g} imgs={imgs} />)}
     </div>
   );
 }

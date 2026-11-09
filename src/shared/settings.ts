@@ -3,7 +3,7 @@ import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardT
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
 export const ECON_VERSION = 1;
 /** версия раскладки игр по префектурам (см. mergeSettings) */
-export const LAYOUT_V = 1;
+export const LAYOUT_V = 2;
 
 /**
  * Линии синкансэна по префектурам — в том порядке, как их проходит поезд (по реальным линиям).
@@ -81,7 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
   groupPrefs: {
     26: 'calligraphy', 34: 'calligraphy', 19: 'calligraphy', 45: 'fukuwarai', 10: 'fukuwarai', 33: 'fukuwarai', 29: 'senryu', 24: 'senryu', 28: 'senryu',
     43: 'iaido', 46: 'iaido', 13: 'iaido', 30: 'sashimi', 1: 'sashimi', 41: 'sashimi', 42: 'dragon',
-    3: 'noodles', 2: 'noodles', 37: 'noodles',
+    3: 'noodles', 2: 'noodles', 37: 'noodles', 6: 'cherry',
   },
   groupTasks: [
     { id: 'cal1', game: 'calligraphy', text: 'Нарисуйте свою версию кандзи «человек» 人', pref: 34 },
@@ -102,10 +102,11 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'nood1', game: 'noodles', text: 'Ванко-соба в Мориоке: официантка не остановится', noodle: 'soba', pref: 3 },
     { id: 'nood2', game: 'noodles', text: 'Рамен на нибоси в Аомори: ещё порцию лапши!', noodle: 'ramen', pref: 2 },
     { id: 'nood3', game: 'noodles', text: 'Сануки-удон в Кагаве — префектуре удона', noodle: 'udon', pref: 37 },
+    { id: 'cher1', game: 'cherry', text: 'Чемпионат Хигасинэ по плевкам вишнёвыми косточками', pref: 6 },
   ],
   group: {
     drawTime: 30,
-    times: { fukuwarai: 40, senryu: 60, sashimi: 25, noodles: 40 },
+    times: { fukuwarai: 40, senryu: 60, sashimi: 25, noodles: 40, cherry: 45 },
     iaidoRounds: 3,
     voteTime: 20,
     showMs: 4000,
@@ -141,6 +142,7 @@ export const DEFAULT_SETTINGS: Settings = {
  * сашими: тунец — Вакаяма (Кацуура), краб — Хоккайдо, кальмар — Сага (Ёбуко).
  * Джа-одори — Нагасаки (праздник Кунти).
  * Лапша: ванко-соба — Иватэ (Мориока), рамен на нибоси — Аомори, сануки-удон — Кагава («префектура удона»).
+ * Косточки — Ямагата (вишни сато-нисики, чемпионат по плевкам косточками в Хигасинэ).
  * Соло: пачинко — Айти (родина пачинко), Осака, Сайтама; призовая машина — Канагава, Фукуока, Мияги; онсэн — Нагано (снежные обезьяны);
  * чо-хан — Сидзуока (Симидзу-но Дзиротё), Фукусима, Оита; судоку — Ибараки (Цукуба), Коти, Ниигата.
  * Магазины: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин; 4 внутри страны.
@@ -198,8 +200,9 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
     out.groupPrefs = { ...saved.groupPrefs, 42: 'dragon' };
   }
   // игры, добавленные позже сохранённых настроек: один раз ставим их в свободные префектуры (дальше решает ведущий)
-  if ((saved.group?.layoutV ?? 0) < 1 && saved.groupPrefs && !Object.values(out.groupPrefs).includes('noodles')) {
-    const add = Object.fromEntries(Object.entries(d.groupPrefs).filter(([c, g]) => g === 'noodles' && !out.groupPrefs[+c]));
+  for (const [v, game] of [[1, 'noodles'], [2, 'cherry']] as const) {
+    if ((saved.group?.layoutV ?? 0) >= v || !saved.groupPrefs || Object.values(out.groupPrefs).includes(game)) continue;
+    const add = Object.fromEntries(Object.entries(d.groupPrefs).filter(([c, g]) => g === game && !out.groupPrefs[+c]));
     out.groupPrefs = { ...out.groupPrefs, ...add };
   }
   out.group.layoutV = LAYOUT_V;
@@ -251,6 +254,7 @@ export const GROUP_GAMES: Record<GroupGameId, { name: string; ja: string; kanji:
   iaido: { name: 'Иайдо', ja: '居合道', kanji: '斬', how: 'Жми, когда на ТВ вспыхнет «!». Раньше — выбываешь из раунда', doing: 'Ждём сигнала…', call: 'Руби первым!' },
   sashimi: { name: 'Сашими', ja: '刺身', kanji: '刺', how: 'Отрежь кусок нужного веса. Побеждает самый точный', doing: 'Примеряются ножом…', call: 'Отрежь точно!', scored: true },
   dragon: { name: 'Джа-одори', ja: '蛇踊り', kanji: '龍', how: 'Тапай в такт: ЛЕВАЯ, ПРАВАЯ, ЛЕВАЯ… Сбился — выбыл', doing: 'Шагают…', call: 'Неси дракона!' },
+  cherry: { name: 'Косточки', ja: '種飛ばし', kanji: '種', how: 'Три плевка: поймай угол, потом силу. Ветер у попытки один на всех. Перестараешься — поперхнёшься', doing: 'Плюются косточками…', call: 'Плюнь дальше всех!' },
   noodles: { name: 'Лапша', ja: '麺', kanji: '麺', how: 'Тапай по миске — ешь. Остановись вовремя: переешь — лопнешь, и в зачёт пойдёт половина', doing: 'Едят наперегонки…', call: 'Ешь, пока влезает!' },
 };
 
