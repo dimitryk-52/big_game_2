@@ -55,7 +55,7 @@
 .question.has-bg .q-title, .question.has-bg .q-text, .question.has-bg .q-result, .question.has-bg .center { text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; }
 .question.has-bg .q-title { color: #e6e6f0; }
 .q-title { color: var(--muted); font-size: 17px; }
-.q-text { font-size: 26px; line-height: 1.2; font-weight: 600; }
+.q-text { font-size: 26px; line-height: 1.2; font-weight: 600; text-wrap: pretty; }
 .q-img { max-width: 100%; max-height: 32vh; object-fit: contain; align-self: center; border: 3px solid #fff; background: #000; }
 .q-tv { text-align: center; padding: 10px; border: 2px dashed var(--muted); color: var(--muted); }
 .q-list { display: flex; flex-direction: column; gap: 10px; }
@@ -161,7 +161,7 @@
 .iai-pad.hit .iai-pad-big { color: var(--green); }
 .iai-pad.done .iai-pad-big { color: var(--yellow); }
 /* меч: катана за ножнами; низ цубы — 25% высоты катаны, ножны — остальные 75% */
-.iai-sword { position: relative; z-index: 1; flex: 1; min-height: 0; aspect-ratio: 16 / 160; max-height: 60vh; margin: auto 0 4vh; }
+.iai-sword { position: relative; z-index: 1; flex: 1; min-height: 0; aspect-ratio: 91 / 160; max-height: 60vh; margin: auto 0 4vh; }
 .iai-katana, .iai-saya { position: absolute; left: 0; width: 100%; image-rendering: pixelated; filter: drop-shadow(4px 4px 0 rgba(0, 0, 0, 0.6)); }
 .iai-katana { top: 0; height: 100%; transition: transform 0.09s steps(3); }
 .iai-saya { top: 25%; height: 75%; transition: transform 0.35s ease-in, opacity 0.35s ease-in; }
@@ -262,7 +262,7 @@
 .phone-intro .pref-intro-ru { font-size: 2.8em; overflow-wrap: anywhere; }
 
 /* ───── магазин: полки с ценниками ───── */
-.shop { position: relative; display: flex; flex-direction: column; gap: 10px; padding-bottom: 14px;
+.shop { position: relative; display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px;
   /* стена лавки, пока нет картинки: тёмные доски */
   background: repeating-linear-gradient(90deg, #3b2418 0 46px, #34200f 46px 48px, #452a1b 48px 94px, #2c1a0e 94px 96px); }
 .shop.has-art { background: #2e1a10 no-repeat center top / 100% auto; image-rendering: pixelated; }
@@ -287,12 +287,11 @@
 .shelf-icon { display: grid; place-items: center; height: 60px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.45)); }
 .shelf-icon img { image-rendering: pixelated; }
 /* доска полки: светлая кромка, тень снизу */
-.shelf-plank { position: absolute; left: 0; right: 0; bottom: 30px; z-index: 0; height: 16px; background: #a8703e; border-top: 4px solid #d79c5a; border-bottom: 4px solid #5a3417; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35); }
-.shelf-plank.art { left: 9%; right: 9%; background: none no-repeat top / 100% auto; border: 0; height: auto; aspect-ratio: 1244 / 142; bottom: 22px; box-shadow: none; image-rendering: pixelated; }
-/* ценник: бумажка на гвоздике, висит под полкой */
-.price-tag { position: relative; z-index: 2; order: 3; display: flex; gap: 6px; justify-content: center; align-items: center; min-width: 74%; margin-top: 30px; padding: 2px 6px;
+.shelf-plank { position: absolute; left: 0; right: 0; bottom: 6px; z-index: 0; height: 16px; background: #a8703e; border-top: 4px solid #d79c5a; border-bottom: 4px solid #5a3417; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35); }
+.shelf-plank.art { left: 9%; right: 9%; background: none no-repeat top / 100% auto; border: 0; height: auto; aspect-ratio: 1244 / 142; bottom: -2px; box-shadow: none; image-rendering: pixelated; }
+/* ценник: бумажка, приклеенная к кромке полки прямо под товаром */
+.price-tag { position: relative; z-index: 2; order: 3; display: flex; gap: 6px; justify-content: center; align-items: center; min-width: 64%; margin-top: 0; padding: 1px 6px;
   background: #fff6dc; color: #2a1a00; border: 2px solid #1a0d06; box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4); font-size: 16px; text-shadow: none; }
-.price-tag::before { content: ''; position: absolute; top: -6px; left: 50%; width: 4px; height: 4px; margin-left: -2px; background: #1a0d06; }
 .shelf-item.poor .price-tag { color: #9a2a2a; }
 /* окошко покупки */
 .sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(5, 6, 16, 0.6); display: flex; align-items: flex-end; }
@@ -324,7 +323,7 @@
 .noodle-bites { display: flex; gap: 6px; justify-content: center; min-height: 14px; }
 .noodle-bites i { width: 14px; height: 14px; border: 2px solid #fff; background: transparent; }
 .noodle-bites i.on { background: var(--yellow); }
-.noodle-boom { position: absolute; inset: 0; display: grid; place-items: center; font-size: 38px; color: var(--pink); text-shadow: 3px 3px 0 #000; }
+.noodle-boom { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 38px; color: var(--pink); text-shadow: 3px 3px 0 #000; }
 .noodle-belly { position: relative; width: min(84vw, 360px); height: 26px; border: 3px solid #fff; background: #11142b; overflow: hidden; }
 .noodle-belly-red { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(45deg, #7a1f24 0 6px, #a63a4c 6px 12px); }
 .noodle-belly-fill { position: absolute; top: 0; bottom: 0; left: 0; background: rgba(236, 198, 90, 0.85); transition: width 0.2s; }
@@ -353,3 +352,6 @@
 .cherry-power-fill { position: absolute; bottom: 0; left: 0; right: 0; background: var(--yellow); }
 .cherry-angle { position: absolute; left: 14px; top: 8px; font-size: 22px; }
 .cherry-hint { font-size: 20px; color: var(--yellow); }
+/* соло-игра: следующий ход мой */
+.next-turn-note { position: fixed; left: 50%; top: 86px; transform: translateX(-50%); z-index: 40; background: var(--yellow); color: #1a1a2e; padding: 4px 12px; border: 3px solid #1a0d06; box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5); font-size: 18px; white-space: nowrap; pointer-events: none; animation: nextTurnBlink 1.2s steps(2) infinite; }
+@keyframes nextTurnBlink { 50% { opacity: 0.75; } }

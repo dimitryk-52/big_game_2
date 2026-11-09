@@ -210,14 +210,14 @@ const diamond = (color: string): Grid => DIAMOND.map((r) => r.split('').map((ch)
 const MISSING: Grid = diamond('#ff00ff');
 
 // групповые игры (выноски только в админке): кисть, лицо окамэ, полоска танзаку, катана, нож и кусок рыбы, дракон
-const GROUP_PAL: Record<string, string> = { b: '#b5793a', g: '#c9ccd6', k: '#222233', s: '#ffe2c4', p: '#ff8fb0', r: '#d0304a', t: '#9fd3ff', y: '#e8b84a', w: '#ffffff' };
+const GROUP_PAL: Record<string, string> = { G: '#3f8f3a', L: '#6cc24a', R: '#8f1d2c', b: '#b5793a', g: '#c9ccd6', k: '#222233', s: '#ffe2c4', p: '#ff8fb0', r: '#d0304a', t: '#9fd3ff', y: '#e8b84a', w: '#ffffff' };
 const GROUP_ART: Record<string, string[]> = {
   group_calligraphy: ['........bb', '.......bbb', '......bbb.', '.....bbb..', '....ggg...', '...ggg....', '..kkk.....', '.kkk......', 'kkk.......', 'kk........'],
   group_fukuwarai: ['..ssssss..', '.ssssssss.', 'ssssssssss', 'skksssskks', 'ssssssssss', 'spssssssps', 'sssrrrrsss', '.ssssssss.', '..ssssss..'],
   group_senryu: ['.kk.', 'tttt', 'tktt', 'tktt', 'tttt', 'tktt', 'tktt', 'tktt', 'tttt'],
   group_iaido: ['.........w', '........wg', '.......wg.', '......wg..', '.....wg...', '...ywg....', '...yy.....', '..rk.y....', '.rk.......', 'kr........'],
   group_sashimi: ['..........', '.ggggggggk', '.gggggggkk', '..gggggk..', '..........', '..pppppp..', '.pwpwpwpp.', '.pppppppp.', '..pppppp..'],
-  group_cherry: ['......kk...', '.....k..k..', '....k....k.', '...k.....k.', '.rrr....rrr', 'rrwrr..rrwr', 'rrrrr..rrrr', '.rrr....rrr'],
+  group_cherry: ['.....GGGGL..', '.....G..GLL.', '....G...G...', '...G.....G..', '..G......G..', '.rrr....rrr.', 'rrwrr..rrwrr', 'rrrrr..rrrrr', 'rrrRr..rrrRr', '.rrr....rrr.'],
   group_noodles: ['........bb', '......bb..', '.yyyybyyy.', 'rrrrrrrrrr', 'kkkkkkkkkk', '.kkkkkkkk.', '..kkkkkk..', '...rrrr...'],
   group_dragon: ['......rr..', '.....rggr.', '....rgwkg.', '...ggggggy', '..gg..yyy.', '.gg.......', 'gg....gg..', 'g....gggg.', '....gg..gg', '...gg.....'],
 };
@@ -242,6 +242,7 @@ const UI_ART: Record<string, string[]> = {
   ui_trash: ['...ggg...', 'ggggggggg', '.ggggggg.', '.gdgdgdg.', '.gdgdgdg.', '.gdgdgdg.', '.gdgdgdg.', '..ggggg..'],
   ui_backspace: ['...wwwwwww', '..wwkwwwkw', '.wwwwkwkww', 'wwwwwwkwww', '.wwwwkwkww', '..wwkwwwkw', '...wwwwwww'],
   ui_dizzy: ['..yyyyy..', '.yyyyyyy.', 'ykykykyky', 'yykyyykyy', 'ykykykyky', 'yyyyyyyyy', 'yykkkkkyy', '.yyyyyyy.', '..yyyyy..'],
+  ui_boom: ['.....y.....', '.y...y...y.', '..y.yoy.y..', '...yoroy...', '.yyorrroyy.', 'yyorrwrroyy', '.yyorrroyy.', '...yoroy...', '..y.yoy.y..', '.y...y...y.', '.....y.....'],
   ui_warn: ['....y....', '...yyy...', '...yky...', '..yykyy..', '..yykyy..', '.yyyyyyy.', '.yyykyyy.', 'yyyyyyyyy'],
   ui_note: ['...wwwww', '...wwwww', '...w...w', '...w...w', '...w...w', '.www.www', 'wwwwwwww', '.ww..ww.'],
   ui_film: ['wkwkwkwkw', 'kwkwkwkwk', 'ggggggggg', 'gbbbbbbbg', 'gbbbbbbbg', 'gbbbbbbbg', 'ggggggggg'],

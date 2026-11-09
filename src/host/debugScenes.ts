@@ -99,7 +99,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     case 'flagQuestion':
     case 'flagWrong': {
       const opts = [pref, ...FLAG_CODES.filter((c) => c !== pref).sort(() => Math.random() - 0.5).slice(0, 3)].sort(() => Math.random() - 0.5);
-      const q = mkQ(questions[0], { text: `Какой флаг у префектуры ${PREF[pref].ru}?`, answers: opts.map((c) => ({ image: flagUrl(c) })), answerImages: true, topic: 'geo', cycle: true });
+      const q = mkQ(questions[0], { text: `Какой флаг у префектуры ${PREF[pref].ru}?`, answers: opts.map((c) => ({ image: flagUrl(c) })), answerImages: true, topic: 'geo', cycle: true, flag: true });
       if (!q || kind === 'flagQuestion') return view({ t: 'question' }, { q });
       const right = opts.indexOf(pref);
       const wrongs = [0, 1, 2, 3].filter((i) => i !== right);
@@ -119,8 +119,11 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     }
     case 'reward': {
       const reward = (sub ?? 'money') as RewardType;
-      const text = { money: `+¥${s.settings.reward.prefMoney}`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус: 50/50', special: 'Спецвопрос', turn2: 'Дополнительный ход', prize: 'Крутим рулетку…' }[reward];
-      return view({ t: 'reward', pid, reward, text, pref });
+      const text = { money: `+¥${s.settings.reward.prefMoney}`, stars: `+${s.settings.reward.prefStars} ★`, bonus: 'Бонус', special: 'Спецвопрос', turn2: 'Дополнительный ход', prize: 'Крутим рулетку…' }[reward];
+      const topics = s.settings.topics.filter((t) => t.special).map((t) => t.id);
+      return view({ t: 'reward', pid, reward, text, pref,
+        ...(reward === 'bonus' ? { bonus: 'fifty2' as BonusId, secret: 'Бонус: 50/50' } : {}),
+        ...(reward === 'special' && topics.length ? { pickTopic: { topics, deadline: now + 30000 } } : {}) });
     }
     case 'prize': return view({ t: 'prize', pid, text: s.settings.prizeNames[0] ?? 'Приз' });
     case 'calibResult': return view({ t: 'calibResult' });

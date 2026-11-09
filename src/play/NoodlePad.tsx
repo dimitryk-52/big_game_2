@@ -85,7 +85,7 @@ export function NoodlePad({ client, g, me }: { client: GameClient; g: GroupPubli
       <button class={'noodle-bowl' + (playing ? ' live' : '') + (run.end === 'burst' ? ' burst' : '')} onPointerDown={(e) => { e.preventDefault(); bite(); }} disabled={!playing}>
         {tossing && <img class="noodle-fly" key={run.n} src={noodleImg(d.fly)} alt="" />}
         <img class="noodle-img" src={noodleImg(bowlImg)} alt="" draggable={false} />
-        {run.end === 'burst' && <div class="noodle-boom pop">ЛОПНУЛ!</div>}
+        {run.end === 'burst' && <div class="noodle-boom pop"><span><PixIcon id="ui_boom" size={66} /><br />ЛОПНУЛ!</span></div>}
       </button>
       <div class="noodle-belly" title="Живот">
         <div class="noodle-belly-red" style={{ left: `${red * 100}%` }} />

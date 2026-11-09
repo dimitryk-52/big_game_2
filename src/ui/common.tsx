@@ -105,17 +105,19 @@ export function BonusIcon({ b, size = 18 }: { b: BonusId; size?: number }) {
 }
 
 /** инвентарь: иконки со счётчиком, без подписей (название — во всплывающей подсказке) */
-export function Inventory({ p, size = 32, all }: { p: Pick<Player, 'bonuses' | 'specials'>; size?: number; all?: boolean }) {
+export function Inventory({ p, size = 32, all, balls = 0 }: { p: Pick<Player, 'bonuses' | 'specials'>; size?: number; all?: boolean; balls?: number }) {
   const items: { key: string; icon: any; n: number; title: string }[] = [
     ...BONUS_IDS.map((b) => ({ key: b, icon: <BonusIcon b={b} size={size} />, n: p.bonuses[b] ?? 0, title: BONUS_INFO[b].name })),
     { key: 'special', icon: <PixIcon id="special" size={size} />, n: p.specials, title: 'Спецвопрос' },
+    // шарики пачинко (хранятся на телефоне): число видно всегда
+    ...(balls > 0 ? [{ key: 'balls', icon: <PixIcon id="pachinko" size={size} />, n: balls, title: 'Шарики пачинко' }] : []),
   ];
   return (
     <div class="inv">
       {items.filter((x) => all || x.n > 0).map((x) => (
         <span class={'inv-slot' + (x.n ? '' : ' empty')} title={x.title}>
           {x.icon}
-          <b class="inv-n">{x.n}</b>
+          {(all || x.n > 1 || x.key === 'balls') && <b class="inv-n">{x.n}</b>}
         </span>
       ))}
     </div>

@@ -5,7 +5,7 @@ import { Avatar, PixIcon, ResText, TimerBar } from '../ui/common';
 import { GROUP_GAMES, senryuLines } from '../shared/settings';
 import { IaidoResults, IaidoTv } from './IaidoTv';
 import { PREF } from '../map/mapData';
-import { now } from '../shared/util';
+import { glue, now } from '../shared/util';
 import { useEffect, useState } from 'preact/hooks';
 import { FishBoard, Scale } from '../games/FishBoard';
 import { FISH } from '../games/sashimi';
@@ -56,7 +56,7 @@ export function ScrollBanner({ game, pref, call, how }: { game: GroupPublic['gam
         <div class="gscroll-sub">Играют все · {PREF[pref]?.ru}</div>
         <div class="gscroll-kanji">{info.kanji}</div>
         <div class="gscroll-name">{info.name} <span>{info.ja}</span></div>
-        <div class="gscroll-call">{call ?? info.call}</div>
+        <div class="gscroll-call">{glue(call ?? info.call)}</div>
         <div class="gscroll-how">{how ?? info.how}</div>
         <div class="gscroll-seal">{info.ja.slice(0, 2)}</div>
       </div>
@@ -107,7 +107,6 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
             <span class="group-task">За свою работу голосовать нельзя</span>
           </div>
           <Gallery g={g} imgs={imgs} />
-          <TimerBar start={g.startAt} end={g.deadline} now={now} big />
           <Who s={s} g={g} done={g.voted} />
         </div>
       )}

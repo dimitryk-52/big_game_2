@@ -5,10 +5,10 @@ import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
-import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
+import { Avatar, BONUS_IDS, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
 import { BONUS_INFO, COIN_DMG, FARM_NO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
-import { fmtYen, vibrate } from '../shared/util';
+import { fmtYen, glue, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
 import { RhythmBoard } from '../games/RhythmBoard';
 import { Pachinko } from './Pachinko';
@@ -23,7 +23,7 @@ import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
 import { BetPad, FindCard, ItemHelp, scoutNote } from './EconPad';
-import { EPOCHS, epochOf } from '../shared/economy';
+import { BONUS_DESC, EPOCHS, epochOf } from '../shared/economy';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -169,12 +169,15 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 
 // ───────── игра ─────────
 
-type Attention = 'question' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | null;
+const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
+
+type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
   if (st.t === 'duelBet' && s.duel && me.id !== s.duel.attacker && me.id !== s.duel.defender && !st.done.includes(me.id)) return 'duelBet';
   if (st.t === 'find' && st.pid === me.id) return 'find';
+  if (st.t === 'reward' && st.pid === me.id && (st.bonus || st.pickTopic || st.reward === 'special')) return 'reward';
   if (st.t === 'question' && s.q?.participants.includes(me.id)) return 'question';
   if (st.t === 'bonus' && st.pids.includes(me.id) && !(me.id in st.picked)) return 'bonus';
   if (st.t === 'landing' && st.pid === me.id) return 'landing';
@@ -208,18 +211,33 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   const hasBalls = Number(localStorage.getItem(ballsKey) ?? 0) > 0;
   /** соло-игры, которые держим открытыми (на паузе) во время вопросов */
   const KEEP: SoloGameId[] = ['ring', 'onsen', 'chohan', 'sudoku'];
+  // пачинко не преследует игрока: ушёл из префектуры с автоматом — вкладки нет, шарики ждут в инвентаре
   useEffect(() => {
-    if ((tab === 'pachinko' && !hasPachinko && !hasBalls) || (KEEP.includes(tab as SoloGameId) && !solo.includes(tab as SoloGameId))) setTab('home');
-  }, [solo.join(), hasBalls, tab]);
+    if ((tab === 'pachinko' && !hasPachinko) || (KEEP.includes(tab as SoloGameId) && !solo.includes(tab as SoloGameId))) setTab('home');
+  }, [solo.join(), tab]);
   // открытые соло-игры остаются смонтированными (на паузе), пока идёт вопрос или групповая игра:
   // после неё игрок возвращается ровно туда, где остановился
   const [opened, setOpened] = useState<SoloGameId[]>([]);
   useEffect(() => {
     if (KEEP.includes(tab as SoloGameId) && !opened.includes(tab as SoloGameId)) setOpened([...opened, tab as SoloGameId]);
   }, [tab]);
+  // начался мой ход: соло-игры замирают (кольцо — нет: хост ждёт, пока огонёк остановится)
+  const myStart = s.stage.t === 'turnStart' && s.stage.pid === me.id;
+  const hold = (g: SoloGameId) => !!att || (myStart && g !== 'ring');
   const soloView = (g: SoloGameId, el: (paused: boolean) => any) => opened.includes(g) && solo.includes(g) && g !== shut && (
-    <div style={{ display: !att && tab === g ? 'contents' : 'none' }}>{el(!!att || tab !== g)}</div>
+    <div style={{ display: !hold(g) && tab === g ? 'contents' : 'none' }}>{el(hold(g) || tab !== g)}</div>
   );
+  // сообщение от прерванной соло-игры (ставка не сыграла и т.п.)
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setNotice((e as CustomEvent<string>).detail);
+    window.addEventListener('bg-notice', on);
+    return () => window.removeEventListener('bg-notice', on);
+  }, []);
+  // следующий ход — мой: предупреждаем, пока играю в соло-игру
+  const order = s.turnOrder.filter((id) => s.players[id]);
+  const cur = s.turnOrder[s.turnIdx];
+  const nextMine = order.length > 1 && order[(order.indexOf(cur) + 1) % order.length] === me.id && cur !== me.id;
 
   const [debug, setDebug] = useState(phoneDebugEnabled);
   const [debugOpen, setDebugOpen] = useState(false);
@@ -248,9 +266,9 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
       )}
       <div class="main">
         {/* мини-игры остаются смонтированными (на паузе), пока идёт вопрос */}
-        {(tab === 'pachinko' || hasBalls) && (hasPachinko || hasBalls) && (shut !== 'pachinko' || hasBalls) && (
-          <div style={{ display: !att && tab === 'pachinko' ? 'contents' : 'none' }}>
-            <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
+        {hasPachinko && (shut !== 'pachinko' || hasBalls) && (
+          <div style={{ display: !hold('pachinko') && tab === 'pachinko' ? 'contents' : 'none' }}>
+            <Pachinko client={client} s={s} me={me} paused={hold('pachinko') || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
         {/* интро префектуры — как на ТВ, но без анимации; вопрос потом появится поверх */}
@@ -265,6 +283,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'extraTurn' && <ExtraTurn client={client} s={s} me={me} />}
         {att === 'duelBet' && <BetPad client={client} s={s} me={me} />}
         {att === 'find' && <FindCard s={s} me={me} />}
+        {att === 'reward' && <RewardCard client={client} s={s} me={me} />}
         {att === 'group' && <GroupGame client={client} s={s} me={me} />}
         {att === 'dragon' && <DragonPad key={s.dr!.id} client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
@@ -273,6 +292,16 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
           </div>
         )}
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
+        {!att && myStart && tab !== 'home' && tab !== 'map' && tab !== 'ring' && <div class="pad col center-screen"><h2>Твой ход!</h2><div class="muted">Игра на паузе — вернёшься к ней после хода</div></div>}
+        {!att && nextMine && SOLO_IDS.includes(tab as SoloGameId) && <div class="next-turn-note">Следующий ход — твой!</div>}
+        {notice && (
+          <div class="sheet-back" onClick={() => setNotice(null)}>
+            <div class="sheet pop" onClick={(e) => e.stopPropagation()}>
+              <div><ResText text={notice} /></div>
+              <button class="btn yellow big-btn" onClick={() => setNotice(null)}>Понятно</button>
+            </div>
+          </div>
+        )}
         {!att && shut && tab === shut && !(shut === 'pachinko' && hasBalls) && <ClosedGame game={shut as keyof typeof FARM_NO} left={me.closed!.left} onExit={() => setTab('home')} />}
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
         {soloView('ring', (paused) => <RingGame client={client} s={s} me={me} paused={paused} onExit={() => setTab('home')} />)}
@@ -284,7 +313,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         <nav class="tabbar">
           <button class={tab === 'home' ? 'on' : ''} onClick={() => setTab('home')}><PixIcon id="ui_home" size={22} /><span>Игра</span></button>
           <button class={tab === 'map' ? 'on' : ''} onClick={() => setTab('map')}><PixIcon id="ui_map" size={22} /><span>Карта</span></button>
-          {(hasPachinko || hasBalls) && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}><PixIcon id="pachinko" size={22} /><span>Пачинко</span></button>}
+          {hasPachinko && <button class={tab === 'pachinko' ? 'on' : ''} onClick={() => setTab('pachinko')}><PixIcon id="pachinko" size={22} /><span>Пачинко</span></button>}
           {hasRing && <button class={tab === 'ring' ? 'on' : ''} onClick={() => setTab('ring')}><PixIcon id="ring" size={22} /><span>Приз</span></button>}
           {solo.includes('onsen') && <button class={tab === 'onsen' ? 'on' : ''} onClick={() => setTab('onsen')}><PixIcon id="onsen" size={22} /><span>Онсэн</span></button>}
           {solo.includes('chohan') && <button class={tab === 'chohan' ? 'on' : ''} onClick={() => setTab('chohan')}><PixIcon id="chohan" size={22} /><span>Чо-хан</span></button>}
@@ -368,6 +397,7 @@ function stageText(s: GameState, me: Player): string {
 
 function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const topics = s.settings.topics.filter((t) => t.combat);
+  const balls = Number(localStorage.getItem(`bg_balls_${client.room}_${me.id}`) ?? 0) || 0;
   return (
     <div class="scroll pad col">
       <div class="status-card slide-up" key={s.stage.t}><ResText text={stageText(s, me)} /></div>
@@ -376,10 +406,10 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         <div class="muted">Сила</div>
         <SkillChips topics={topics} stats={me.stats} size={26} grid />
         <div class="muted">Инвентарь</div>
-        <Inventory p={me} size={36} all />
+        {BONUS_IDS.some((b) => (me.bonuses[b] ?? 0) > 0) || me.specials > 0 || balls > 0 ? <Inventory p={me} size={36} balls={balls} /> : <div class="muted small-text">Пока пусто</div>}
+        {balls > 0 && <div class="muted small-text">Шарики пачинко ({balls}) — сыграй ими или обменяй на ¥ у любого автомата пачинко.</div>}
         <ItemHelp me={me} />
         <div class="muted small-text">Эпоха: {EPOCHS[epochOf(s)].ja} {EPOCHS[epochOf(s)].name} — цены ×{EPOCHS[epochOf(s)].price}, награды ×{EPOCHS[epochOf(s)].reward}</div>
-        {me.prizes.length > 0 && <div class="prizes"><PixIcon id="prize" /> Призы: {me.prizes.join(', ')}</div>}
       </div>
       <div class="panel col small-text">
         <div>Твой PIN для входа с другого устройства: <b class="pin">{client.pin ?? '—'}</b></div>
@@ -446,7 +476,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
       {q.media?.type === 'image' && <img class="q-img" src={q.media.url} alt="" />}
       {q.media?.type === 'audio' && <div class="q-tv"><PixIcon id="ui_note" /> Слушай на ТВ</div>}
       {q.media?.type === 'video' && <div class="q-tv"><PixIcon id="ui_film" /> Смотри на ТВ</div>}
-      <div class="q-text">{q.text}</div>
+      <div class="q-text">{glue(q.text)}</div>
       {q.reading && <div class="center muted">Слушайте вопрос — варианты появятся следом</div>}
       {!q.reading && <div class={imgs ? 'q-grid' : 'q-list'}>
         {(q.orders?.[me.id] ?? [0, 1, 2, 3]).map((i, pos) => {
@@ -506,6 +536,41 @@ function BonusPick({ client, s, me }: { client: GameClient; s: GameState; me: Pl
         <button class="btn yellow big-btn" onClick={() => client.pick('bonus', b)}><BonusIcon b={b} size={28} /> {BONUS_INFO[b].name} (есть {me.bonuses[b]})</button>
       ))}
       <button class="btn big-btn" onClick={() => client.pick('bonus', null)}>Не хочу</button>
+    </div>
+  );
+}
+
+/** награда префектуры на телефоне получателя: какой бонус выпал; за спецвопрос — выбор спецтемы */
+function RewardCard({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
+  const st = s.stage;
+  const [sent, setSent] = useState<string | null>(null);
+  if (st.t !== 'reward') return null;
+  if (st.pickTopic) {
+    const topics = st.pickTopic.topics.map((id) => s.settings.topics.find((t) => t.id === id)).filter(Boolean) as typeof s.settings.topics;
+    return (
+      <div class="pad col center-screen">
+        <div class="shop-door pop"><PixIcon id="special" size={80} /></div>
+        <h2>Спецвопрос!</h2>
+        <div class="muted">Суперудар в дуэли (сила {s.settings.specialPower}). Выбери спецтему — в дуэли задашь вопрос из неё.</div>
+        <TimerBar start={st.pickTopic.deadline - 30000} end={st.pickTopic.deadline} now={() => client.hostNow()} />
+        <div class="topic-grid">
+          {topics.map((t) => (
+            <button class={'btn small rainbow' + (sent === t.id ? ' picked' : '')} disabled={!!sent} onClick={() => { setSent(t.id); client.pick('specialTopic', t.id); vibrate(20); }}>
+              <SkillIcon t={t} size={20} /> {t.name}
+            </button>
+          ))}
+        </div>
+        {sent && <div class="muted">Принято!</div>}
+      </div>
+    );
+  }
+  return (
+    <div class="pad col center-screen find-card">
+      <div class="shop-door pop">{st.bonus ? <BonusIcon b={st.bonus} size={96} /> : <PixIcon id="special" size={96} />}</div>
+      <h2>Награда префектуры</h2>
+      <div><b><ResText text={st.secret ?? st.text} /></b></div>
+      {st.bonus && <div class="muted">{BONUS_DESC[st.bonus] ?? ''}</div>}
+      <div class="muted small-text">Лежит в инвентаре. На ТВ видно только «{st.text}».</div>
     </div>
   );
 }
@@ -584,6 +649,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       if (dead) return v.destroy();
       view.current = v;
       v.onTap = (code) => { if (allowedRef.current.includes(code)) { setSel(code); vibrate(15); } };
+      keepZoom(v);
       refresh();
       if (st.t === 'move') v.focus([me.pref!, ...allowed], false, 4);
       else v.fitAll(false);
@@ -609,6 +675,11 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       machines: mode === 'move' ? machinesOf(s.settings) : undefined,
       shops: mode === 'move' ? s.settings.shopPrefs : undefined,
       showRewards: mode === 'move',
+      // старая карта: что под туманом — только на телефоне нашедшего
+      ...(mode === 'move' && me.scouted?.length ? {
+        scouted: me.scouted,
+        groupGames: Object.fromEntries(me.scouted.filter((c) => s.settings.groupPrefs?.[c] && !s.prefs[c]?.groupDone).map((c) => [c, s.settings.groupPrefs[c]])),
+      } : {}),
     });
   };
   useEffect(refresh, [sel, s.v]);
@@ -670,6 +741,16 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
   );
 }
 
+/** масштаб карты на телефоне живёт между экранами: игрок приблизил один раз — так и остаётся */
+let phoneZoom: number | null = (() => { try { return Number(sessionStorage.getItem('bg_map_zoom')) || null; } catch { return null; } })();
+function keepZoom(v: MapView) {
+  v.fixedZoom = phoneZoom;
+  v.onZoom = (z) => {
+    phoneZoom = v.fixedZoom = z;
+    try { sessionStorage.setItem('bg_map_zoom', String(z)); } catch { /* приватный режим */ }
+  };
+}
+
 function FreeMap({ s, me }: { s: GameState; me: Player }) {
   const el = useRef<HTMLDivElement>(null);
   const view = useRef<MapView | null>(null);
@@ -678,6 +759,7 @@ function FreeMap({ s, me }: { s: GameState; me: Player }) {
     MapView.create(el.current!, { interactive: true }).then((v) => {
       if (dead) return v.destroy();
       view.current = v;
+      keepZoom(v);
       upd();
       if (me.pref) v.focus([me.pref], false, 3);
     });

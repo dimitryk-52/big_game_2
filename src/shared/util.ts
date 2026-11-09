@@ -59,3 +59,8 @@ export function vibrate(p: number | number[]) {
 export function uiFont() {
   return getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'DotGothic16, monospace';
 }
+
+/** короткое слово после числа (634 м, 235 г, 1 000 лет) не уезжает на новую строку один */
+export function glue(text: string) {
+  return text.replace(/(\d) (?=[^\s\d]{1,4}(?=[\s).,!?:;»]|$))/gu, '$1 ');
+}

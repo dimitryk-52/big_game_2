@@ -75,7 +75,8 @@ export function drawChohan(ctx: CanvasRenderingContext2D, v: ChohanView, frame?:
   if (!open) shadow(ctx, CX + 2 + sx, CY + 1, 21 - Math.round(up / 3), 7 - Math.round(up / 6), up ? 0.22 : 0.32);
 
   if (open) put(ctx, 'cup_open', CX + 1, CY - 15);
-  if (v.dice && !v.air) {
+  // кости рисуем, только когда стакан оторвался от сукна: под стоящим их не видно (и края не торчат)
+  if (v.dice && !v.air && (open || up > 0)) {
     shadow(ctx, CX, CY + 3, 16, 4, 0.18);
     put(ctx, `die_alt_${v.dice[0]}`, CX - 10, CY + 8);
     put(ctx, `die_${v.dice[1]}`, CX + 11, CY + 6);

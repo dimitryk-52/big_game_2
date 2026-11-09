@@ -6,7 +6,7 @@ import type { GameState, SoloGameId } from '../shared/types';
 import { PixIcon } from '../ui/common';
 import { OnsenView, type OnsenLook } from './OnsenView';
 import { PachinkoSim, drawPachinko } from './pachinko';
-import { PACHI, ringCellAt, ringLayout, type RingLayout } from './logic';
+import { PACHI, RING_SLOW_MS, ringCellAt, ringLayout, ringSlowCell, type RingLayout } from './logic';
 import { drawRing } from './ring';
 import { CH_FOCUS, drawChohan, preloadChohan } from './chohan';
 import { now } from '../shared/util';
@@ -17,8 +17,11 @@ class Bus {
   private subs = new Map<string, Set<Listener>>();
   private last = new Map<string, number>();
   private all = new Set<() => void>();
+  /** последнее событие каждого вида: окно, открывшееся позже события, всё равно его увидит */
+  private lastEv = new Map<string, any>();
   emit(pid: string, ev: any) {
     this.last.set(pid, Date.now());
+    if (ev?.k) this.lastEv.set(pid + '|' + ev.k, ev);
     if (KIND[ev?.k]) lastKind.set(pid, KIND[ev.k]);
     this.subs.get(pid)?.forEach((l) => l(ev));
     this.all.forEach((c) => c());
@@ -27,6 +30,9 @@ class Bus {
     if (!this.subs.has(pid)) this.subs.set(pid, new Set());
     this.subs.get(pid)!.add(l);
     return () => { this.subs.get(pid)!.delete(l); };
+  }
+  latest(pid: string, k: string) {
+    return this.lastEv.get(pid + '|' + k);
   }
   onAny(c: () => void) {
     this.all.add(c);
@@ -169,17 +175,21 @@ function PachiPnP({ pid }: { pid: string }) {
 
 function RingPnP({ pid }: { pid: string }) {
   const cv = useRef<HTMLCanvasElement>(null);
-  const st = useRef<{ layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: any } } | null>(null);
+  const st = useRef<{ layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: any; from: number; at: number } } | null>(null);
   useEffect(() => {
-    const off = pnpBus.on(pid, (ev) => {
+    const onEv = (ev: any, replay = false) => {
       if (ev.k === 'ring') {
         st.current = { layout: ringLayout(ev.seed), t0: ev.t0, cellMs: ev.cellMs, stop: null };
       }
       if (ev.k === 'ringStop' && st.current) {
-        st.current.stop = { cell: ev.cell, res: ev.res };
-        if (ev.res !== 'miss') playSound('soloWin');
+        st.current.stop = { cell: ev.cell, res: ev.res, from: ev.from ?? ev.cell, at: replay ? 0 : performance.now() };
+        if (ev.res !== 'miss' && !replay) setTimeout(() => playSound('soloWin'), RING_SLOW_MS);
       }
-    });
+    };
+    // окно открылось после старта — подхватываем текущую попытку
+    const start = pnpBus.latest(pid, 'ring'), end = pnpBus.latest(pid, 'ringStop');
+    if (start) { onEv(start, true); if (end && end.t0 === start.t0) onEv(end, true); }
+    const off = pnpBus.on(pid, (ev) => onEv(ev));
     let raf = 0;
     const loop = () => {
       raf = requestAnimationFrame(loop);
@@ -187,8 +197,9 @@ function RingPnP({ pid }: { pid: string }) {
       if (!c) return;
       const ctx = c.getContext('2d')!;
       if (!r) { ctx.fillStyle = '#2b1240'; ctx.fillRect(0, 0, c.width, c.height); return; }
-      const cell = r.stop ? r.stop.cell : now() < r.t0 ? null : ringCellAt(r.t0, now(), r.cellMs).cell;
-      drawRing(ctx, c.width, r.layout, cell, r.stop?.res ?? null, performance.now());
+      const slow = r.stop ? ringSlowCell(r.stop.from, r.stop.cell, performance.now() - r.stop.at, r.cellMs) : null;
+      const cell = slow ? slow.cell : now() < r.t0 ? null : ringCellAt(r.t0, now(), r.cellMs).cell;
+      drawRing(ctx, c.width, r.layout, cell, slow?.done ? r.stop!.res : null, performance.now());
     };
     raf = requestAnimationFrame(loop);
     return () => { off(); cancelAnimationFrame(raf); };

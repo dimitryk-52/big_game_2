@@ -107,8 +107,8 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
           ['Шагов разминки (без зачёта)', 'warm'],
           ['Шагов зачёта максимум', 'steps'],
           ['Поправка на задержку касания, мс', 'tapLag'],
-        ] as [string, keyof DragonSettings][]).map(([l, k]) => num(l, () => dragonSettings(s)[k], (c, v) => { c.group.dragon = { ...dragonSettings(c), [k]: v }; }))}
-        {num('Время на голос, сек', () => s.group.voteTime, (c, v) => (c.group.voteTime = v))}
+          ['Раундов шествия', 'rounds'],
+        ] as [string, keyof DragonSettings][]).map(([l, k]) => num(l, () => dragonSettings(s)[k] ?? 3, (c, v) => { c.group.dragon = { ...dragonSettings(c), [k]: v }; }))}
         {num('Показ каждой работы, мс', () => s.group.showMs, (c, v) => (c.group.showMs = v))}
         {s.group.prizes.map((_, i) => i).flatMap((i) => [
           num(`${i + 1} место, ¥`, () => s.group.prizes[i]?.yen ?? 0, (c, v) => { (c.group.prizes[i] ??= { yen: 0, stars: 0 }).yen = v; }),

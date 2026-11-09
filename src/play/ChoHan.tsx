@@ -43,6 +43,15 @@ export function ChoHan({ client, s, me, paused, onExit }: { client: GameClient; 
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
+  // партию прервали (ход, вопрос) до ставки — ставка не сыграла, деньги не списаны
+  useEffect(() => {
+    if (!paused || (phase !== 'shaking' && phase !== 'bet')) return;
+    anim.current = null;
+    view.current = { shake: 0, lift: 0, air: false, dice: null };
+    setPhase('idle');
+    const mine = s.stage.t === 'turnStart' && s.stage.pid === me.id;
+    window.dispatchEvent(new CustomEvent('bg-notice', { detail: (mine ? 'Твой ход! ' : '') + 'Партию в чо-хан прервали — ставка не сыграла, деньги при тебе.' }));
+  }, [paused]);
   // ТВ показывает окно игры, пока игрок за столом (на паузе — нет)
   useEffect(() => {
     if (paused) return;

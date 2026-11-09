@@ -3,17 +3,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player } from '../shared/types';
-import { RING_PRIZE_INFO, ringCellAt, ringLayout, type RingLayout, type RingPrize } from '../games/logic';
+import { RING_PRIZE_INFO, ringCellAt, ringLayout, ringSlowCell, type RingLayout, type RingPrize } from '../games/logic';
 import { drawRing } from '../games/ring';
 import { vibrate } from '../shared/util';
 import { sfx } from '../shared/sound';
 import { ResText } from '../ui/common';
 
-interface Run { layout: RingLayout; t0: number; cellMs: number; stop: null | { cell: number; res: RingPrize } }
+interface Run { layout: RingLayout; t0: number; cellMs: number; stop: null | { from: number; at: number; cell: number | null; res: RingPrize | null } }
 
 /** paused — экран спрятан (вопрос, групповая игра): указатель идёт по часам хоста, поэтому
  *  запущенная попытка не теряется — вернувшись, игрок жмёт СТОП как обычно */
-export function RingGame({ client, s, me, onExit }: { client: GameClient; s: GameState; me: Player; paused?: boolean; onExit: () => void }) {
+export function RingGame({ client, s, me, paused, onExit }: { client: GameClient; s: GameState; me: Player; paused?: boolean; onExit: () => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
   const run = useRef<Run | null>(null);
   const [phase, setPhase] = useState<'idle' | 'running' | 'stopping' | 'done'>('idle');
@@ -30,12 +30,20 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
       if (!c) return;
       const r = run.current;
       const t = client.hostNow();
-      const cell = r ? (r.stop ? r.stop.cell : t < r.t0 ? 0 : ringCellAt(r.t0, t, r.cellMs).cell) : Math.floor(performance.now() / 400) % 24;
-      drawRing(c.getContext('2d')!, c.width, r?.layout ?? idle, cell, r?.stop?.res ?? null, performance.now());
+      // после СТОП огонёк тормозит ещё 3–5 клеток
+      const slow = r?.stop ? ringSlowCell(r.stop.from, r.stop.cell, performance.now() - r.stop.at) : null;
+      const cell = r ? (slow ? slow.cell : t < r.t0 ? 0 : ringCellAt(r.t0, t, r.cellMs).cell) : Math.floor(performance.now() / 400) % 24;
+      drawRing(c.getContext('2d')!, c.width, r?.layout ?? idle, cell, slow?.done ? r!.stop!.res : null, performance.now());
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
+  // ТВ показывает окно кольца, пока игрок у машины (на паузе — нет)
+  useEffect(() => {
+    if (paused) return;
+    void client.req('busy', { busy: 'ring' }).catch(() => {});
+    return () => { void client.req('busy', { busy: null }).catch(() => {}); };
+  }, [paused]);
 
   const start = async () => {
     setErr('');
@@ -51,13 +59,19 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
     const r = run.current;
     if (!r || phase !== 'running') return;
     const at = client.hostNow();
-    // мгновенно замираем на ячейке, которую видел игрок
-    r.stop = { cell: ringCellAt(r.t0, Math.max(at, r.t0), r.cellMs).cell, res: 'miss' };
+    // огонёк не замирает, а тормозит с той клетки, которую видел игрок
+    const stop: NonNullable<Run['stop']> = { from: ringCellAt(r.t0, Math.max(at, r.t0), r.cellMs).cell, at: performance.now(), cell: null, res: null };
+    r.stop = stop;
     setPhase('stopping');
     vibrate(40);
     try {
-      const res = await client.req<{ cell: number; res: RingPrize }>('ringStop', { at });
-      r.stop = { cell: res.cell, res: res.res };
+      const res = await client.req<{ cell: number; from: number; res: RingPrize }>('ringStop', { at });
+      stop.from = res.from ?? stop.from;
+      stop.cell = res.cell;
+      stop.res = res.res;
+      // ждём, пока огонёк докатится
+      const left = ringSlowCell(stop.from, stop.cell, performance.now() - stop.at).doneIn;
+      await new Promise((ok) => setTimeout(ok, Math.max(0, left)));
       const big = ['yen1500', 'star3', 'special', 'turn2'].includes(res.res);
       if (res.res === 'miss') { sfx.wrong(); setMsg('Мимо! Попробуй ещё'); }
       else {
@@ -79,7 +93,7 @@ export function RingGame({ client, s, me, onExit }: { client: GameClient; s: Gam
       ) : (
         <button class="btn yellow big-btn" disabled={me.yen < st.cost} onClick={start}>Играть (¥{st.cost})</button>
       )}
-      <div class="muted small-text">Огонёк бежит по кольцу — жми СТОП на нужном призе. В каждом секторе свой приз: йены, звёзды, бонусы, спецвопрос и даже доп. ход.</div>
+      <div class="muted small-text">Огонёк бежит по кольцу — жми СТОП, и он, замедляясь, проедет ещё 3–5 секторов. В каждом секторе свой приз: йены, звёзды, бонусы, спецвопрос и даже доп. ход.</div>
       <button class="btn small ghost" onClick={onExit}>Назад</button>
     </div>
   );

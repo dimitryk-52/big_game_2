@@ -113,7 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
     showMs: 4000,
     // звёзды — только тройке лидеров, йены — всем местам до 7-го
     prizes: [{ yen: 1000, stars: 3 }, { yen: 700, stars: 2 }, { yen: 500, stars: 1 }, { yen: 350, stars: 0 }, { yen: 250, stars: 0 }, { yen: 150, stars: 0 }, { yen: 100, stars: 0 }],
-    dragon: { bpm: 90, accel: 8, maxBpm: 220, warm: 8, steps: 160, tapLag: 30 },
+    dragon: { bpm: 90, accel: 8, maxBpm: 220, warm: 8, steps: 160, tapLag: 30, rounds: 3 },
     layoutV: LAYOUT_V,
   },
   ringPrefs: [14, 40, 4],

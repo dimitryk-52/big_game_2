@@ -68,6 +68,7 @@ export function GroupGame({ client, s, me }: { client: GameClient; s: GameState;
 }
 
 export function MyNumber({ g, me }: { g: GroupPublic; me: Player }) {
+  if (g.game !== 'calligraphy' && g.game !== 'fukuwarai' && g.game !== 'senryu') return null;
   const n = g.order.indexOf(me.id) + 1;
   return n ? <div class="group-mynum">Твоя работа — <b>№{n}</b></div> : null;
 }
@@ -285,7 +286,6 @@ function Vote({ client, s, g, me }: { client: GameClient; s: GameState; g: Group
     <div class="pad col center-screen">
       <h2>Голосуем за {g.voteRound} место</h2>
       <div class="muted">Номер работы с ТВ · {pts} {pts === 1 ? 'очко' : 'очка'}</div>
-      <TimerBar start={g.startAt} end={g.deadline} now={() => client.hostNow()} />
       <div class="vote-grid">
         {g.order.map((_, i) => {
           const n = i + 1;
@@ -322,7 +322,7 @@ function Results({ g, me }: { g: GroupPublic; me: Player }) {
         ? <div class="muted">{g.grams?.[me.id] != null ? <>Твой кусок: <b>{g.grams[me.id]} г</b> из {g.target} г (промах {g.points?.[me.id]} г)</> : 'Ты не успел отрезать'}</div>
         : <div class="muted">Твои очки: <b>{g.points?.[me.id] ?? 0}</b></div>}
       {g.awards?.[me.id] && <div class="q-result pop"><ResText text={g.awards[me.id]} size={28} /></div>}
-      {g.game !== 'sashimi' && g.game !== 'noodles' && g.game !== 'cherry' && <MyNumber g={g} me={me} />}
+      {(g.game === 'calligraphy' || g.game === 'fukuwarai' || g.game === 'senryu') && <MyNumber g={g} me={me} />}
     </div>
   );
 }

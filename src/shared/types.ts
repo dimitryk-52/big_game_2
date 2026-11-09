@@ -212,6 +212,12 @@ export interface DragonPublic {
   tapLag: number;
   /** ничья на шаге: сбились все оставшиеся — никто не выбыл */
   tie?: number;
+  /** раунд (с 1) и сколько всего; итоги раунда — phase 'results' при round < rounds */
+  round?: number;
+  rounds?: number;
+  /** места в этом раунде и очки за все раунды (3/2/1 за 1/2/3 место раунда) */
+  roundPlaces?: Record<string, number>;
+  score?: Record<string, number>;
   places?: Record<string, number>;
   awards?: Record<string, string>;
 }
@@ -234,6 +240,8 @@ export interface PublicQuestion {
   prize?: number;
   /** цикличный: при ошибке правильный ответ не показывается */
   cycle?: boolean;
+  /** флаг: на ТВ не показываем, какой неверный вариант выбрал игрок (видно только на его телефоне) */
+  flag?: boolean;
   /** ведущий читает вопрос вслух: текст уже на экране, ответов и таймера ещё нет */
   reading?: boolean;
   startAt: number; // время хоста
@@ -299,7 +307,11 @@ export type Stage =
   /** интро префектуры при первом входе: фон и название по центру */
   | { t: 'prefIntro'; code: number; pid: string; /** пояснение под названием (интро Окинавы) */ note?: string }
   /** secret — что именно получено (видит только сам игрок); text — для всех */
-  | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number; secret?: string }
+  | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number; secret?: string;
+      /** какой бонус выпал (показывает только телефон получателя) */
+      bonus?: BonusId;
+      /** спецвопрос: получатель выбирает спецтему до deadline */
+      pickTopic?: { topics: TopicId[]; deadline: number } }
   /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
   | { t: 'shop'; pid: string; deadline: number; entered: boolean }
   | { t: 'group' }
@@ -432,6 +444,8 @@ export interface DragonSettings {
   warm: number;
   steps: number;
   tapLag: number;
+  /** раундов шествия (по умолчанию 3) */
+  rounds?: number;
 }
 
 export interface GameState {
@@ -469,7 +483,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

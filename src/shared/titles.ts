@@ -81,9 +81,9 @@ export const TITLE_BY_ID: Record<string, TitleDef> = Object.fromEntries([...TITL
 /** очки за место в групповой игре: 1 место — 7, 7 место — 1 */
 export const placePoints = (place: number) => Math.max(0, 8 - place);
 
-/** порядок итоговой таблицы: призы, звёзды, йены */
+/** порядок итоговой таблицы: звёзды, йены (призы от ведущего не считаются) */
 export function finalRank(ps: Player[]): Player[] {
-  return [...ps].sort((a, b) => b.prizes.length - a.prizes.length || b.stars - a.stars || b.yen - a.yen);
+  return [...ps].sort((a, b) => b.stars - a.stars || b.yen - a.yen);
 }
 
 /** кто лучший по значениям (все с равным лучшим); пусто — события не было */
@@ -106,7 +106,7 @@ export function computeTitles(players: Player[], tally: Tally): Record<string, s
     if (t.id === 'emperor') {
       const r = finalRank(players);
       if (r.length) {
-        const k = (p: Player) => `${p.prizes.length}|${p.stars}|${p.yen}`;
+        const k = (p: Player) => `${p.stars}|${p.yen}`;
         win = r.filter((p) => k(p) === k(r[0])).map((p) => p.id);
       }
     } else if (t.id === 'magnate') win = best(ids, (id) => byId[id].yen);

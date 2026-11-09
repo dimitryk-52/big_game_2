@@ -29,8 +29,10 @@ export interface MapUpdate {
   activePid?: string | null;
   /** соло-игры: id иконки → префектуры */
   machines?: Record<string, number[]>;
-  /** магазины: плашка видна всегда, даже под туманом */
+  /** магазины: плашка видна, когда префектура открыта */
   shops?: number[];
+  /** старая карта: префектуры под туманом, что в них лежит, видит только нашедший (его телефон) */
+  scouted?: number[];
   showRewards?: boolean;
   /** путь стрелки хода (коды префектур от текущей до цели) */
   arrow?: number[] | null;
@@ -93,7 +95,7 @@ export class MapView {
   private outline: Sprite | null = null;
   private tokens = new Map<string, Token>();
   private labels = new Map<number, Text>();
-  private icons = new Map<number, Sprite & { key?: string; bobs?: boolean; bob?: number }>();
+  private icons = new Map<number, Sprite & { key?: string; bobs?: boolean; bob?: number; lift?: number }>();
   private particles: { g: Graphics; vx: number; vy: number; life: number; max: number }[] = [];
   private flights: { s: Sprite; a: { x: number; y: number }; b: { x: number; y: number }; life: number; dur: number; to: number }[] = [];
   private lastLookKey = '';
@@ -104,6 +106,10 @@ export class MapView {
   private cam = { x: CANVAS_W / 2, y: CANVAS_H / 2, z: 1 };
   private camTarget: { x: number; y: number; z: number } | null = null;
   private userTouchedAt = -1e9;
+  /** масштаб, выбранный игроком (телефон): фокус центрирует, но не меняет приближение */
+  fixedZoom: number | null = null;
+  /** игрок изменил масштаб щипком/колесом */
+  onZoom?: (z: number) => void;
   private pointers = new Map<number, { x: number; y: number }>();
   private dragMoved = 0;
   private pinchDist = 0;
@@ -153,7 +159,11 @@ export class MapView {
     const onFonts = (e: FontFaceSetLoadEvent) => { if (e.fontfaces.some((f) => f.family.replace(/["']/g, '') === fam.replace(/["']/g, ''))) this.redrawTexts(); };
     document.fonts.addEventListener('loadingdone', onFonts);
     this.app.renderer.runners.destroy.add({ destroy: () => document.fonts.removeEventListener('loadingdone', onFonts) });
-    this.resizeObs = new ResizeObserver(() => { if (!this.camTarget && performance.now() - this.userTouchedAt > 4000) this.refocus(); });
+    // смена размера (на телефоне — прячется адресная строка): с выбранным масштабом камеру не трогаем
+    this.resizeObs = new ResizeObserver(() => {
+      if (this.fixedZoom) { this.applyCam(); return; }
+      if (!this.camTarget && performance.now() - this.userTouchedAt > 4000) this.refocus();
+    });
     this.resizeObs.observe(el);
   }
 
@@ -325,10 +335,11 @@ export class MapView {
       if (!want.has(code)) want.set(code, []);
       want.get(code)!.push(part);
     };
-    const occupied = new Set(u.players.map((p) => p.pref));
-    const shown = (c: number) => !!u.prefs[c]?.rev && !occupied.has(c);
+    // пока там стоит игрок — выноска поднимается над его именем (награда видна, пока её не заберут)
+    const shown = (c: number) => !!u.prefs[c]?.rev || !!u.scouted?.includes(c);
     for (const [icon, codes] of Object.entries(u.machines ?? {})) for (const c of codes) if (shown(c)) add(c, { id: icon, kind: 'machine' });
-    for (const c of u.shops ?? []) if (!occupied.has(c)) add(c, { id: 'shop', kind: 'machine' });
+    // магазин под туманом не виден
+    for (const c of u.shops ?? []) if (shown(c)) add(c, { id: 'shop', kind: 'machine' });
     for (const c of PREF_CODES) {
       if (u.showRewards !== false && shown(c) && !u.prefs[c].taken) add(c, { id: u.prefs[c].reward, kind: 'reward' });
     }
@@ -350,6 +361,7 @@ export class MapView {
       }
       const a = prefAnchorWorld(code);
       t.position.set(a.x, a.y);
+      t.lift = u.players.filter((p) => p.pref === code).length;
     }
   }
 
@@ -406,7 +418,12 @@ export class MapView {
         t.dog = { s, frames, x: t.x - t.face * 12, y: t.y, face: t.face };
       } else if (!p.akita && t.dog) { t.dog.s.destroy(); t.dog = null; }
       t.label.text = p.name;
-      if (t.plateFor !== p.name) { t.plateFor = p.name; drawNamePlate(t.plate, t.label, p.color); }
+      // двое в одной префектуре: имя второго выше, чтобы плашки не наезжали друг на друга
+      const same = u.players.filter((x) => x.pref === p.pref);
+      t.label.y = same.length > 1 && same.findIndex((x) => x.id === p.id) === 1 ? -29 - 26 : -29;
+      // ширина текста меняется, когда догрузится шрифт, — плашку перерисовываем по фактическому размеру
+      const plateKey = `${p.name}|${p.color}|${t.label.y}|${Math.round(t.label.width)}`;
+      if (t.plateFor !== plateKey) { t.plateFor = plateKey; drawNamePlate(t.plate, t.label, p.color); }
       t.tx = target.x;
       t.ty = target.y;
       t.body.alpha = p.hp <= 0 ? 0.45 : 1;
@@ -516,6 +533,13 @@ export class MapView {
     if (!codes.length) return this.fitAll(animate);
     // если пользователь только что двигал карту — не дёргаем камеру
     if (this.interactive && performance.now() - this.userTouchedAt < 2500) return;
+    if (this.fixedZoom) {
+      const b = prefBoundsWorld(codes);
+      const target = this.clamped({ x: b.x + b.w / 2, y: b.y + b.h / 2, z: this.fixedZoom });
+      if (animate) this.camTarget = target;
+      else { this.cam = target; this.camTarget = null; this.applyCam(); }
+      return;
+    }
     this.fitBounds(prefBoundsWorld(codes), animate, Math.min(this.viewSize().w, this.viewSize().h) * 0.1, maxZoom);
   }
 
@@ -633,6 +657,7 @@ export class MapView {
     this.cam.x += before.x - after.x;
     this.cam.y += before.y - after.y;
     this.clampCam();
+    this.onZoom?.(this.cam.z);
   }
 
   private clampCam() {
@@ -668,7 +693,7 @@ export class MapView {
     const iconScale = 1.4 * Math.max(0.6, Math.min(1.4, 1.1 / Math.sqrt(this.cam.z)));
     for (const t of this.icons.values()) {
       t.scale.set(iconScale);
-      t.pivot.y = t.bobs ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0;
+      t.pivot.y = (t.bobs ? Math.round(Math.sin(this.time / 400 + t.bob!) * 0.8) : 0) + (t.lift ? 40 : 0) + ((t.lift ?? 0) > 1 ? 19 : 0);
       t.visible = this.iconsAlways || this.cam.z > 0.75;
     }
 

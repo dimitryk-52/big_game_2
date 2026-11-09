@@ -281,3 +281,12 @@ body, .tv, .phone { transition: background-color 1.2s; }
 .find-card { text-align: center; gap: 12px; }
 .item-help { gap: 6px; }
 .bet-fighter .btn:disabled { --c: #5b5f7e; color: #c9cbe0; }
+
+/* ритм-игра: общая для ТВ (зритель) и телефона (игрок) */
+.rhythm { display: flex; flex-direction: column; height: 100%; }
+.rhythm-head { padding: 6px 10px; text-align: center; background: #232850; }
+.rhythm-cv { flex: 1; width: 100%; min-height: 0; display: block; image-rendering: pixelated; }
+.rhythm-pads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px; background: #11142b; }
+.rhythm-pad { height: 18vh; border: 3px solid #fff; box-shadow: 3px 3px 0 #000; touch-action: none; }
+.rhythm-pad:active { filter: brightness(1.5); transform: translateY(2px); }
+.rhythm-wrap .rhythm-pad { height: 22vh; }

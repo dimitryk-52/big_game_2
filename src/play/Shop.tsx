@@ -8,7 +8,7 @@ import type { GameState, Player, Settings } from '../shared/types';
 import { BONUS_INFO } from '../shared/settings';
 import { PREF } from '../map/mapData';
 import { sfx } from '../shared/sound';
-import { fmtYen, vibrate } from '../shared/util';
+import { vibrate } from '../shared/util';
 import { epochOf, shopCost } from '../shared/economy';
 import { BonusIcon, PixIcon, ResText, SkillIcon, TimerBar } from '../ui/common';
 
@@ -67,7 +67,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     // что это собачий корм, не говорим: игрок сам поймёт, когда окажется рядом с акитой
     food: { name: BONUS_INFO.food.name, tag: 'корм', icon: <BonusIcon b="food" size={44} />, desc: 'Пахнет вкусно. Кому-нибудь обязательно понравится — главное, оказаться рядом.', have: `Есть: ${me.bonuses.food ?? 0}` },
     ticket: { name: BONUS_INFO.ticket.name, tag: 'билет', icon: <BonusIcon b="ticket" size={44} />, desc: `Стоишь на станции синкансэна — в свой ход уезжаешь на любую другую станцию, где есть место. Станции: ${stations}.`, have: `Есть: ${me.bonuses.ticket ?? 0}` },
-    scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите, и никто не сможет помешать — даже собака. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
+    scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите, и никто не сможет помешать. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
   };
 
   const buy = async (item: Item) => {
@@ -91,7 +91,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
       <div class="shop-top">
         <div class="shop-head">
           {!BG && <div class="shop-sign">店 Магазин</div>}
-          <span class="shop-wallet">{coupon && <span class="chip">купон −50%</span>} {fmtYen(me.yen)} · {me.stars} <PixIcon id="stars" size={16} /></span>
+          {coupon && <span class="shop-wallet"><span class="chip">купон −50%</span></span>}
         </div>
         {/* на картинке — надпись прямо на занавесе, будто выкрашена на ткани */}
         {BG && <div class="shop-noren"><span>店</span>МАГАЗИН</div>}

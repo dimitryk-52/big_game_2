@@ -67,6 +67,7 @@ export function DragonTv({ s }: { s: GameState }) {
       <DragonScene s={s} d={d} />
       <div class="dragon-hud">
         <span class="dragon-hud-title">{info.kanji} {info.name} <span class="jp">{info.ja}</span></span>
+        {(d.rounds ?? 1) > 1 && d.phase !== 'intro' && <span>Раунд {d.round} из {d.rounds}</span>}
         {playing && p < 0 && <span>Приготовились…</span>}
         {playing && p >= 0 && step < d.warm && <span>Разминка · шаг {step + 1} из {d.warm} · без зачёта</span>}
         {playing && step >= d.warm && <span class="dragon-live">ЗАЧЁТ · {Math.round(dragonBpm(d, step))} ударов в минуту · несут {d.alive.length} из {total}</span>}
@@ -102,20 +103,26 @@ export function DragonTv({ s }: { s: GameState }) {
 }
 
 function Results({ s, d }: { s: GameState; d: DragonPublic }) {
-  const order = [...d.players].filter((id) => s.players[id]).sort((a, b) => (d.out[b] ?? Infinity) - (d.out[a] ?? Infinity));
+  const final = !d.rounds || (d.round ?? 1) >= d.rounds && !!d.places;
+  const ids = d.players.filter((id) => s.players[id]);
+  const sc = (id: string) => d.score?.[id] ?? 0;
+  const order = final && d.places
+    ? [...ids].sort((a, b) => (d.places![a] ?? 99) - (d.places![b] ?? 99))
+    : [...ids].sort((a, b) => sc(b) - sc(a) || (d.roundPlaces?.[a] ?? 99) - (d.roundPlaces?.[b] ?? 99));
   return (
     <div class="dragon-card dragon-results pop">
-      <div class="group-title">Итоги · Джа-одори</div>
+      <div class="group-title">{final ? 'Итоги · Джа-одори' : `Раунд ${d.round} из ${d.rounds}`}</div>
       {order.map((id) => {
-        const pl = d.places?.[id];
+        const pl = final ? d.places?.[id] : d.roundPlaces?.[id];
         const out = d.out[id];
+        const got = d.roundPlaces?.[id] ? Math.max(0, 4 - d.roundPlaces[id]) : 0;
         return (
           <div class={'dragon-row' + (pl ? ' place' + pl : '')}>
-            <span class="medal">{pl && pl <= 3 ? <PixIcon id={'ui_medal' + pl} size={28} /> : ''}</span>
+            <span class="medal">{final && pl && pl <= 3 ? <PixIcon id={'ui_medal' + pl} size={28} /> : ''}</span>
             <Avatar p={s.players[id]} size={30} />
             <b>{s.players[id].name}</b>
-            <span class="muted">{out == null ? 'донёс дракона' : `шаг ${out - d.warm + 1}`}</span>
-            <span class="dragon-award">{d.awards?.[id] ?? ''}</span>
+            <span class="muted">{final ? `${sc(id)} ${sc(id) === 1 ? 'очко' : sc(id) < 5 && sc(id) > 0 ? 'очка' : 'очков'}` : (out == null ? 'донёс' : `шаг ${out - d.warm + 1}`) + (got ? ` · +${got}` : '')}</span>
+            <span class="dragon-award">{final ? d.awards?.[id] ?? '' : `Σ ${sc(id)}`}</span>
           </div>
         );
       })}
@@ -279,9 +286,12 @@ function draw(c: HTMLCanvasElement, s: GameState, d: DragonPublic, A: Anim) {
     ctx.globalAlpha = 1;
     drawSprite(ctx, pearl, px, py, 12, 0);
     // хвост, туловище от хвоста к голове, голова
-    drawSprite(ctx, dragonImg('tail')!, xAt(s1), yAt(s1), 18, angAt(s1), 0.35);
-    const stepS = Math.max(0.08, 7 / Math.max(8, sp));
-    for (let x = s1 - 0.15; x >= s0 + 0.1; x -= stepS) drawSprite(ctx, body, xAt(x), yAt(x), BH, angAt(x));
+    // последний носильщик несёт одну голову: короткое туловище торчало из-под морды
+    if (alive.length > 1) {
+      drawSprite(ctx, dragonImg('tail')!, xAt(s1), yAt(s1), 18, angAt(s1), 0.35);
+      const stepS = Math.max(0.08, 7 / Math.max(8, sp));
+      for (let x = s1 - 0.15; x >= s0 + 0.1; x -= stepS) drawSprite(ctx, body, xAt(x), yAt(x), BH, angAt(x));
+    }
     drawSprite(ctx, dragonImg('head')!, xAt(s0), yAt(s0) - 4, 30, angAt(s0), -0.3);
   }
 

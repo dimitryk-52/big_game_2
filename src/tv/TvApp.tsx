@@ -5,11 +5,12 @@ import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
 import { Avatar, BonusIcon, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
+import { finalRank } from '../shared/titles';
 import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf, prefIcons } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
-import { fmtYen, now } from '../shared/util';
+import { fmtYen, glue, now } from '../shared/util';
 import { playRhythmMusic, setSound, soundOn } from '../shared/sound';
 import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
@@ -354,7 +355,6 @@ function PlayerList({ s }: { s: GameState }) {
                 <div class="pc-money">
                   <span>{fmtYen(p.yen)}</span>
                   <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
-                  {p.prizes.length > 0 && <span><PixIcon id="prize" />{p.prizes.length}</span>}
                   {/* бонусы и спецвопросы секретны: на ТВ их не показываем, раскрываются только при использовании */}
                 </div>
               </div>
@@ -438,7 +438,7 @@ function CalibResult({ s }: { s: GameState }) {
               const p = s.players[id];
               return (
                 <tr class="slide-up" style={{ animationDelay: `${i * 0.12}s` }}>
-                  <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
+                  <td class="calib-name"><span class="row"><Avatar p={p} size={32} /> {p.name}</span></td>
                   {topics.map((t) => <td class="calib-skill">{p.stats[t.id] ?? 0}</td>)}
                 </tr>
               );
@@ -489,14 +489,16 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
         {q.media?.type === 'image' && <img class="qmedia" src={resolveMedia(q.media.url)} alt="" />}
         {q.media?.type === 'audio' && <audio class="qaudio" src={resolveMedia(q.media.url)} autoPlay controls />}
         {q.media?.type === 'video' && <video class="qmedia" src={resolveMedia(q.media.url)} autoPlay playsInline />}
-        <div class="qtext">{q.text}</div>
+        <div class="qtext">{glue(q.text)}</div>
         {!q.reading && <div class={'qanswers' + (imgs ? ' imgs' : '')}>
           {q.answers.map((a, i) => {
-            const cls = q.revealed ? (i === q.correct ? ' correct' : choosers(i).length ? ' wrong' : ' dim') : '';
+            // флаги: чужой неверный выбор не раскрываем — просто «неверно» у игрока внизу
+            const hideWrong = q.flag && i !== q.correct;
+            const cls = q.revealed ? (i === q.correct ? ' correct' : choosers(i).length && !hideWrong ? ' wrong' : ' dim') : '';
             return (
               <div class={'qans' + cls}>
                 {a.image ? <img src={a.image} alt="" /> : <span class="qans-text">{a.text}</span>}
-                {q.revealed && (
+                {q.revealed && !hideWrong && (
                   <span class="qchoosers">
                     {choosers(i).map((p) => <Avatar p={p} size={30} />)}
                   </span>
@@ -518,6 +520,7 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
                 <Avatar p={p} size={36} />
                 <span>{p.name}</span>
                 {q.revealed && q.results?.[id] && <span class="qres"><ResText text={q.results[id]} topics={s.settings.topics} /></span>}
+                {q.revealed && q.flag && !ok && <span class="qres">{q.choices?.[id] == null ? 'нет ответа' : 'неверно'}</span>}
               </div>
             );
           })}
@@ -609,6 +612,7 @@ function RewardPopup({ s }: { s: GameState }) {
         <div class="reward-icon"><PixIcon id={st.reward} size={96} /></div>
         <div class="banner-text">{p?.name}</div>
         <div class="banner-sub">Награда префектуры {PREF[st.pref].ru}: <ResText text={st.text} size={32} /></div>
+        {st.pickTopic && <div class="banner-sub muted">Выбирает спецтему на телефоне…</div>}
       </div>
     </div>
   );
@@ -632,7 +636,7 @@ function PrizePopup({ s }: { s: GameState }) {
 }
 
 function EndScreen({ s }: { s: GameState }) {
-  const ps = Object.values(s.players).sort((a, b) => b.prizes.length - a.prizes.length || b.stars - a.stars || b.yen - a.yen);
+  const ps = finalRank(Object.values(s.players));
   return (
     <div class="overlay-center">
       <div class="panel calib pop">
@@ -642,8 +646,7 @@ function EndScreen({ s }: { s: GameState }) {
             {ps.map((p, i) => (
               <tr>
                 <td>{i + 1}</td>
-                <td class="row"><Avatar p={p} size={32} /> {p.name}</td>
-                <td><PixIcon id="prize" /> {p.prizes.length}</td>
+                <td class="calib-name"><span class="row"><Avatar p={p} size={32} /> {p.name}</span></td>
                 <td><PixIcon id="stars" /> {p.stars}</td>
                 <td>{fmtYen(p.yen)}</td>
               </tr>

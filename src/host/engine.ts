@@ -13,7 +13,7 @@ import { buildDebugScene } from './debugScenes';
 import { OKINAWA, PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/look';
-import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
+import { RHYTHM_LEAD_BEATS, RING_CELLS, RING_PRIZE_INFO, RING_SLOW_MAX, RING_SLOW_MIN, RING_SLOW_MS, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
@@ -558,8 +558,16 @@ export class GameEngine {
     const dogOwner = Object.values(this.s.players).find((x) => x.akita);
     if (dogOwner) this.bump('akitaTurns', dogOwner.id);
     await this.sleep(epoch, 1800);
+    // крутит призовое кольцо — ход начнётся, когда огонёк остановится (но не дольше 25 с)
+    for (const t0 = Date.now(); (this.sec.ring[pid] || (this.ringSettle[pid] ?? 0) > Date.now()) && Date.now() - t0 < 25000;) await this.sleep(epoch, 300);
 
-    if (p.hp <= 0) await this.revive(epoch, p);
+    // восстановился на Окинаве — получил деньги и бонус, ходит уже в следующий раз
+    if (p.hp <= 0) {
+      await this.revive(epoch, p);
+      this.setStage({ t: 'banner', text: `${p.name} снова в строю`, sub: 'Ход — в следующем круге' });
+      await this.sleep(epoch, 2200);
+      return;
+    }
 
     // ── находка под ногами (тайная помощь отстающим) ──
     const found = await this.maybeFind(epoch, p);
@@ -885,6 +893,7 @@ export class GameEngine {
     if (reward === 'prize' && ps.prizeTaken) reward = 'money';
     let text = '';
     let secret: string | undefined;
+    let bonus: BonusId | undefined;
     switch (reward) {
       case 'money': { const y = rewardYen(st.reward.prefMoney, epochOf(this.s)); p.yen += y; text = `+¥${y}`; break; }
       case 'stars': p.stars += st.reward.prefStars; text = `+${st.reward.prefStars} ★`; break;
@@ -894,9 +903,29 @@ export class GameEngine {
         // какой именно бонус — секрет: на ТВ просто «Бонус», подробности на телефоне получателя
         text = 'Бонус';
         secret = `Бонус: ${BONUS_INFO[b].name}`;
+        bonus = b;
         break;
       }
-      case 'special': p.specials++; text = 'Спецвопрос (сила ' + st.specialPower + ')'; break;
+      case 'special': {
+        p.specials++;
+        text = 'Спецвопрос (сила ' + st.specialPower + ')';
+        // спецтемы узкие — получатель сам выбирает, из какой будет вопрос (тема — секрет, как в магазине)
+        const topics = st.topics.filter((t) => t.special).map((t) => t.id);
+        if (topics.length) {
+          const ms = 30000;
+          this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, pickTopic: { topics, deadline: this.now + ms } });
+          this.io.fx?.('reward', { pid: p.id, reward });
+          const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'specialTopic' && m.pid === p.id && topics.includes(m.value) ? String(m.value) : undefined),
+            p.bot ? 1500 : p.online ? ms : 4000);
+          const topic = v ?? pick(topics);
+          (p.specialTopics ??= []).push(topic);
+          secret = `Спецвопрос «${st.topics.find((t) => t.id === topic)?.name ?? topic}»`;
+          this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, secret });
+          await this.sleep(epoch, 2000);
+          return;
+        }
+        break;
+      }
       case 'turn2': p.bonuses.turn2 = (p.bonuses.turn2 ?? 0) + 1; text = 'Дополнительный ход'; break;
       case 'prize': {
         ps.prizeTaken = true;
@@ -910,9 +939,10 @@ export class GameEngine {
         return;
       }
     }
-    this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, ...(secret ? { secret } : {}) });
+    this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, ...(secret ? { secret } : {}), ...(bonus ? { bonus } : {}) });
     this.io.fx?.('reward', { pid: p.id, reward });
-    await this.sleep(epoch, 2600);
+    // получателю — карточка на телефоне: что именно выпало
+    await this.sleep(epoch, bonus ? 4000 : 2600);
   }
 
   private async revive(epoch: number, p: Player) {
@@ -1399,25 +1429,29 @@ export class GameEngine {
       await this.gate(epoch);
       g.voteRound = r;
       g.voted = [];
+      // без таймера: ждём, пока проголосуют все, кто на связи (ведущий может пропустить)
       g.startAt = this.now + LEAD;
-      g.deadline = g.startAt + st.group.voteTime * 1000;
+      g.deadline = 0;
       this.emit();
       const voters = () => g.players.filter((id) => this.s.players[id] && (this.s.players[id].online || this.s.players[id].bot));
-      const end = g.deadline + ANSWER_GRACE;
-      while (voters().some((id) => !g.voted.includes(id)) && this.now < end) {
+      let skipped = false;
+      const skip = () => { skipped = true; };
+      this.skipCbs.add(skip);
+      while (!skipped && voters().some((id) => !g.voted.includes(id))) {
         const m = await this.waitInput(epoch, (x) => {
           if (x.t !== 'pick' || x.kind !== 'vote' || !g.players.includes(x.pid) || g.voted.includes(x.pid)) return undefined;
           const n = Number(x.value);
           const mine = this.votes[x.pid] ?? [];
           if (!(n >= 1 && n <= g.order.length) || g.order[n - 1] === x.pid || mine.includes(n)) return undefined;
           return { pid: x.pid, n };
-        }, end - this.now);
-        if (!m) break;
+        }, 2000);
+        if (!m) continue; // проверяем, кто ещё на связи
         (this.votes[m.pid] ??= [])[r - 1] = m.n;
         g.voted.push(m.pid);
         this.io.fx?.('answered', { pid: m.pid });
         this.emit();
       }
+      this.skipCbs.delete(skip);
     }
 
     // ── итоги: 3 очка за голос «1 место», 2 — за второе, 1 — за третье ──
@@ -1673,6 +1707,8 @@ export class GameEngine {
 
   /** промахи игроков (номера шагов), пока не засчитаны */
   private dragonMiss: Record<string, Set<number>> = {};
+  /** призовое кольцо: до какого времени огонёк ещё тормозит после СТОП */
+  private ringSettle: Record<string, number> = {};
   /** прощённые ничьей шаги: промахи до этого шага включительно больше не считаются */
   private dragonForgiven: Record<string, number> = {};
 
@@ -1685,21 +1721,86 @@ export class GameEngine {
       startAt: 0, bpm: cfg.bpm, accel: cfg.accel, maxBpm: Math.max(cfg.bpm, cfg.maxBpm), warm: Math.max(0, cfg.warm | 0),
       steps: Math.max(8, cfg.steps | 0), tapLag: cfg.tapLag,
     };
-    this.dragonMiss = {};
-    this.dragonForgiven = {};
+    const rounds = Math.max(1, Math.min(5, cfg.rounds ?? 3));
+    d.round = 1;
+    d.rounds = rounds;
+    d.score = {};
+    // суммарно пронесённые шаги — тай-брейк по очкам
+    const carried: Record<string, number> = {};
     this.s.dr = d;
     this.setStage({ t: 'dragon' });
     // ведущий объясняет правила
     await this.sleep(epoch, this.hostPaced ? 36e5 : 8000);
 
-    // ── танец ──
+    for (let r = 1; r <= rounds; r++) {
+      if (r > 1) {
+        d.id = this.sec.groupN = (this.sec.groupN ?? 0) + 1;
+        d.round = r;
+        d.alive = d.players.filter((id) => this.s.players[id]);
+        d.out = {};
+        d.tie = undefined;
+        d.roundPlaces = undefined;
+      }
+      await this.dragonRound(epoch, d);
+      // места раунда: кто дольше нёс — выше; выбывшие на одном шаге делят место
+      const levels = [Infinity, ...new Set(Object.values(d.out))].sort((a, b) => b - a);
+      const rp: Record<string, number> = {};
+      for (const id of d.players) {
+        if (!this.s.players[id]) continue;
+        const lv = levels.indexOf(d.alive.includes(id) ? Infinity : d.out[id]);
+        rp[id] = lv + 1;
+        d.score![id] = (d.score![id] ?? 0) + Math.max(0, 3 - lv);
+        carried[id] = (carried[id] ?? 0) + (d.alive.includes(id) ? d.steps + d.warm : d.out[id]);
+      }
+      d.roundPlaces = rp;
+      if (r < rounds) {
+        d.phase = 'results';
+        this.emit();
+        await this.sleep(epoch, this.hostPaced ? 36e5 : 7000);
+      }
+    }
+
+    // ── итоги: больше очков за раунды — выше; при равенстве — кто суммарно дольше нёс ──
+    const key = (id: string) => `${d.score![id] ?? 0}:${carried[id] ?? 0}`;
+    const ids = d.players.filter((id) => this.s.players[id]);
+    const levels = [...new Set(ids.map(key))].sort((a, b) => { const [sa, ca] = a.split(':').map(Number), [sb, cb] = b.split(':').map(Number); return sb - sa || cb - ca; });
+    const places: Record<string, number> = {};
+    const awards: Record<string, string> = {};
+    for (const id of ids) {
+      const p = this.s.players[id];
+      const lv = levels.indexOf(key(id));
+      if (lv < 0 || lv >= st.group.prizes.length) continue;
+      places[id] = lv + 1;
+      this.bump('group:dragon', id, placePoints(lv + 1));
+      const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
+      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
+      p.yen += pr.yen;
+      p.stars += pr.stars;
+      awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
+    }
+    d.places = places;
+    d.awards = awards;
+    d.phase = 'results';
+    this.emit();
+    this.io.fx?.('prize', { game: 'dragon' });
+    const win = d.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
+    if (win.length) this.log(`🐉 Джа-одори: лучше всех дракона нёс ${win.join(', ')}`);
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
+    this.s.dr = null;
+    this.emit();
+  }
+
+  /** один раунд шествия: до последнего носильщика или до конца шагов */
+  private async dragonRound(epoch: number, d: DragonPublic) {
+    this.dragonMiss = {};
+    this.dragonForgiven = {};
     d.phase = 'play';
     d.startAt = this.now + 2500;
     this.emit();
     this.io.fx?.('dragon', d);
     const times = dragonTimes(d);
     // боты сбиваются в случайный момент зачёта
-    for (const id of players) if (this.s.players[id]?.bot) this.dragonMiss[id] = new Set([d.warm + 4 + randInt(Math.min(d.steps - 4, 90))]);
+    for (const id of d.players) if (this.s.players[id]?.bot) this.dragonMiss[id] = new Set([d.warm + 4 + randInt(Math.min(d.steps - 4, 90))]);
     let stopped = false;
     const stop = () => { stopped = true; };
     this.skipCbs.add(stop);
@@ -1733,34 +1834,6 @@ export class GameEngine {
       }
     }
     this.skipCbs.delete(stop);
-
-    // ── итоги: кто дольше нёс, тот выше; выбывшие на одном шаге делят место ──
-    const levels = [Infinity, ...new Set(Object.values(d.out))].sort((a, b) => b - a);
-    const places: Record<string, number> = {};
-    const awards: Record<string, string> = {};
-    for (const id of d.players) {
-      const p = this.s.players[id];
-      if (!p) continue;
-      const lv = levels.indexOf(d.alive.includes(id) ? Infinity : d.out[id]);
-      if (lv < 0 || lv >= st.group.prizes.length) continue;
-      places[id] = lv + 1;
-      this.bump('group:dragon', id, placePoints(lv + 1));
-      const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
-      const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
-      p.yen += pr.yen;
-      p.stars += pr.stars;
-      awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
-    }
-    d.places = places;
-    d.awards = awards;
-    d.phase = 'results';
-    this.emit();
-    this.io.fx?.('prize', { game: 'dragon' });
-    const win = d.players.filter((id) => places[id] === 1).map((id) => this.s.players[id]?.name).filter(Boolean);
-    if (win.length) this.log(`🐉 Джа-одори: дольше всех дракона нёс ${win.join(', ')}`);
-    await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
-    this.s.dr = null;
-    this.emit();
   }
 
   private onDragon(m: Extract<InputMsg, { t: 'dragon' }>) {
@@ -1795,6 +1868,7 @@ export class GameEngine {
       topic: q.topic, special: isSpecialQ(this.s.settings, q), startAt: 0, deadline: 0, participants, answered: [], removed, revealed: false,
       orders: answerOrders(Object.keys(this.s.players)),
       ...(reading ? { reading } : {}),
+      ...(q.kind === 'flag' ? { flag: true } : {}),
       ...(pref ? { pref } : {}),
       ...(extra.prize ? { prize: extra.prize } : {}),
       ...(extra.cycle ? { cycle: true } : {}),
@@ -2063,20 +2137,25 @@ export class GameEngine {
         let at = Number(a.at);
         if (!isFinite(at) || at > t + 50 || at < t - 3000) at = t;
         at = Math.max(at, r.t0);
-        const { cell } = ringCellAt(r.t0, at, st.ring.cellMs);
+        const { cell: from } = ringCellAt(r.t0, at, st.ring.cellMs);
+        // огонёк ещё проходит 3–5 клеток, замедляясь: результат труднее угадать
+        const cell = (from + RING_SLOW_MIN + randInt(RING_SLOW_MAX - RING_SLOW_MIN + 1)) % RING_CELLS;
         const res = ringResult(ringLayout(r.seed), cell);
         const info = RING_PRIZE_INFO[res];
-        p.busy = null;
-        p.yen += info.yen ?? 0;
-        p.stars += info.stars ?? 0;
-        if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket' || res === 'scroll') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
-        if (res === 'special') p.specials++;
-        if (res !== 'miss') this.bump('ringPrizes', p.id);
-        if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
-        if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
-        this.emit();
-        this.io.fx?.('ringStop', { pid: p.id, cell, res, at });
-        return reply(true, { cell, res, at });
+        // приз зачисляется, когда огонёк остановится (иначе деньги в шапке выдадут результат раньше)
+        this.ringSettle[p.id] = Date.now() + RING_SLOW_MS;
+        setT(() => {
+          p.yen += info.yen ?? 0;
+          p.stars += info.stars ?? 0;
+          if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket' || res === 'scroll') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
+          if (res === 'special') p.specials++;
+          if (res !== 'miss') this.bump('ringPrizes', p.id);
+          if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
+          if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
+          this.emit();
+        }, RING_SLOW_MS);
+        this.io.fx?.('ringStop', { pid: p.id, cell, from, res, at, t0: r.t0 });
+        return reply(true, { cell, from, res, at });
       }
       case 'chohanRoll': {
         if (!(st.chohanPrefs ?? []).includes(p.pref!)) return reply(false, null, 'Здесь не играют в чо-хан');

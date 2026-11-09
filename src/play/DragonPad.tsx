@@ -116,11 +116,15 @@ export function DragonPad({ client, s, me }: { client: GameClient; s: GameState;
     );
   }
   if (d.phase === 'results') {
-    const pl = d.places?.[me.id];
+    const final = !!d.places;
+    const pl = final ? d.places?.[me.id] : d.roundPlaces?.[me.id];
     return (
       <div class="pad col center-screen">
-        <h2>{pl ? `${pl} место!` : 'Итоги на ТВ'}</h2>
-        <div class="muted">{d.out[me.id] == null ? 'Ты донёс дракона до конца!' : `Ты сбился на шаге ${d.out[me.id] - d.warm + 1}`}</div>
+        {!final && <div class="muted">Раунд {d.round} из {d.rounds}</div>}
+        <h2>{pl ? `${pl} место${final ? '!' : ' в раунде'}` : 'Итоги на ТВ'}</h2>
+        {!final && <div class="muted">{d.out[me.id] == null ? 'Ты донёс дракона до конца!' : `Ты сбился на шаге ${d.out[me.id] - d.warm + 1}`}</div>}
+        {d.score && <div class="muted">Очки за раунды: <b>{d.score[me.id] ?? 0}</b></div>}
+        {!final && <div class="muted">Скоро следующий раунд — приготовься!</div>}
         {d.awards?.[me.id] && <div class="q-result pop"><ResText text={d.awards[me.id]} size={28} /></div>}
       </div>
     );

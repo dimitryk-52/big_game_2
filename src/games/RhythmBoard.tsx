@@ -30,7 +30,8 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       if (!c) return;
       const dpr = Math.min(2, devicePixelRatio || 1);
       const W = c.clientWidth, H = c.clientHeight;
-      if (c.width !== W * dpr) { c.width = W * dpr; c.height = H * dpr; }
+      if (!W || !H) return;
+      if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
       const ctx = c.getContext('2d')!;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.imageSmoothingEnabled = false;
