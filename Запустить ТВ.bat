@@ -5,11 +5,30 @@ title BIG GAME 2 — сервер (ТВ и админка)
 
 rem Сервер уже запущен (например, из «Запустить админку») — просто открываем ТВ
 netstat -ano | findstr ":4173 " | findstr LISTENING >nul
-if not errorlevel 1 (
+if errorlevel 1 goto start
+
+rem ...но если код новее сборки, сервер показывает старую версию: предлагаем перезапустить
+set "BUILT="
+for /f "delims=" %%t in ('powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stale-build.ps1') do set "BUILT=%%t"
+if not defined BUILT (
   start "" http://localhost:4173/tv.html
   exit /b
 )
+echo.
+echo Сервер уже запущен, но со старой сборкой (от %BUILT%) — в ней нет последних изменений.
+echo   R — перезапустить сервер с новой сборкой. Открытые ТВ и админку потом обнови (F5).
+echo       Если сейчас идёт игра, ТВ на минуту потеряет сервер.
+echo   O — открыть как есть, со старой сборкой.
+choice /c RO /n /m "R или O? "
+if errorlevel 2 (
+  start "" http://localhost:4173/tv.html
+  exit /b
+)
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":4173 " ^| findstr LISTENING') do taskkill /PID %%p /F >nul 2>&1
+timeout /t 1 /nobreak >nul
+echo Старый сервер остановлен, собираю заново.
 
+:start
 if not exist node_modules (
   echo Первый запуск: устанавливаю зависимости...
   call npm install
