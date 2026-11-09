@@ -5,6 +5,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { GameState, GroupGameId, GroupPublic, Player, SoloGameId } from '../shared/types';
 import { PrefIntro } from '../ui/common';
 import { DEFAULT_SETTINGS, groupTasksFor, prefIcons } from '../shared/settings';
+import { OKINAWA } from '../map/mapData';
 import { prefBgUrl } from '../shared/prefBg';
 import { GroupScroll } from './GroupTv';
 import { DragonTv } from './DragonTv';
@@ -53,6 +54,7 @@ export function IntroPreview() {
 }
 
 function Scene({ m }: { m: PreviewMsg }) {
+  if (m.kind === 'pref' && Number(m.id) === OKINAWA) return <PrefIntro code={OKINAWA} who={PLAYERS[0]} icons={['ui_plus']} />;
   if (m.kind === 'pref') return <PrefIntro code={Number(m.id)} who={PLAYERS[0]} icons={m.icons ?? prefIcons(DEFAULT_SETTINGS, Number(m.id), { reward: 'money' })} />;
   if (m.kind === 'group') {
     const game = m.id as GroupGameId;

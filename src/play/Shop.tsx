@@ -67,7 +67,7 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     // что это собачий корм, не говорим: игрок сам поймёт, когда окажется рядом с акитой
     food: { name: BONUS_INFO.food.name, tag: 'корм', icon: <BonusIcon b="food" size={44} />, desc: 'Пахнет вкусно. Кому-нибудь обязательно понравится — главное, оказаться рядом.', have: `Есть: ${me.bonuses.food ?? 0}` },
     ticket: { name: BONUS_INFO.ticket.name, tag: 'билет', icon: <BonusIcon b="ticket" size={44} />, desc: `Стоишь на станции синкансэна — в свой ход уезжаешь на любую другую станцию, где есть место. Станции: ${stations}.`, have: `Есть: ${me.bonuses.ticket ?? 0}` },
-    scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
+    scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите, и никто не сможет помешать — даже собака. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
   };
 
   const buy = async (item: Item) => {

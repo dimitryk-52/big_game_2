@@ -22,6 +22,10 @@ export const PREFS: PrefInfo[] = raw.prefs as any;
 export const PREF: Record<number, PrefInfo> = Object.fromEntries(PREFS.map((p) => [p.code, p]));
 export const PREF_CODES = PREFS.map((p) => p.code);
 
+/** Окинава: на карте её нет (сюда не ходят) — это место воскрешения. В PREF она есть ради интро и фона, в PREF_CODES — нет */
+export const OKINAWA = 47;
+PREF[OKINAWA] = { code: OKINAWA, ja: '沖縄県', ru: 'Окинава', en: 'Okinawa', region: 'okinawa', size: 0, anchor: [0, 0], bb: [0, 0, 0, 0], adj: [] };
+
 /** префектуры без выхода к морю: на них не высаживаются */
 export const INLAND = [9, 10, 11, 19, 20, 21, 25, 29];
 export const isCoastal = (code: number) => !INLAND.includes(code);

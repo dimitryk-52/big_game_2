@@ -114,6 +114,7 @@ img.avatar, .avatar img { image-rendering: pixelated; display: inline-block; ver
 .pref-intro-ru { font-size: 3.4em; line-height: 1; text-shadow: 4px 4px 0 #000; }
 .pref-intro-reward { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0.4em; font-size: 1.3em; color: var(--yellow); text-shadow: 2px 2px 0 #000; animation: pop 0.5s 0.9s both; }
 .pref-intro-who { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 0.3em; color: var(--muted); }
+.pref-intro-note { max-width: 30em; margin: 0.5em auto 0; font-size: 1.05em; line-height: 1.35; text-shadow: 2px 2px 0 #000; animation: pop 0.5s 0.9s both; }
 
 /* отладочное меню 🐞 */
 .debug-menu { position: fixed; top: 12px; left: 12px; z-index: 100; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 80px); overflow-y: auto; background: rgba(14, 16, 36, 0.97); border: 3px solid var(--yellow); box-shadow: 6px 6px 0 var(--shadow); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 16px; }

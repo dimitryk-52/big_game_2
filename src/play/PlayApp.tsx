@@ -6,7 +6,7 @@ import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
 import { Avatar, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
-import { BONUS_INFO, COIN_DMG, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
+import { BONUS_INFO, COIN_DMG, FARM_NO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, vibrate } from '../shared/util';
 import { MapView } from '../map/MapView';
@@ -200,6 +200,8 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   const goingTo = s.stage.t === 'moving' ? s.stage.to : null;
   useEffect(() => { const u = prefBgUrl(goingTo); if (u) new Image().src = u; }, [goingTo]);
   const solo = soloAt(s.settings, me.pref);
+  // защита от фарма: денежная соло-игра здесь закрыта на этот приход
+  const shut = me.closed && me.closed.code === me.pref ? me.closed.game : null;
   const hasPachinko = solo.includes('pachinko');
   const hasRing = solo.includes('ring');
   const ballsKey = `bg_balls_${client.room}_${me.id}`;
@@ -215,7 +217,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   useEffect(() => {
     if (KEEP.includes(tab as SoloGameId) && !opened.includes(tab as SoloGameId)) setOpened([...opened, tab as SoloGameId]);
   }, [tab]);
-  const soloView = (g: SoloGameId, el: (paused: boolean) => any) => opened.includes(g) && solo.includes(g) && (
+  const soloView = (g: SoloGameId, el: (paused: boolean) => any) => opened.includes(g) && solo.includes(g) && g !== shut && (
     <div style={{ display: !att && tab === g ? 'contents' : 'none' }}>{el(!!att || tab !== g)}</div>
   );
 
@@ -246,14 +248,14 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
       )}
       <div class="main">
         {/* мини-игры остаются смонтированными (на паузе), пока идёт вопрос */}
-        {(tab === 'pachinko' || hasBalls) && (hasPachinko || hasBalls) && (
+        {(tab === 'pachinko' || hasBalls) && (hasPachinko || hasBalls) && (shut !== 'pachinko' || hasBalls) && (
           <div style={{ display: !att && tab === 'pachinko' ? 'contents' : 'none' }}>
             <Pachinko client={client} s={s} me={me} paused={!!att || tab !== 'pachinko'} onExit={() => setTab('home')} />
           </div>
         )}
         {/* интро префектуры — как на ТВ, но без анимации; вопрос потом появится поверх */}
         {s.stage.t === 'prefIntro' && (
-          <div class="phone-intro"><PrefIntro code={s.stage.code} who={s.players[s.stage.pid]} still icons={prefIcons(s.settings, s.stage.code, s.prefs[s.stage.code])} /></div>
+          <div class="phone-intro"><PrefIntro code={s.stage.code} who={s.players[s.stage.pid]} still icons={s.stage.note ? ['ui_plus'] : prefIcons(s.settings, s.stage.code, s.prefs[s.stage.code])} /></div>
         )}
         {att === 'question' && s.q && <QuestionView key={s.q.n} client={client} s={s} q={s.q} me={me} />}
         {att === 'bonus' && <BonusPick client={client} s={s} me={me} />}
@@ -271,6 +273,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
           </div>
         )}
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
+        {!att && shut && tab === shut && !(shut === 'pachinko' && hasBalls) && <ClosedGame game={shut as keyof typeof FARM_NO} left={me.closed!.left} onExit={() => setTab('home')} />}
         {!att && tab === 'map' && <FreeMap s={s} me={me} />}
         {soloView('ring', (paused) => <RingGame client={client} s={s} me={me} paused={paused} onExit={() => setTab('home')} />)}
         {soloView('onsen', (paused) => <Onsen client={client} s={s} me={me} paused={paused} />)}
@@ -288,6 +291,20 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
           {solo.includes('sudoku') && <button class={tab === 'sudoku' ? 'on' : ''} onClick={() => setTab('sudoku')}><PixIcon id="sudoku" size={22} /><span>Судоку</span></button>}
         </nav>
       )}
+    </div>
+  );
+}
+
+/** защита от фарма: игрок вернулся к денежной соло-игре слишком быстро */
+function ClosedGame({ game, left, onExit }: { game: keyof typeof FARM_NO; left: number; onExit: () => void }) {
+  const turns = left === 1 ? 'ход' : left < 5 ? 'хода' : 'ходов';
+  return (
+    <div class="pad col closed-game">
+      <PixIcon id={game} size={64} />
+      <h2>{SOLO_GAMES[game].name}: закрыто</h2>
+      <p>{FARM_NO[game]}</p>
+      <p class="muted">Загляни сюда снова не раньше, чем через {left} {turns}.</p>
+      <button class="btn" onClick={onExit}>Понятно</button>
     </div>
   );
 }

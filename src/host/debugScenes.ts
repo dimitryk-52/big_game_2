@@ -2,12 +2,14 @@
 // Сцена кладётся в state.debug и подменяет stage/q/duel/rhythm у ТВ и телефонов (см. viewState),
 // сам сценарий игры при этом не трогается — «Закрыть» возвращает всё как было.
 import type { BonusId, DebugView, GameState, PublicQuestion, Question, RewardType, Stage } from '../shared/types';
-import { PREF, PREF_CODES, neighbors, atDistance, path } from '../map/mapData';
+import { OKINAWA, PREF, PREF_CODES, neighbors, atDistance, path } from '../map/mapData';
+import { OKINAWA_NOTE } from '../shared/settings';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { TITLES } from '../shared/titles';
 
 export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'prefIntro', name: 'Интро префектуры', group: 'Префектура' },
+  { id: 'okinawaIntro', name: 'Интро Окинавы (первое воскрешение)', group: 'Префектура' },
   { id: 'question', name: 'Вопрос префектуры', group: 'Префектура' },
   { id: 'questionReveal', name: 'Ответ на вопрос', group: 'Префектура' },
   { id: 'questionImages', name: 'Вопрос с картинками', group: 'Префектура' },
@@ -91,6 +93,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
   const [kind, sub] = a.scene.split(':');
   switch (kind) {
     case 'prefIntro': return view({ t: 'prefIntro', code: pref, pid });
+    case 'okinawaIntro': return view({ t: 'prefIntro', code: OKINAWA, pid, note: OKINAWA_NOTE });
     case 'question': return view({ t: 'question' }, { q: mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), {}) });
     case 'questionImages': return view({ t: 'question' }, { q: mkQ(findQ((q) => !!q.answerImages), {}) });
     case 'flagQuestion':

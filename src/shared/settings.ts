@@ -1,7 +1,7 @@
 import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
-export const ECON_VERSION = 1;
+export const ECON_VERSION = 2;
 /** версия раскладки игр по префектурам (см. mergeSettings) */
 export const LAYOUT_V = 2;
 
@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
     reviveYen: 300,
     duelWinYen: 300,
     duelWinStars: 1,
-    duelStealPct: 15,
+    duelStealPct: 20,
   },
   betTime: 15,
   shop: {
@@ -78,6 +78,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // 4 внутри страны, остальные на побережье там, где без этого не обойтись; на соло-играх магазинов нет
   shopPrefs: [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43],
   shopTime: 45,
+  soloCooldown: 3,
   groupPrefs: {
     26: 'calligraphy', 34: 'calligraphy', 19: 'calligraphy', 45: 'fukuwarai', 10: 'fukuwarai', 33: 'fukuwarai', 29: 'senryu', 24: 'senryu', 28: 'senryu',
     43: 'iaido', 46: 'iaido', 13: 'iaido', 30: 'sashimi', 1: 'sashimi', 41: 'sashimi', 42: 'dragon',
@@ -186,12 +187,15 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   const out: any = { ...d, ...saved };
   for (const k of ['reward', 'shop', 'pachinko', 'ring', 'group', 'chohan', 'sudoku'] as const) out[k] = { ...(d as any)[k], ...((saved as any)[k] ?? {}) };
   // экономику пересчитали: старые сохранённые награды и цены заменяем новыми (один раз, дальше решает ведущий)
-  if ((saved.econ ?? 0) < ECON_VERSION) {
+  const econ = saved.econ ?? 0;
+  if (econ < 1) {
     out.reward = { ...out.reward, moverCorrectYen: d.reward.moverCorrectYen, moverWrongYen: d.reward.moverWrongYen, otherCorrectYen: d.reward.otherCorrectYen };
     out.shop = structuredClone(d.shop);
     out.ring = { ...out.ring, cost: d.ring.cost };
-    out.econ = ECON_VERSION;
   }
+  // v2: кража в дуэли 15% → 20% (если ведущий не менял)
+  if (econ < 2 && out.reward.duelStealPct === 15) out.reward.duelStealPct = d.reward.duelStealPct;
+  out.econ = ECON_VERSION;
   // в старых настройках награды только за 3 места — остальные места берём стандартные
   out.group.prizes = d.group.prizes.map((x, i) => out.group.prizes[i] ?? x);
   // джа-одори появилась позже сохранённых настроек: один раз закрепляем её за Нагасаки, если там свободно.
@@ -219,6 +223,17 @@ export function isSpecialQ(st: Pick<Settings, 'topics'>, q: Pick<Question, 'spec
   // спецвопрос = вопрос из спецтемы; флаг q.special в обычных темах игнорируется (старые данные)
   return !!st.topics.find((t) => t.id === q.topic)?.special;
 }
+
+/** интро Окинавы (первое воскрешение игрока) */
+export const OKINAWA_NOTE = 'Остров, где приходят в себя после нокаута. HP восстанавливается полностью, а за верный ответ на вопрос — деньги и бонус. Потом — обратно в бой!';
+
+/** защита от фарма: отказ денежной соло-игры, если игрок вернулся слишком быстро */
+export const FARM_NO = {
+  pachinko: 'Автомат узнал тебя в лицо и притворился сломанным.',
+  ring: 'Барабан ещё не остыл после прошлого раза — дай ему передохнуть.',
+  chohan: 'Якудза за столом переглядываются: «Опять ты? Шёл бы погулять».',
+  sudoku: 'Монах-составитель ещё не придумал для тебя новую головоломку.',
+} as const;
 
 export const BONUS_INFO: Record<BonusId, { name: string; short: string; icon: string }> = {
   fifty1: { name: 'Убрать 1 неверный ответ', short: '−1 ответ', icon: '✂️' },

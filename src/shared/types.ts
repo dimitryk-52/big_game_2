@@ -79,6 +79,8 @@ export interface Player {
   online: boolean;
   /** чем игрок занят на телефоне (пнп на ТВ) */
   busy: null | SoloGameId;
+  /** защита от фарма: денежная соло-игра здесь закрыта для игрока на этот приход (left — через сколько своих ходов откроется) */
+  closed?: { code: number; game: SoloGameId; left: number };
   bot?: boolean;
 }
 
@@ -295,7 +297,7 @@ export type Stage =
   | { t: 'bonus'; pids: string[]; deadline: number; offers: Record<string, BonusId[]>; picked: Record<string, BonusId | 'none'> }
   | { t: 'question' }
   /** интро префектуры при первом входе: фон и название по центру */
-  | { t: 'prefIntro'; code: number; pid: string }
+  | { t: 'prefIntro'; code: number; pid: string; /** пояснение под названием (интро Окинавы) */ note?: string }
   /** secret — что именно получено (видит только сам игрок); text — для всех */
   | { t: 'reward'; pid: string; reward: RewardType; text: string; pref: number; secret?: string }
   /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
@@ -381,6 +383,8 @@ export interface Settings {
   shopPrefs: number[];
   /** сколько секунд игрок может пробыть в магазине */
   shopTime: number;
+  /** защита от фарма: денежную соло-игру (пачинко, кольцо, чо-хан, судоку) снова можно играть через столько своих ходов (онсэн — без ограничений) */
+  soloCooldown?: number;
   /** префектуры с групповой игрой: код → игра */
   groupPrefs: Record<number, GroupGameId>;
   groupTasks: GroupTask[];

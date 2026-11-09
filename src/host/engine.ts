@@ -3,14 +3,14 @@
 // кнопкой ведущего «Далее». Снапшот сохраняется на контрольных точках,
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
-  BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, Stage, TopicId,
+  BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, SoloGameId, Stage, TopicId,
 } from '../shared/types';
-import { BONUS_INFO, COIN_DMG, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
+import { BONUS_INFO, COIN_DMG, FARM_NO, OKINAWA_NOTE, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
 import { NOODLES, noodleOf, noodleScore, parseNoodle } from '../games/noodles';
 import { ANGLE_MAX, ANGLE_MIN, PIT_TRIES, parsePits, pitDistance, randomWind } from '../games/cherry';
 import { buildDebugScene } from './debugScenes';
-import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
+import { OKINAWA, PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/look';
 import { RHYTHM_LEAD_BEATS, RING_PRIZE_INFO, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
@@ -52,6 +52,10 @@ interface Secrets {
   sudoku?: Record<string, { level: number; puzzle: number[] }>;
   /** онсэн: где игрок уже вылечился (до ухода из префектуры) */
   onsen?: Record<string, number>;
+  /** кто уже видел интро Окинавы (первое воскрешение) */
+  okinawaSeen?: string[];
+  /** защита от фарма: на каком своём ходу игрок последний раз играл в денежную соло-игру в префектуре */
+  soloPlayed?: Record<string, Record<number, number>>;
   /** вопросы префектур, которые больше не задаются (одноразовые заданы, цикличные решены) */
   qDone?: string[];
   /** вопросы-флаги: текущие неверные варианты и уже выбранные (их больше не показываем) */
@@ -203,7 +207,7 @@ export class GameEngine {
         // ручное перемещение игрока ведущим (исправить спорную ситуацию)
         const p = this.s.players[args?.pid];
         const code = Number(args?.pref);
-        if (!p || !PREF[code]) break;
+        if (!p || !PREF_CODES.includes(code)) break;
         p.pref = code;
         this.s.prefs[code] && (this.s.prefs[code].rev = true);
         this.log(`Ведущий переместил ${p.name}: ${PREF[code].ru}`);
@@ -653,12 +657,13 @@ export class GameEngine {
     if (!landing && p.pref != null && p.pref !== to) this.bump('distance', pid, path(p.pref, to).length - 1);
     p.pref = to;
     if (this.sec.onsen) delete this.sec.onsen[pid];
+    this.closeFarm(p, to);
     const ps = this.s.prefs[to];
     const firstVisit = !ps.rev;
     if (firstVisit) this.bump('opened', pid);
     ps.rev = true;
     ps.visits++;
-    // первый, кто дошёл до Акиты, получает собаку акита-ину (бонус от неё — потом)
+    // первый, кто дошёл до Акиты, получает собаку акита-ину: она защищает хозяина от нападений (см. dogChase)
     if (to === AKITA_PREF && !Object.values(this.s.players).some((x) => x.akita)) {
       p.akita = true;
       this.log(`${p.name}: акита-ину теперь бежит следом!`);
@@ -671,6 +676,14 @@ export class GameEngine {
       await this.sleep(epoch, this.introWait);
     }
     await this.gate(epoch);
+
+    // акита-ину охраняет хозяина: напасть нельзя — собака кусает (−1 HP) и прогоняет в соседнюю префектуру.
+    // Свиток-вызов сюда не попадает — он собаку обходит
+    const guard = this.occupants(to, pid).find((o) => o.akita && o.hp > 0);
+    if (guard && p.hp > 0) {
+      await this.dogChase(epoch, p, guard, to);
+      return;
+    }
 
     // порядок в префектуре: вопрос (пусто) или дуэль (занято) → магазин → групповая игра.
     // Соло-игры (пачинко, онсэн, чо-хан…) — на телефоне, пока игрок стоит здесь
@@ -687,6 +700,58 @@ export class GameEngine {
       await this.gate(epoch);
       await this.groupGame(epoch, to, game);
     }
+  }
+
+  /** денежные соло-игры, которые закрываются от фарма (онсэн не в счёт: за лечение платят) */
+  private static readonly FARM: SoloGameId[] = ['pachinko', 'ring', 'chohan', 'sudoku'];
+
+  /** пришёл в префектуру: если недавно уже играл здесь в денежную соло-игру — она закрыта на этот приход */
+  private closeFarm(p: Player, code: number) {
+    delete p.closed;
+    const game = soloAt(this.s.settings, code).find((g) => GameEngine.FARM.includes(g));
+    const last = this.sec.soloPlayed?.[p.id]?.[code];
+    if (!game || last == null) return;
+    const cd = this.s.settings.soloCooldown ?? 3;
+    const passed = (this.sec.ownTurns?.[p.id] ?? 0) - last;
+    if (passed < cd) p.closed = { code, game, left: cd - passed };
+  }
+
+  /** сыграл в денежную соло-игру: запоминаем ход (для защиты от фарма) */
+  private playedSolo(p: Player) {
+    if (p.pref == null) return;
+    ((this.sec.soloPlayed ??= {})[p.id] ??= {})[p.pref] = this.sec.ownTurns?.[p.id] ?? 0;
+  }
+
+  /** акита-ину кусает пришедшего (−1 HP) и прогоняет: он выбирает другую соседнюю префектуру и приходит туда как обычно */
+  private async dogChase(epoch: number, p: Player, owner: Player, at: number) {
+    const pid = p.id;
+    this.log(`Акита-ину ${owner.name} не пускает ${p.name}: −1 HP`);
+    this.io.fx?.('akita', { pid, owner: owner.id, code: at });
+    this.setStage({ t: 'banner', text: 'Гав! Акита-ину охраняет хозяина', sub: `${p.name}: −1 HP — ищи другую дорогу`, big: true });
+    await this.sleep(epoch, 1200);
+    this.hit(p, 1);
+    await this.sleep(epoch, 2000);
+    if (p.hp <= 0) {
+      this.setStage({ t: 'banner', text: `${p.name} без сил`, sub: 'Собака оказалась сильнее', big: true });
+      await this.sleep(epoch, 2500);
+      return;
+    }
+    const options = neighbors(at).filter((c) => this.occupants(c, pid).length < 2 && !this.occupants(c, pid).some((o) => o.akita && o.hp > 0));
+    if (!options.length) {
+      this.setStage({ t: 'banner', text: `${p.name}: бежать некуда`, sub: 'Ход окончен' });
+      await this.sleep(epoch, 2500);
+      return;
+    }
+    this.setStage({ t: 'move', pid, options, options2: [] });
+    const choice = await this.waitInput(epoch, (m) => {
+      if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
+      const c = Number(m.value);
+      return options.includes(c) ? c : undefined;
+    }, p.bot ? 20000 : p.online ? null : 15000);
+    const to = choice ?? pick(options);
+    this.setStage({ t: 'moving', pid, from: at, to, path: [at, to] });
+    await this.sleep(epoch, 1500);
+    await this.arrive(epoch, p, to);
   }
 
   /** вопросы префектуры по порядку, которые ещё можно задать */
@@ -852,6 +917,14 @@ export class GameEngine {
 
   private async revive(epoch: number, p: Player) {
     const st = this.s.settings;
+    // первое воскрешение игрока — интро Окинавы: что здесь происходит
+    const seen = (this.sec.okinawaSeen ??= []);
+    if (!seen.includes(p.id)) {
+      seen.push(p.id);
+      this.setStage({ t: 'prefIntro', code: OKINAWA, pid: p.id, note: OKINAWA_NOTE });
+      await this.sleep(epoch, this.introWait);
+      await this.gate(epoch);
+    }
     this.setStage({ t: 'banner', text: `${p.name} восстанавливается`, sub: 'Отдых на Окинаве: ответь, чтобы получить бонус', big: true });
     await this.sleep(epoch, 2500);
     const q = this.pickQuestion((x) => x.topic === 'okinawa') ?? this.pickQuestion((x) => !x.special);
@@ -972,7 +1045,7 @@ export class GameEngine {
       d.winner = win.id;
       this.bump('duelWin', win.id);
       // победитель забирает часть денег проигравшего
-      const stolen = Math.floor((loser.yen * (st.reward.duelStealPct ?? 15)) / 100 / 10) * 10;
+      const stolen = Math.floor((loser.yen * (st.reward.duelStealPct ?? 20)) / 100 / 10) * 10;
       loser.yen -= stolen;
       win.yen += stolen;
       d.stolen = stolen;
@@ -1930,6 +2003,7 @@ export class GameEngine {
       }
       case 'pachiBuy': {
         if (!soloAt(st, p.pref).includes('pachinko')) return reply(false, null, 'Здесь нет пачинко');
+        if (p.closed?.code === p.pref) return reply(false, null, FARM_NO.pachinko);
         const packs = Math.max(1, Math.min(10, Math.floor(a.packs ?? 1)));
         const balls = packs * st.pachinko.pack;
         const cost = balls * st.pachinko.yenPerBall;
@@ -1937,6 +2011,7 @@ export class GameEngine {
         p.yen -= cost;
         this.bump('pachiNet', p.id, -cost);
         p.busy = 'pachinko';
+        this.playedSolo(p);
         this.emit();
         return reply(true, { balls });
       }
@@ -1953,6 +2028,7 @@ export class GameEngine {
       case 'busy': {
         const g = a.busy as keyof typeof SOLO_GAMES | null;
         if (g && !soloAt(st, p.pref).includes(g)) return reply(false, null, 'Здесь нет такой игры');
+        if (g && p.closed?.code === p.pref && p.closed.game === g) return reply(false, null, FARM_NO[g as keyof typeof FARM_NO]);
         p.busy = g ?? null;
         // онсэн лечит: один раз за приход в префектуру
         if (g === 'onsen' && (this.sec.onsen ??= {})[p.id] !== p.pref) {
@@ -1967,7 +2043,9 @@ export class GameEngine {
       }
       case 'ringStart': {
         if (!soloAt(st, p.pref).includes('ring')) return reply(false, null, 'Здесь нет призовой машины');
+        if (p.closed?.code === p.pref) return reply(false, null, FARM_NO.ring);
         if (!pay({ yen: st.ring.cost, stars: 0 })) return reply(false, null, 'Не хватает йен');
+        this.playedSolo(p);
         const seed = randInt(1e9);
         const t0 = this.now + 1200;
         this.sec.ring[p.id] = { seed, t0 };
@@ -2006,6 +2084,8 @@ export class GameEngine {
         if (!(st.chohan?.bets ?? []).includes(bet)) return reply(false, null, 'Нет такой ставки');
         if (a.guess !== 'cho' && a.guess !== 'han') return reply(false, null, 'Чёт или нечет?');
         if (p.yen < bet) return reply(false, null, 'Не хватает йен');
+        if (p.closed?.code === p.pref) return reply(false, null, FARM_NO.chohan);
+        this.playedSolo(p);
         const d1 = 1 + randInt(6), d2 = 1 + randInt(6);
         const win = (a.guess === 'cho') === ((d1 + d2) % 2 === 0);
         p.yen += win ? bet : -bet;
@@ -2024,7 +2104,9 @@ export class GameEngine {
         const cur = this.sudokuFor(p.id);
         if (cur.done) return reply(false, null, 'Все судоку уже решены');
         const grid = Array.isArray(a.grid) ? a.grid.map(Number) : [];
+        if (p.closed?.code === p.pref) return reply(false, null, FARM_NO.sudoku);
         if (!isSolved(cur.puzzle!, grid, cur.size!)) return reply(false, null, 'Пока не решено');
+        this.playedSolo(p);
         this.bump('sudoku', p.id);
         const pr = st.sudoku?.rewards?.[cur.level] ?? { yen: 0, stars: 0 };
         p.yen += pr.yen;

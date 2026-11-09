@@ -153,7 +153,7 @@ export function SkillChips({ topics, stats, size = 16, grid }: { topics: Topic[]
 /** bgLayer — фон рисует общий слой под интро (ТВ), здесь только заглушка, если фона нет */
 /** still — без анимаций (телефон): тот же фон и та же плашка с названием, что на ТВ */
 /** icons — что есть в префектуре (prefIcons): награда, соло-игры, магазин, групповая игра */
-export function PrefIntro({ code, who, icons, bgLayer, still }: { code: number; who?: Player; icons?: string[]; bgLayer?: boolean; still?: boolean }) {
+export function PrefIntro({ code, who, icons, bgLayer, still, note }: { code: number; who?: Player; icons?: string[]; bgLayer?: boolean; still?: boolean; note?: string }) {
   const bg = prefBgUrl(code);
   const smooth = useSmoothBg(bgLayer || still ? null : bg);
   const p = PREF[code];
@@ -163,6 +163,7 @@ export function PrefIntro({ code, who, icons, bgLayer, still }: { code: number; 
       <div class="pref-intro-title">
         <div class="pref-intro-ja">{p?.ja}</div>
         <div class="pref-intro-ru">{p?.ru}</div>
+        {note && <div class="pref-intro-note">{note}</div>}
         {!!icons?.length && <div class="pref-intro-reward">{icons.map((id) => <PixIcon id={id} size={40} />)}</div>}
         {who && <div class="pref-intro-who"><Avatar p={who} size={36} /> {who.name}</div>}
       </div>

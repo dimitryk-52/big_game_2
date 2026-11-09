@@ -68,6 +68,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           break;
         }
         case 'lure': playSound('lure'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
+        case 'akita': playSound('akita'); if (d.code) m?.puff(d.code, 0xe2453c); break;
         case 'bonusUsed': if (d.b === 'coin') playSound('coinToss'); break;
         case 'duel': playSound('duel'); break;
         case 'iaiCut': playSound('iaiCut'); break;
@@ -241,7 +242,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'duelBet' && <BetBoard s={s} />}
       {st.t === 'find' && <FindPopup s={s} />}
       {st.t === 'epoch' && <EpochBanner s={s} />}
-      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer icons={prefIcons(s.settings, st.code, s.prefs[st.code])} />}
+      {st.t === 'prefIntro' && <PrefIntro key={st.code} code={st.code} who={s.players[st.pid]} bgLayer icons={st.note ? ['ui_plus'] : prefIcons(s.settings, st.code, s.prefs[st.code])} />}
       {st.t === 'question' && s.q && <QuestionPanel key={s.q.n} s={s} q={s.q} />}
       {st.t === 'duelPick' && (
         <div class="duel-pick pop">

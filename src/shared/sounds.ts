@@ -4,7 +4,7 @@
 // 8-битный звук (если он у события есть). На телефонах (GitHub Pages) списка нет — там всегда 8 бит.
 import { audio, sfx, soundOn } from './sound';
 import { GROUP_GAMES, SOLO_GAMES } from './settings';
-import { PREFS } from '../map/mapData';
+import { OKINAWA, PREF, PREFS } from '../map/mapData';
 import type { GroupGameId, SoloGameId } from './types';
 import { now } from './util';
 
@@ -47,6 +47,7 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'turnStart', name: 'Начало хода', when: 'Плашка «Ход: Имя» — камера наезжает на игрока' },
       { id: 'moving', name: 'Фишка пошла', when: 'Игрок выбрал, куда идти, фишка поехала по стрелке' },
       { id: 'lure', name: 'Акиту переманили', when: 'Игрок потратил корм — акита-ину убежала к нему', synth: sfx.woof },
+      { id: 'akita', name: 'Акита не пускает', when: 'Игрок пришёл к хозяину акиты — собака кусает и прогоняет', synth: sfx.woof },
       { id: 'rail', name: 'Синкансэн', when: 'Игрок поехал по билету на синкансэн', synth: sfx.rail },
       { id: 'challenge', name: 'Свиток-вызов', when: 'Игрок отправил свиток-вызов — свиток летит через карту к сопернику', synth: sfx.challenge },
       { id: 'arrive', name: 'Фишка пришла', when: 'Фишка встала в новую префектуру (облачко на карте)', synth: sfx.land },
@@ -135,7 +136,8 @@ export const SOUND_EVENTS: Record<string, SoundEvent> = Object.fromEntries(SOUND
 export type IntroKind = 'pref' | 'group' | 'solo';
 export const introId = (k: IntroKind, id: string | number) => `${k}:${id}`;
 export const INTRO_LIST: { kind: IntroKind; id: string; name: string; sub: string }[] = [
-  ...PREFS.map((p) => ({ kind: 'pref' as const, id: String(p.code), name: p.ru, sub: p.ja })),
+  // Окинавы нет в PREFS (её нет на карте), но интро у неё есть — добавляем отдельно
+  ...[...PREFS, PREF[OKINAWA]].map((p) => ({ kind: 'pref' as const, id: String(p.code), name: p.ru, sub: p.ja })),
   ...(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => ({ kind: 'group' as const, id: g, name: GROUP_GAMES[g].name, sub: GROUP_GAMES[g].ja })),
   ...(Object.keys(SOLO_GAMES) as SoloGameId[]).map((g) => ({ kind: 'solo' as const, id: g, name: SOLO_GAMES[g].name, sub: '' })),
 ];
