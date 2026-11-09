@@ -1,8 +1,9 @@
-// Чо-хан: пиксельная отрисовка — белое сукно на татами, плетёный стакан (壺) и две кости.
-// Рисуем в маленький холст (CH_W×CH_H), на экране он растягивается без сглаживания.
+// Чо-хан: стол бакуто в перспективе (src/img/chohan/table.png), плетёный стакан (壺) и две кости.
+// Спрайты стакана и костей — pxl-арт из art/chohan/chohan.px.js, в той же перспективе, что стол.
+// Рисуем в холст родного размера фона (CH_W×CH_H); на экране он растягивается без сглаживания.
 
-export const CH_W = 120;
-export const CH_H = 90;
+export const CH_W = 320;
+export const CH_H = 240;
 
 export interface ChohanView {
   /** смещение стакана при тряске, px */
@@ -14,86 +15,70 @@ export interface ChohanView {
   dice: [number, number] | null;
 }
 
-const PIPS: Record<number, [number, number][]> = {
-  1: [[1, 1]],
-  2: [[0, 0], [2, 2]],
-  3: [[0, 0], [1, 1], [2, 2]],
-  4: [[0, 0], [2, 0], [0, 2], [2, 2]],
-  5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]],
-  6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]],
-};
-
-export function drawDie(ctx: CanvasRenderingContext2D, x: number, y: number, v: number, s = 13) {
-  ctx.fillStyle = '#0d0d1a';
-  ctx.fillRect(x - 1, y, s + 2, s);
-  ctx.fillRect(x, y - 1, s, s + 2);
-  ctx.fillStyle = '#c9c2b4';
-  ctx.fillRect(x, y + 1, s, s - 1);
-  ctx.fillStyle = '#fbf8f0';
-  ctx.fillRect(x, y, s, s - 2);
-  // японская кость: единица — большая красная точка
-  if (v === 1) {
-    ctx.fillStyle = '#d0202a';
-    const c = Math.floor(s / 2) - 2;
-    ctx.fillRect(x + c, y + c - 1, 4, 4);
-    ctx.fillRect(x + c - 1, y + c, 6, 2);
-    ctx.fillRect(x + c + 1, y + c - 2, 2, 6);
-    return;
+const files = import.meta.glob<string>(['../img/chohan/table.png', '../img/chohan/cup_*.png', '../img/chohan/die_*.png'], { eager: true, import: 'default', query: '?url' });
+const imgs = new Map<string, HTMLImageElement>();
+function img(name: string): HTMLImageElement | null {
+  let im = imgs.get(name);
+  if (!im) {
+    const url = files[`../img/chohan/${name}.png`];
+    if (!url || typeof Image === 'undefined') return null;
+    im = new Image();
+    im.src = url;
+    imgs.set(name, im);
   }
-  ctx.fillStyle = '#1a1410';
-  const step = (s - 6) / 2;
-  for (const [px, py] of PIPS[v] ?? []) ctx.fillRect(Math.round(x + 2 + px * step), Math.round(y + 1 + py * step), 2, 2);
+  return im.complete && im.naturalWidth ? im : null;
+}
+/** загрузить картинки заранее, чтобы первый кадр не мигал */
+export function preloadChohan() {
+  for (const n of ['table', 'cup_closed', 'cup_open', ...[1, 2, 3, 4, 5, 6].flatMap((v) => [`die_${v}`, `die_alt_${v}`])]) img(n);
 }
 
-function drawCup(ctx: CanvasRenderingContext2D, cx: number, by: number) {
-  // плетёный стакан: трапеция, светлый ободок, полосы плетения
-  const h = 30, top = 22, bot = 30;
-  for (let y = 0; y < h; y++) {
-    const w = Math.round(top + ((bot - top) * y) / h);
-    const x = Math.round(cx - w / 2);
-    const yy = by - h + y;
-    ctx.fillStyle = '#0d0d1a';
-    ctx.fillRect(x - 1, yy, w + 2, 1);
-    ctx.fillStyle = y % 4 < 2 ? '#8a5a2b' : '#a8733a';
-    ctx.fillRect(x, yy, w, 1);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    for (let k = (y >> 1) % 2; k < w; k += 4) ctx.fillRect(x + k, yy, 1, 1);
-    ctx.fillStyle = 'rgba(255,230,180,0.35)';
-    ctx.fillRect(x + 3, yy, 2, 1);
-  }
-  ctx.fillStyle = '#0d0d1a';
-  ctx.fillRect(Math.round(cx - top / 2) - 1, by - h - 1, top + 2, 1);
-  ctx.fillRect(Math.round(cx - bot / 2) - 1, by, bot + 2, 1);
-  ctx.fillStyle = '#d9a35c';
-  ctx.fillRect(Math.round(cx - bot / 2), by - 3, bot, 2);
+/** точка на сукне, где стоит стакан (середина устья) */
+const CX = 160, CY = 104;
+export interface ChohanFrame { x: number; y: number; w: number; h: number }
+/** кадр телефона: середина стола с дилером, без краёв татами — кости крупнее */
+export const CH_PHONE: ChohanFrame = { x: 40, y: 22, w: 240, h: 180 };
+/** кадр вокруг стакана и костей — для маленького окна на ТВ (там 1 пиксель арта = 2 пикселя экрана) */
+export const CH_FOCUS: ChohanFrame = { x: 110, y: 44, w: 100, h: 75 };
+
+/** спрайт по нижней середине */
+function put(ctx: CanvasRenderingContext2D, name: string, cx: number, by: number) {
+  const im = img(name);
+  if (im) ctx.drawImage(im, Math.round(cx - im.width / 2), Math.round(by - im.height));
 }
 
-export function drawChohan(ctx: CanvasRenderingContext2D, v: ChohanView) {
+/** тень на сукне: полупрозрачный эллипс шахматкой, чтобы осталась пиксельной */
+function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, a: number) {
+  ctx.fillStyle = `rgba(60, 30, 25, ${a})`;
+  for (let y = -ry; y <= ry; y++) {
+    const w = Math.floor(rx * Math.sqrt(1 - (y / ry) ** 2));
+    for (let x = -w; x <= w; x++) if ((x + y) % 2 === 0) ctx.fillRect(cx + x, cy + y, 1, 1);
+  }
+}
+
+/** frame — какой кусок стола рисовать (холст должен быть его размера); без него — весь стол */
+export function drawChohan(ctx: CanvasRenderingContext2D, v: ChohanView, frame?: ChohanFrame) {
+  ctx.setTransform(1, 0, 0, 1, -(frame?.x ?? 0), -(frame?.y ?? 0));
   ctx.imageSmoothingEnabled = false;
-  // татами
-  ctx.fillStyle = '#b8b26a';
+  const table = img('table');
+  ctx.fillStyle = '#2a1518';
   ctx.fillRect(0, 0, CH_W, CH_H);
-  ctx.fillStyle = '#a69f58';
-  for (let y = 1; y < CH_H; y += 3) ctx.fillRect(0, y, CH_W, 1);
-  ctx.fillStyle = '#2a3a2a';
-  ctx.fillRect(0, 0, CH_W, 4);
-  ctx.fillRect(0, CH_H - 4, CH_W, 4);
-  // белое сукно
-  ctx.fillStyle = '#0d0d1a';
-  ctx.fillRect(13, 21, 94, 56);
-  ctx.fillStyle = '#d8d2c4';
-  ctx.fillRect(14, 22, 92, 54);
-  ctx.fillStyle = '#f2eee4';
-  ctx.fillRect(14, 22, 92, 51);
-  const cx = 60, base = 62;
-  // тень стакана
-  const shadowW = 30 - Math.round(v.lift * 8);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(cx - shadowW / 2 + 2, base, shadowW, 3);
+  if (table) ctx.drawImage(table, 0, 0); // фон 320×239: последняя строка — тёмная подложка
+
+  // подъём: сначала стакан отрывается вверх, на второй половине дилер запрокидывает его к себе
+  const raise = v.air ? 0 : Math.min(1, v.lift * 2);
+  const open = !v.air && v.lift >= 0.5;
+  const up = v.air ? 18 : Math.round(raise * 14);
+  const sx = Math.round(v.shake);
+
+  // тень стакана: на месте, когда стоит; бледнее и меньше, когда поднят
+  if (!open) shadow(ctx, CX + 2 + sx, CY + 1, 21 - Math.round(up / 3), 7 - Math.round(up / 6), up ? 0.22 : 0.32);
+
+  if (open) put(ctx, 'cup_open', CX + 1, CY - 15);
   if (v.dice && !v.air) {
-    drawDie(ctx, cx - 15, base - 15, v.dice[0]);
-    drawDie(ctx, cx + 3, base - 13, v.dice[1]);
+    shadow(ctx, CX, CY + 3, 16, 4, 0.18);
+    put(ctx, `die_alt_${v.dice[0]}`, CX - 10, CY + 8);
+    put(ctx, `die_${v.dice[1]}`, CX + 11, CY + 6);
   }
-  const lift = Math.round(v.lift * 30) + (v.air ? 16 : 0);
-  drawCup(ctx, cx + Math.round(v.shake), base + 1 - lift);
+  if (!open) put(ctx, 'cup_closed', CX + sx, CY + 15 - up);
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { GameClient } from '../shared/client';
 import type { GameState, Player } from '../shared/types';
-import { CH_H, CH_W, drawChohan, type ChohanView } from '../games/chohan';
+import { CH_PHONE, drawChohan, preloadChohan, type ChohanView } from '../games/chohan';
 import { fmtYen, vibrate } from '../shared/util';
 import { sfx } from '../shared/sound';
 
@@ -21,6 +21,7 @@ export function ChoHan({ client, s, me, paused, onExit }: { client: GameClient; 
   const [err, setErr] = useState('');
 
   useEffect(() => {
+    preloadChohan();
     let raf = 0;
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop);
@@ -37,7 +38,7 @@ export function ChoHan({ client, s, me, paused, onExit }: { client: GameClient; 
         if (k >= 1) anim.current = null;
       }
       const c = cv.current;
-      if (c) drawChohan(c.getContext('2d')!, v);
+      if (c) drawChohan(c.getContext('2d')!, v, CH_PHONE);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -83,7 +84,7 @@ export function ChoHan({ client, s, me, paused, onExit }: { client: GameClient; 
   return (
     <div class="chohan pad col">
       <div class="center"><b>Чо-хан</b> <span class="jp">丁半</span> · чёт или нечет?</div>
-      <canvas ref={cv} width={CH_W} height={CH_H} class="chohan-cv" />
+      <canvas ref={cv} width={CH_PHONE.w} height={CH_PHONE.h} class="chohan-cv" />
       {res && (
         <div class={'status-card pop center ' + (res.win ? 'win' : 'lose')}>
           {res.d1} + {res.d2} = {sum} — {sum % 2 === 0 ? '丁 чёт' : '半 нечет'}

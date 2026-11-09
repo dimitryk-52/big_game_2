@@ -8,7 +8,7 @@ import { OnsenView, type OnsenLook } from './OnsenView';
 import { PachinkoSim, drawPachinko } from './pachinko';
 import { PACHI, ringCellAt, ringLayout, type RingLayout } from './logic';
 import { drawRing } from './ring';
-import { CH_H, CH_W, drawChohan } from './chohan';
+import { CH_FOCUS, drawChohan, preloadChohan } from './chohan';
 import { now } from '../shared/util';
 import { playSound } from '../shared/sounds';
 
@@ -86,6 +86,7 @@ function ChohanPnP({ pid }: { pid: string }) {
   const [res, setRes] = useState<{ d1: number; d2: number; win: boolean; bet: number } | null>(null);
   useEffect(() => {
     let t0 = 0, dice: [number, number] | null = null;
+    preloadChohan();
     const off = pnpBus.on(pid, (ev) => {
       if (ev.k !== 'chohan') return;
       dice = [ev.d1, ev.d2];
@@ -99,7 +100,7 @@ function ChohanPnP({ pid }: { pid: string }) {
       const c = cv.current;
       if (!c) return;
       const k = dice ? Math.max(0, Math.min(1, (t - t0 - 700) / 600)) : 0;
-      drawChohan(c.getContext('2d')!, { shake: 0, lift: k, air: false, dice });
+      drawChohan(c.getContext('2d')!, { shake: 0, lift: k, air: false, dice }, CH_FOCUS);
     };
     raf = requestAnimationFrame(loop);
     return () => { off(); cancelAnimationFrame(raf); };
@@ -107,7 +108,7 @@ function ChohanPnP({ pid }: { pid: string }) {
   const sum = res ? res.d1 + res.d2 : 0;
   return (
     <>
-      <canvas ref={cv} width={CH_W} height={CH_H} class="pnp-cv" style={{ width: 200, height: 150 }} />
+      <canvas ref={cv} width={CH_FOCUS.w} height={CH_FOCUS.h} class="pnp-cv" style={{ width: CH_FOCUS.w * 2, height: CH_FOCUS.h * 2 }} />
       <div class="pnp-foot">{res ? `${sum % 2 ? '半' : '丁'} ${sum} · ${res.win ? '+' : '−'}¥${res.bet}` : 'ставка…'}</div>
     </>
   );
