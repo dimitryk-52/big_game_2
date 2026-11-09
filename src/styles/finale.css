@@ -31,37 +31,35 @@
 }
 .plaque.on { opacity: 1; transform: none; }
 
-/* печать: квадрат с рамкой и кандзи цвета туши; падает сверху и «впечатывается» в бумагу */
-.hanko {
-  position: absolute; width: 68px; height: 68px; display: grid; place-items: center;
-  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS Mincho', 'DotGothic16', serif; font-weight: 900;
-  font-size: 46px; line-height: 1; color: var(--c);
-  border: 5px solid var(--c); border-radius: 8px;
-  background: rgba(255, 255, 255, 0.15);
-  mix-blend-mode: multiply; opacity: 0.95;
-  box-shadow: inset 0 0 0 2px rgba(239, 227, 200, 0.6);
-  transform: rotate(var(--rot));
-  animation: hanko-drop 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+/* печать: пиксельная рамка (маска 36x36 ×2, форма из titles.ts) и кандзи пиксельным шрифтом;
+   падает сверху и «впечатывается» в бумагу. left/top — центр печати */
+.fseal {
+  --ink: var(--c);
+  position: absolute; width: 72px; height: 72px; display: grid; place-items: center;
+  mix-blend-mode: multiply; opacity: 0.93;
+  transform: translate(-50%, -50%) rotate(var(--rot));
+  animation: fseal-drop 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
 }
-.hanko::after {
-  /* неровный оттиск: белёсые пятна, будто краска легла не везде */
-  content: ''; position: absolute; inset: -5px; border-radius: 8px; pointer-events: none;
-  background:
-    radial-gradient(circle at 22% 30%, rgba(239, 227, 200, 0.7) 0 3px, transparent 4px),
-    radial-gradient(circle at 75% 70%, rgba(239, 227, 200, 0.6) 0 2px, transparent 3px),
-    radial-gradient(circle at 60% 15%, rgba(239, 227, 200, 0.5) 0 2px, transparent 3px);
+.fseal::before {
+  content: ''; position: absolute; inset: 0; background: var(--ink);
+  -webkit-mask: var(--frame) center / 100% 100% no-repeat; mask: var(--frame) center / 100% 100% no-repeat;
+  image-rendering: pixelated;
 }
-.hanko.rainbow {
-  border-image: linear-gradient(135deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #8e24aa) 1;
-  border-radius: 0;
-  background: linear-gradient(135deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #8e24aa);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+/* DotGothic16 нарисован на сетке 16px: 32px — ровно 2 экранных пикселя на точку, как у рамки */
+.fseal span {
+  position: relative; font-family: 'DotGothic16', monospace; font-size: 32px; line-height: 1;
+  color: var(--ink); -webkit-font-smoothing: none; font-smooth: never;
 }
-@keyframes hanko-drop {
-  0% { transform: rotate(var(--rot)) scale(3); opacity: 0; }
-  70% { transform: rotate(var(--rot)) scale(0.92); opacity: 0.95; }
-  85% { transform: rotate(var(--rot)) scale(1.04); }
-  100% { transform: rotate(var(--rot)) scale(1); opacity: 0.95; }
+/* треугольник крупнее (46x46 ×2), кандзи — в его центре тяжести, ниже середины */
+.fseal.triangle { width: 92px; height: 92px; }
+.fseal.triangle span { transform: translateY(8px); }
+.fseal.rainbow { --ink: linear-gradient(135deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #8e24aa); }
+.fseal.rainbow span { background: var(--ink); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@keyframes fseal-drop {
+  0% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(3); opacity: 0; }
+  70% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(0.92); opacity: 0.93; }
+  85% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(1.04); }
+  100% { transform: translate(-50%, -50%) rotate(var(--rot)) scale(1); opacity: 0.93; }
 }
 .finale-card.active .finale-fig { animation: finale-thud 0.3s ease 0.32s; }
 @keyframes finale-thud {

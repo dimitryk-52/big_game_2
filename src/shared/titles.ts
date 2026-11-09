@@ -14,11 +14,15 @@ export interface TitleDef {
   kanji: string;
   /** цвет печати и плашки */
   color: string;
+  /** форма печати (рамка — пиксельная маска src/img/hanko/hanko_<shape>.png) */
+  shape: HankoShape;
   /** счётчик в Tally; у Магната и Императора считается по итогам игры */
   metric?: string;
   /** меньше — лучше (Скряга) */
   min?: boolean;
 }
+
+export type HankoShape = 'square' | 'circle' | 'diamond' | 'hexagon' | 'octagon' | 'triangle';
 
 export const MAX_TITLES = 3;
 
@@ -31,46 +35,46 @@ const BROWN = '#7b4a26';
 const RAINBOW = 'rainbow';
 
 export const TITLES: TitleDef[] = [
-  { id: 'emperor', name: 'Император', kanji: '帝', color: RAINBOW },
-  { id: 'weapon', name: 'Оружейник', kanji: '器', color: RAINBOW, metric: 'specials' },
+  { id: 'emperor', name: 'Император', kanji: '帝', color: RAINBOW, shape: 'octagon' },
+  { id: 'weapon', name: 'Оружейник', kanji: '器', color: RAINBOW, shape: 'hexagon', metric: 'specials' },
   // дуэли
-  { id: 'shogun', name: 'Сёгун', kanji: '将', color: RED, metric: 'duelWin' },
-  { id: 'ronin', name: 'Ронин', kanji: '浪', color: RED, metric: 'duelAttack' },
-  { id: 'phoenix', name: 'Феникс', kanji: '鳳', color: RED, metric: 'revive' },
-  { id: 'yakuza', name: 'Якудза', kanji: '盗', color: RED, metric: 'stolen' },
-  { id: 'bookie', name: 'Букмекер', kanji: '賭', color: RED, metric: 'betNet' },
+  { id: 'shogun', name: 'Сёгун', kanji: '将', color: RED, shape: 'square', metric: 'duelWin' },
+  { id: 'ronin', name: 'Ронин', kanji: '浪', color: RED, shape: 'triangle', metric: 'duelAttack' },
+  { id: 'phoenix', name: 'Феникс', kanji: '鳳', color: RED, shape: 'circle', metric: 'revive' },
+  { id: 'yakuza', name: 'Якудза', kanji: '盗', color: RED, shape: 'diamond', metric: 'stolen' },
+  { id: 'bookie', name: 'Букмекер', kanji: '賭', color: RED, shape: 'hexagon', metric: 'betNet' },
   // вопросы
-  { id: 'sage', name: 'Мудрец', kanji: '賢', color: INDIGO, metric: 'correct' },
-  { id: 'banner', name: 'Знаменосец', kanji: '旗', color: INDIGO, metric: 'flags' },
+  { id: 'sage', name: 'Мудрец', kanji: '賢', color: INDIGO, shape: 'circle', metric: 'correct' },
+  { id: 'banner', name: 'Знаменосец', kanji: '旗', color: INDIGO, shape: 'square', metric: 'flags' },
   // карта
-  { id: 'pioneer', name: 'Первопроходец', kanji: '拓', color: GREEN, metric: 'opened' },
-  { id: 'wanderer', name: 'Странник', kanji: '旅', color: GREEN, metric: 'distance' },
-  { id: 'master', name: 'Хозяин', kanji: '犬', color: GREEN, metric: 'akitaTurns' },
+  { id: 'pioneer', name: 'Первопроходец', kanji: '拓', color: GREEN, shape: 'diamond', metric: 'opened' },
+  { id: 'wanderer', name: 'Странник', kanji: '旅', color: GREEN, shape: 'triangle', metric: 'distance' },
+  { id: 'master', name: 'Хозяин', kanji: '犬', color: GREEN, shape: 'circle', metric: 'akitaTurns' },
   // деньги
-  { id: 'magnate', name: 'Магнат', kanji: '富', color: GOLD },
-  { id: 'spender', name: 'Транжира', kanji: '散', color: GOLD, metric: 'shopSpent' },
-  { id: 'miser', name: 'Скряга', kanji: '吝', color: GOLD, metric: 'shopSpent', min: true },
-  { id: 'fox', name: 'Лис', kanji: '狐', color: GOLD, metric: 'finds' },
+  { id: 'magnate', name: 'Магнат', kanji: '富', color: GOLD, shape: 'octagon' },
+  { id: 'spender', name: 'Транжира', kanji: '散', color: GOLD, shape: 'diamond', metric: 'shopSpent' },
+  { id: 'miser', name: 'Скряга', kanji: '吝', color: GOLD, shape: 'square', metric: 'shopSpent', min: true },
+  { id: 'fox', name: 'Лис', kanji: '狐', color: GOLD, shape: 'triangle', metric: 'finds' },
   // групповые игры (очки за места во всех играх этого вида) и ритм-батлы
-  { id: 'calligrapher', name: 'Каллиграф', kanji: '書', color: PURPLE, metric: 'group:calligraphy' },
-  { id: 'poet', name: 'Поэт', kanji: '詩', color: PURPLE, metric: 'group:senryu' },
-  { id: 'visagist', name: 'Визажист', kanji: '顔', color: PURPLE, metric: 'group:fukuwarai' },
-  { id: 'lightning', name: 'Молния', kanji: '閃', color: PURPLE, metric: 'group:iaido' },
-  { id: 'chef', name: 'Шеф', kanji: '包', color: PURPLE, metric: 'group:sashimi' },
-  { id: 'dragon', name: 'Дракон', kanji: '龍', color: PURPLE, metric: 'group:dragon' },
-  { id: 'glutton', name: 'Обжора', kanji: '麺', color: PURPLE, metric: 'group:noodles' },
-  { id: 'sniper', name: 'Снайпер', kanji: '種', color: PURPLE, metric: 'group:cherry' },
-  { id: 'drummer', name: 'Барабанщик', kanji: '鼓', color: PURPLE, metric: 'rhythmWin' },
+  { id: 'calligrapher', name: 'Каллиграф', kanji: '書', color: PURPLE, shape: 'square', metric: 'group:calligraphy' },
+  { id: 'poet', name: 'Поэт', kanji: '詩', color: PURPLE, shape: 'circle', metric: 'group:senryu' },
+  { id: 'visagist', name: 'Визажист', kanji: '顔', color: PURPLE, shape: 'hexagon', metric: 'group:fukuwarai' },
+  { id: 'lightning', name: 'Молния', kanji: '閃', color: PURPLE, shape: 'triangle', metric: 'group:iaido' },
+  { id: 'chef', name: 'Шеф', kanji: '包', color: PURPLE, shape: 'diamond', metric: 'group:sashimi' },
+  { id: 'dragon', name: 'Дракон', kanji: '龍', color: PURPLE, shape: 'octagon', metric: 'group:dragon' },
+  { id: 'glutton', name: 'Обжора', kanji: '麺', color: PURPLE, shape: 'circle', metric: 'group:noodles' },
+  { id: 'sniper', name: 'Снайпер', kanji: '種', color: PURPLE, shape: 'triangle', metric: 'group:cherry' },
+  { id: 'drummer', name: 'Барабанщик', kanji: '鼓', color: PURPLE, shape: 'hexagon', metric: 'rhythmWin' },
   // соло-игры
-  { id: 'gambler', name: 'Лудоман', kanji: '玉', color: BROWN, metric: 'pachiNet' },
-  { id: 'fortune', name: 'Фортуна', kanji: '輪', color: BROWN, metric: 'ringPrizes' },
-  { id: 'cheater', name: 'Шулер', kanji: '骰', color: BROWN, metric: 'chohanNet' },
-  { id: 'counter', name: 'Счетовод', kanji: '数', color: BROWN, metric: 'sudoku' },
-  { id: 'seal', name: 'Тюлень', kanji: '湯', color: BROWN, metric: 'onsen' },
+  { id: 'gambler', name: 'Лудоман', kanji: '玉', color: BROWN, shape: 'circle', metric: 'pachiNet' },
+  { id: 'fortune', name: 'Фортуна', kanji: '輪', color: BROWN, shape: 'octagon', metric: 'ringPrizes' },
+  { id: 'cheater', name: 'Шулер', kanji: '骰', color: BROWN, shape: 'diamond', metric: 'chohanNet' },
+  { id: 'counter', name: 'Счетовод', kanji: '数', color: BROWN, shape: 'square', metric: 'sudoku' },
+  { id: 'seal', name: 'Тюлень', kanji: '湯', color: BROWN, shape: 'hexagon', metric: 'onsen' },
 ];
 
 /** утешительный — тем, кому ничего не досталось */
-export const TOURIST: TitleDef = { id: 'tourist', name: 'Турист', kanji: '観', color: '#3e8a8a' };
+export const TOURIST: TitleDef = { id: 'tourist', name: 'Турист', kanji: '観', color: '#3e8a8a', shape: 'circle' };
 
 export const TITLE_BY_ID: Record<string, TitleDef> = Object.fromEntries([...TITLES, TOURIST].map((t) => [t.id, t]));
 

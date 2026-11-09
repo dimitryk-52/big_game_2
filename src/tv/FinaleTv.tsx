@@ -10,11 +10,15 @@ import '../styles/finale.css';
 
 const STEP_MS = 1300;
 const START_MS = 1800;
-/** где лежат печати вокруг персонажа (поворот — случайный) */
+/** пиксельные рамки печатей по форме (белые маски, цвет даёт CSS) */
+const FRAMES = Object.fromEntries(
+  Object.entries(import.meta.glob<string>('../img/hanko/*.png', { eager: true, import: 'default', query: '?url' })).map(([k, v]) => [k.replace(/^.*hanko_|\.png$/g, ''), v]),
+);
+/** центры печатей вокруг персонажа (поворот — случайный) */
 const SPOTS = [
-  { x: 150, y: 4 },
-  { x: 4, y: 34 },
-  { x: 146, y: 80 },
+  { x: 186, y: 40 },
+  { x: 38, y: 70 },
+  { x: 182, y: 116 },
 ];
 /** случайный наклон печати, ±20° */
 const randRot = () => Math.round((Math.random() * 2 - 1) * 20);
@@ -67,8 +71,11 @@ export function FinaleTv({ s, titles }: { s: GameState; titles: Record<string, s
                   const sp = SPOTS[i % SPOTS.length];
                   const rainbow = t.color === 'rainbow';
                   return (
-                    <div class={'hanko' + (rainbow ? ' rainbow' : '')} style={{ left: sp.x + 'px', top: sp.y + 'px', '--rot': (rots[p.id + ':' + i] ?? 0) + 'deg', '--c': rainbow ? '#c0392b' : t.color } as any}>
-                      {t.kanji}
+                    <div
+                      class={'fseal ' + t.shape + (rainbow ? ' rainbow' : '')}
+                      style={{ left: sp.x + 'px', top: sp.y + 'px', '--rot': (rots[p.id + ':' + i] ?? 0) + 'deg', '--c': rainbow ? '#c0392b' : t.color, '--frame': `url(${FRAMES[t.shape]})` } as any}
+                    >
+                      <span>{t.kanji}</span>
                     </div>
                   );
                 })}
