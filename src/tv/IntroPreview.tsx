@@ -36,6 +36,7 @@ function groupPublic(game: GroupGameId, pref: number): GroupPublic {
     submitted: [], showIdx: 0, voteRound: 0, order: [], votes: {}, scores: {},
     ...(game === 'fukuwarai' ? { face: (task as any)?.face ?? 'okame' } : {}),
     ...(game === 'sashimi' ? { fish: 'tuna', total: 1200, target: 300 } : {}),
+    ...(game === 'noodles' ? { noodle: (task as any)?.noodle ?? 'soba' } : {}),
   } as any;
 }
 

@@ -9,6 +9,8 @@ import { now } from '../shared/util';
 import { useEffect, useState } from 'preact/hooks';
 import { FishBoard, Scale } from '../games/FishBoard';
 import { FISH } from '../games/sashimi';
+import { NoodleResults, NoodleTv } from './NoodleTv';
+import { noodleOf } from '../games/noodles';
 
 let paperUrl: string | undefined;
 const paper = () => (paperUrl ??= washiCanvas(450, 600, 7).toDataURL());
@@ -39,7 +41,7 @@ const FACE_CALL: Record<string, string> = { okame: 'Собери лицо Ока
 export function GroupScroll({ g }: { g: GroupPublic }) {
   const info = GROUP_GAMES[g.game];
   const call = g.game === 'calligraphy' ? g.prompt : g.game === 'fukuwarai' ? FACE_CALL[g.face ?? ''] ?? info.call
-    : g.game === 'sashimi' ? `${g.prompt}: отрежь ${g.target} г` : info.call;
+    : g.game === 'sashimi' ? `${g.prompt}: отрежь ${g.target} г` : g.game === 'noodles' ? `${noodleOf(g.noodle).name}: ${info.call.toLowerCase()}` : info.call;
   return <ScrollBanner game={g.game} pref={g.pref} call={call} />;
 }
 
@@ -76,7 +78,8 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
     <div class="group-tv">
       {g.phase === 'intro' && <GroupScroll g={g} />}
       {g.game === 'iaido' && g.phase === 'draw' && <IaidoTv s={s} g={g} sig={iaiSignal ?? null} />}
-      {g.game !== 'iaido' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
+      {g.game === 'noodles' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && <NoodleTv s={s} g={g} head={head} />}
+      {g.game !== 'iaido' && g.game !== 'noodles' && (g.phase === 'draw' || (g.phase === 'show' && g.showIdx < 0)) && (
         <div class="group-draw">
           {head}
           {g.game === 'sashimi'
@@ -108,7 +111,7 @@ export function GroupTv({ s, imgs, iaiSignal }: { s: GameState; imgs: Record<str
       )}
       {g.phase === 'results' && (g.game === 'iaido'
         ? <div class="group-results iai-final"><div class="group-head"><span class="group-game">Итоги · {info.name} <span class="jp">{info.ja}</span></span><span class="group-task">{g.prompt}</span></div><IaidoResults s={s} g={g} /></div>
-        : g.game === 'sashimi' ? <SashimiResults s={s} g={g} /> : <Results s={s} g={g} imgs={imgs} />)}
+        : g.game === 'sashimi' ? <SashimiResults s={s} g={g} /> : g.game === 'noodles' ? <NoodleResults s={s} g={g} /> : <Results s={s} g={g} imgs={imgs} />)}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import type {
 } from '../shared/types';
 import { BONUS_INFO, COIN_DMG, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
+import { NOODLES, noodleOf, noodleScore, parseNoodle } from '../games/noodles';
 import { buildDebugScene } from './debugScenes';
 import { PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
 import { pick, randInt, shuffle, uid } from '../shared/util';
@@ -160,6 +161,7 @@ export class GameEngine {
       case 'pnp': return this.io.fx?.('pnp', m);
       case 'ctl': return this.onCtl(m.cmd, m.args);
     }
+    if (m.t === 'pick' && m.kind === 'noodle') return this.onNoodle(m.pid, m.value);
     this.feed(m);
   }
 
@@ -1215,8 +1217,15 @@ export class GameEngine {
       ...(game === 'fukuwarai' ? { face: task?.face ?? 'okame' } : {}),
       ...(game === 'iaido' && task?.scene ? { scene: task.scene } : {}),
       ...(game === 'sashimi' ? (() => { const fish = task?.fish && FISH[task.fish] ? task.fish : 'tuna'; return { fish, total: FISH[fish].total, target: randomTarget(fish) }; })() : {}),
+      ...(game === 'noodles' ? (() => {
+        const noodle = task?.noodle && NOODLES[task.noodle] ? task.noodle : 'soba';
+        const d = NOODLES[noodle];
+        // у каждого свой скрытый предел живота — из одних и тех же границ
+        const limits = Object.fromEntries(players.map((id) => [id, d.min + randInt(d.max - d.min + 1)]));
+        return { noodle, limits, bowls: Object.fromEntries(players.map((id) => [id, 0])), closed: [], burst: [] };
+      })() : {}),
       phase: 'intro', players, startAt: 0, deadline: 0, order: shuffle(players), submitted: [], showIdx: 0, voteRound: 0,
-      voteRounds: game === 'iaido' ? 0 : Math.min(3, players.length - 1), voted: [],
+      voteRounds: game === 'iaido' || game === 'noodles' ? 0 : Math.min(3, players.length - 1), voted: [],
     };
     this.groupImgs = {};
     this.drawParts = {};
@@ -1265,6 +1274,7 @@ export class GameEngine {
     // кто не успел прислать — пустой лист
     for (const id of g.players) if (!(id in this.groupImgs)) this.groupImgs[id] = null;
 
+    if (game === 'noodles') return this.noodleResults(epoch, g);
     if (GROUP_GAMES[game].scored) return this.sashimiResults(epoch, g);
 
     // ── показ работ по одной ──
@@ -1441,6 +1451,49 @@ export class GameEngine {
     await this.groupResults(epoch, g, err, (id) => -err[id], (id) => id in err);
   }
 
+  /**
+   * Лапша: итоги. Телефон сам считает миски и шлёт «nood:<съедено>:<как кончил>»; хост сверяет со скрытым пределом:
+   * съел больше предела — лопнул (в зачёт половина предела). Кто не прислал итог — по последнему ходу игры.
+   */
+  private async noodleResults(epoch: number, g: GroupPublic) {
+    const d = noodleOf(g.noodle);
+    // больше, чем физически можно съесть за время игры, не бывает
+    const maxBowls = Math.ceil((groupTime(this.s.settings, 'noodles') * 1000) / (d.tossMs + d.taps * 70)) + 2;
+    const points: Record<string, number> = {};
+    const bowls = (g.bowls ??= {});
+    const burst = new Set(g.burst ?? []);
+    const closed = new Set(g.closed ?? []);
+    for (const id of g.players) {
+      const r = parseNoodle(this.groupImgs[id]);
+      const lim = g.limits?.[id] ?? d.max;
+      let n = Math.min(maxBowls, r ? r.n : bowls[id] ?? 0);
+      if (r?.how === 'burst' || n > lim) { burst.add(id); n = lim; }
+      else if (r?.how === 'lid') closed.add(id);
+      bowls[id] = n;
+      points[id] = noodleScore(n, burst.has(id));
+    }
+    g.burst = [...burst];
+    g.closed = [...closed].filter((id) => !burst.has(id));
+    // при равных очках выше тот, кто не лопнул
+    await this.groupResults(epoch, g, points, (id) => points[id] * 2 + (burst.has(id) ? 0 : 1), (id) => points[id] > 0);
+  }
+
+  /** лапша: ход игры с телефона (сколько съел, закрыл ли миску) — для ТВ; рассылаем не чаще раза в 0,4 c */
+  private noodleEmitT: any = null;
+  private onNoodle(pid: string, v: any) {
+    const g = this.s.g;
+    if (!g || g.game !== 'noodles' || g.phase !== 'draw' || g.id !== v?.id || !g.players.includes(pid) || !g.bowls) return;
+    if (g.burst?.includes(pid) || g.closed?.includes(pid)) return;
+    const n = Math.max(0, Math.min(999, Math.floor(Number(v.n) || 0)));
+    const lim = g.limits?.[pid] ?? 0;
+    if (v.how === 'burst' || n > lim) { (g.burst ??= []).push(pid); g.bowls[pid] = lim; this.io.fx?.('noodleBurst', { pid }); }
+    else {
+      g.bowls[pid] = Math.max(g.bowls[pid] ?? 0, n);
+      if (v.how === 'lid') { (g.closed ??= []).push(pid); this.io.fx?.('answered', { pid }); }
+    }
+    if (!this.noodleEmitT) this.noodleEmitT = setT(() => { this.noodleEmitT = null; this.emit(); }, 400);
+  }
+
   private onDraw(m: Extract<InputMsg, { t: 'draw' }>) {
     const g = this.s.g;
     if (!g || g.id !== m.id || !g.players.includes(m.pid) || g.submitted.includes(m.pid)) return;
@@ -1452,7 +1505,7 @@ export class GameEngine {
     if (parts.some((x) => !x)) return;
     const url = parts.join('');
     delete this.drawParts[m.pid];
-    this.groupImgs[m.pid] = url.startsWith('data:image/') || ((url.startsWith('text:') || url.startsWith('cut:')) && url.length < 300) ? url : null;
+    this.groupImgs[m.pid] = url.startsWith('data:image/') || ((url.startsWith('text:') || url.startsWith('cut:') || url.startsWith('nood:')) && url.length < 300) ? url : null;
     g.submitted.push(m.pid);
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
@@ -1466,7 +1519,8 @@ export class GameEngine {
       setT(() => {
         if (this.s.g !== g || g.submitted.includes(id)) return;
         this.groupImgs[id] = g.game === 'senryu' ? 'text:' + pick(lines)
-          : g.game === 'sashimi' ? 'cut:' + cutForGrams(g.fish!, g.target! * (0.7 + Math.random() * 0.6)).toFixed(4) : null;
+          : g.game === 'sashimi' ? 'cut:' + cutForGrams(g.fish!, g.target! * (0.7 + Math.random() * 0.6)).toFixed(4)
+          : g.game === 'noodles' ? (() => { const d = noodleOf(g.noodle); const n = d.min + randInt(d.max - d.min + 4); return `nood:${n}:${n > (g.limits?.[id] ?? 0) ? 'burst' : 'lid'}`; })() : null;
         g.submitted.push(id);
         this.emit();
         this.groupDone?.();

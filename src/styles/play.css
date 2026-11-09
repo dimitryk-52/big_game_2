@@ -302,3 +302,26 @@
 .topic-grid .btn { opacity: 0.75; }
 .topic-grid .btn.picked { opacity: 1; outline: 3px solid #fff; outline-offset: 2px; transform: translateY(-2px); }
 .shelf-items > :only-child { grid-column: 2; }
+
+/* ───── Лапша ───── */
+.noodle-pad { gap: 10px; flex: 1; overflow-y: auto; align-items: center; }
+.noodle-pad > .timer { width: 100%; align-self: stretch; }
+.noodle-task { text-align: center; font-size: 18px; }
+.noodle-count { font-size: 22px; }
+.noodle-count b { font-size: 40px; color: var(--yellow); }
+.noodle-bowl { position: relative; width: min(78vw, 340px); aspect-ratio: 22 / 17; background: none; border: 0; padding: 0; touch-action: manipulation; user-select: none; -webkit-user-select: none; display: grid; place-items: end center; }
+.noodle-bowl img { image-rendering: pixelated; pointer-events: none; }
+.noodle-img { width: 100%; }
+.noodle-bowl.live:active .noodle-img { transform: scale(0.97) translateY(2px); }
+.noodle-bowl.burst .noodle-img { filter: grayscale(0.6) brightness(0.7); }
+.noodle-fly { position: absolute; width: 30%; left: 35%; top: -10%; animation: noodle-fly 0.35s ease-in forwards; z-index: 2; }
+@keyframes noodle-fly { from { transform: translate(-120%, -140%) rotate(-30deg); opacity: 0.4; } to { transform: translate(0, 40%) rotate(0); opacity: 1; } }
+.noodle-bites { display: flex; gap: 6px; justify-content: center; min-height: 14px; }
+.noodle-bites i { width: 14px; height: 14px; border: 2px solid #fff; background: transparent; }
+.noodle-bites i.on { background: var(--yellow); }
+.noodle-boom { position: absolute; inset: 0; display: grid; place-items: center; font-size: 38px; color: var(--pink); text-shadow: 3px 3px 0 #000; }
+.noodle-belly { position: relative; width: min(84vw, 360px); height: 26px; border: 3px solid #fff; background: #11142b; overflow: hidden; }
+.noodle-belly-red { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(45deg, #7a1f24 0 6px, #a63a4c 6px 12px); }
+.noodle-belly-fill { position: absolute; top: 0; bottom: 0; left: 0; background: rgba(236, 198, 90, 0.85); transition: width 0.2s; }
+.noodle-belly-mark { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--pink); }
+.noodle-belly-label { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; text-shadow: 1px 1px 0 #000; }

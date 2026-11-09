@@ -85,6 +85,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;
         case 'chohan': pnpBus.emit(d.pid, { k: 'chohan', ...d }); break;
         case 'chop': playSound('chop'); break;
+        case 'noodleBurst': playSound('noodleBurst'); break;
         case 'sudoku': pnpBus.emit(d.pid, { k: 'sudokuWin', ...d }); break;
       }
     });

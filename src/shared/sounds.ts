@@ -33,7 +33,7 @@ export interface SoundEvent {
 export interface SoundGroup { id: string; name: string; note?: string; events: SoundEvent[] }
 
 /** групповые игры с таймером на работу (у иайдо и джа-одори его нет) */
-export const GROUP_TIMED: GroupGameId[] = ['calligraphy', 'fukuwarai', 'senryu', 'sashimi'];
+export const GROUP_TIMED: GroupGameId[] = ['calligraphy', 'fukuwarai', 'senryu', 'sashimi', 'noodles'];
 export const groupEndId = (g: GroupGameId) => `groupEnd:${g}`;
 export const groupTableId = (g: GroupGameId) => `groupTable:${g}`;
 
@@ -89,6 +89,7 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'iaiCut', name: 'Иайдо: удар', when: 'Кто-то первым срубил', synth: sfx.slash },
       { id: 'iaiEarly', name: 'Иайдо: фальстарт', when: 'Игрок нажал раньше сигнала', synth: sfx.early },
       { id: 'chop', name: 'Сашими: разрез', when: 'Игрок отрезал кусок рыбы', synth: sfx.chop },
+      { id: 'noodleBurst', name: 'Лапша: лопнул', when: 'Игрок съел больше своего предела', synth: sfx.stumble },
       { id: 'dragonOut', name: 'Джа-одори: сбился', when: 'Игрок сбился с ритма и выбыл', synth: sfx.stumble },
     ],
   },

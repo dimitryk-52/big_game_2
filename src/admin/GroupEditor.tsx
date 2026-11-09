@@ -1,9 +1,10 @@
 // Админка: групповые игры — задания, время, награды за места.
 import { useEffect, useState } from 'preact/hooks';
-import type { DragonSettings, FaceId, FishId, GroupGameId, IaiSceneId, Settings } from '../shared/types';
+import type { DragonSettings, FaceId, FishId, GroupGameId, IaiSceneId, NoodleId, Settings } from '../shared/types';
 import { DEFAULT_SETTINGS, GROUP_GAMES, dragonSettings, groupTime, iaidoRounds } from '../shared/settings';
 import { FACES } from '../games/faces';
 import { FISH } from '../games/sashimi';
+import { NOODLES } from '../games/noodles';
 import { IAI_SCENES } from '../games/iaidoScenes';
 import { PREF } from '../map/mapData';
 import { uid } from '../shared/util';
@@ -44,6 +45,9 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {game === 'dragon' && <>Джа-одори (танец дракона): все игроки несут дракона цепочкой и жмут на телефоне ЛЕВУЮ и ПРАВУЮ по очереди в такт барабану на ТВ.
           Сначала разминка без зачёта, потом гонг и зачёт; каждые 8 шагов темп растёт. Сбился — выбыл, остальные смыкаются. Места — по тому, кто дольше нёс;
           сбились все оставшиеся на одном шаге — прощаются. Картинки дракона и улицы — в <code>src/img/dragon/</code>.<br /></>}
+        {game === 'noodles' && <>Лапша: у всех на телефоне миска. Тапаешь по миске — ешь (соба — {NOODLES.soba.taps} тапа на мисочку, рамен — {NOODLES.ramen.taps}, удон — {NOODLES.udon.taps}), пустую тут же наполняют.
+          Живот наполняется; у каждого свой скрытый предел, случайный в красной зоне ({(Object.keys(NOODLES) as NoodleId[]).map((k) => `${NOODLES[k].name.toLowerCase()} ${NOODLES[k].min}–${NOODLES[k].max}`).join(', ')}).
+          Вовремя накрыл миску (палочки на миску) — в зачёт всё съеденное; съел больше предела — лопнул, в зачёт половина. На ТВ растут стопки мисок, в конце пределы раскрываются. Без голосования. Картинки — <code>src/img/noodles/</code>.<br /></>}
         {game === 'senryu' && <>Сэнрю: в задании две первые строки через « / » (5 и 7 слогов), игроки дописывают последнюю (5 слогов), телефон считает слоги. Потом стихи по одному на ТВ и голосование.<br /></>}
         {game === 'calligraphy' && <> у всех на телефонах холст и кисть, по сигналу рисуют задание. Потом работы по одной показываются на ТВ под номерами,
         и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
@@ -63,6 +67,11 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
               {(Object.keys(FISH) as FishId[]).map((f) => <option value={f}>{FISH[f].name} ({FISH[f].total} г)</option>)}
             </select>
           )}
+          {game === 'noodles' && (
+            <select value={t.noodle ?? 'soba'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.noodle = (e.target as HTMLSelectElement).value as NoodleId; })}>
+              {(Object.keys(NOODLES) as NoodleId[]).map((k) => <option value={k}>{NOODLES[k].name}</option>)}
+            </select>
+          )}
           {game === 'iaido' && (
             <select title="Фон картины" value={t.scene ?? 'moon'} onChange={(e) => upd((c) => { c.groupTasks.find((x) => x.id === t.id)!.scene = (e.target as HTMLSelectElement).value as IaiSceneId; })}>
               {(Object.keys(IAI_SCENES) as IaiSceneId[]).map((k) => <option value={k}>{IAI_SCENES[k].name}</option>)}
@@ -80,7 +89,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
           <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
         </div>
       ))}
-      {game !== 'dragon' && <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}), ...(game === 'sashimi' ? { fish: 'tuna' as FishId } : {}) }); })}>+ Задание</button></div>}
+      {game !== 'dragon' && <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}), ...(game === 'sashimi' ? { fish: 'tuna' as FishId } : {}), ...(game === 'noodles' ? { noodle: 'soba' as NoodleId } : {}) }); })}>+ Задание</button></div>}
       <h3 style={{ margin: '8px 0 0' }}>Время и награды</h3>
       <div class="settings-grid">
         {num('Каллиграфия: время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
@@ -88,6 +97,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {num('Сэнрю: время, сек', () => groupTime(s, 'senryu'), (c, v) => { (c.group.times ??= {}).senryu = v; })}
         {num('Иайдо: раундов', () => iaidoRounds(s), (c, v) => (c.group.iaidoRounds = v))}
         {num('Сашими: время, сек', () => groupTime(s, 'sashimi'), (c, v) => { (c.group.times ??= {}).sashimi = v; })}
+        {num('Лапша: время, сек', () => groupTime(s, 'noodles'), (c, v) => { (c.group.times ??= {}).noodles = v; })}
         {game === 'dragon' && ([
           ['Джа-одори: темп в начале, ударов/мин', 'bpm'],
           ['Ускорение каждые 8 шагов, %', 'accel'],

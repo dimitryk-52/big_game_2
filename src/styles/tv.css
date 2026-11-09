@@ -318,3 +318,27 @@
 .dragon-award { color: var(--yellow); }
 /* джа-одори: тот же свиток, что у остальных групповых игр */
 .dragon-center > .gscroll { display: flex; flex-direction: column; align-items: center; filter: drop-shadow(10px 10px 0 rgba(11, 13, 31, 0.85)); pointer-events: auto; }
+
+/* ───── Лапша ───── */
+.nood-tv { width: 100%; }
+.nood-row { display: flex; align-items: flex-end; gap: 1.2em; width: 100%; justify-content: center; }
+.nood-server { width: clamp(90px, 9vw, 160px); image-rendering: pixelated; }
+.nood-players { display: flex; flex-wrap: wrap; gap: 0.6em 1em; justify-content: center; align-items: flex-end; flex: 1; }
+.nood-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 7em; }
+.nood-stack { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 260px; }
+.nood-stack img { width: 72px; image-rendering: pixelated; margin-top: -40px; position: relative; }
+.nood-stack img:first-child { margin-top: 0; }
+.nood-stack .nood-top { z-index: 99 !important; margin-bottom: -6px; }
+.nood-n { font-size: 2em; color: var(--yellow); line-height: 1; }
+.nood-name { display: flex; align-items: center; gap: 4px; font-size: 0.9em; }
+.nood-state { font-size: 0.8em; color: #bbb; }
+.nood-card.closed .nood-state { color: var(--green); }
+.nood-card.burst .nood-state { color: var(--pink); }
+.nood-card.burst .nood-stack { animation: nood-shake 0.4s 2; }
+@keyframes nood-shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+.nood-rank { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.nood-rank .qpart { font-size: 1.05em; gap: 10px; }
+.nood-rank .place1 { border-color: var(--yellow); }
+.nood-place { min-width: 1.6em; text-align: right; }
+.nood-mini { width: 36px; image-rendering: pixelated; }
+.nood-burst { color: var(--pink); }

@@ -217,6 +217,7 @@ const GROUP_ART: Record<string, string[]> = {
   group_senryu: ['.kk.', 'tttt', 'tktt', 'tktt', 'tttt', 'tktt', 'tktt', 'tktt', 'tttt'],
   group_iaido: ['.........w', '........wg', '.......wg.', '......wg..', '.....wg...', '...ywg....', '...yy.....', '..rk.y....', '.rk.......', 'kr........'],
   group_sashimi: ['..........', '.ggggggggk', '.gggggggkk', '..gggggk..', '..........', '..pppppp..', '.pwpwpwpp.', '.pppppppp.', '..pppppp..'],
+  group_noodles: ['........bb', '......bb..', '.yyyybyyy.', 'rrrrrrrrrr', 'kkkkkkkkkk', '.kkkkkkkk.', '..kkkkkk..', '...rrrr...'],
   group_dragon: ['......rr..', '.....rggr.', '....rgwkg.', '...ggggggy', '..gg..yyy.', '.gg.......', 'gg....gg..', 'g....gggg.', '....gg..gg', '...gg.....'],
 };
 for (const [id, rows] of Object.entries(GROUP_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => GROUP_PAL[ch] ?? null)));

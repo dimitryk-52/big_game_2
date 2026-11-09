@@ -97,7 +97,9 @@ export interface PrefState {
 export type SoloGameId = 'pachinko' | 'ring' | 'onsen' | 'chohan' | 'sudoku';
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon' | 'noodles';
+/** какая лапша в «Лапше» */
+export type NoodleId = 'soba' | 'ramen' | 'udon';
 /** что режем в «Сашими» */
 export type FishId = 'tuna' | 'salmon' | 'crab' | 'squid';
 /** лицо для фукуварай */
@@ -117,6 +119,8 @@ export interface GroupTask {
   fish?: FishId;
   /** иайдо: фон картины (по умолчанию ночная сакура) */
   scene?: IaiSceneId;
+  /** лапша: соба, рамен или удон */
+  noodle?: NoodleId;
   /** префектура задания: там играется именно оно, в других префектурах игры — не выпадает */
   pref?: number;
 }
@@ -156,6 +160,12 @@ export interface GroupPublic {
   /** сашими (после сдачи): место разреза 0..1 и вес куска, г */
   cuts?: Record<string, number>;
   grams?: Record<string, number>;
+  /** лапша: что едим, скрытый предел живота каждого (мисок), съедено, кто закрыл миску, кто лопнул */
+  noodle?: NoodleId;
+  limits?: Record<string, number>;
+  bowls?: Record<string, number>;
+  closed?: string[];
+  burst?: string[];
 }
 
 /** раунд иайдо: ready — ждём сигнала, done — итог раунда */
@@ -382,6 +392,8 @@ export interface Settings {
     prizes: { yen: number; stars: number }[];
     /** джа-одори: темп, ускорение, разминка */
     dragon?: DragonSettings;
+    /** версия раскладки новых игр: старые сохранённые настройки один раз получают новые игры в свободных префектурах */
+    layoutV?: number;
   };
   ringPrefs: number[];
   /** префектуры с онсэном: отдых лечит */
@@ -448,7 +460,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =
