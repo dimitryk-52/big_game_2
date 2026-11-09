@@ -1,0 +1,71 @@
+/* Финал: лист бумаги, печати-ханко и цветные плашки титулов (src/tv/FinaleTv.tsx) */
+.finale {
+  position: absolute; inset: 0; z-index: 30; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 3vh 3vw 4vh;
+  color: #2b1d12;
+  background-color: #efe3c8;
+  background-image:
+    radial-gradient(ellipse at 50% 40%, rgba(255, 250, 235, 0.75), rgba(255, 250, 235, 0) 70%),
+    repeating-linear-gradient(93deg, rgba(120, 90, 50, 0.035) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(-4deg, rgba(120, 90, 50, 0.03) 0 1px, transparent 1px 11px),
+    radial-gradient(circle at 15% 85%, rgba(150, 110, 60, 0.12), transparent 40%),
+    radial-gradient(circle at 90% 10%, rgba(150, 110, 60, 0.1), transparent 35%);
+  box-shadow: inset 0 0 120px rgba(110, 75, 30, 0.35);
+}
+.finale-head { display: flex; align-items: baseline; gap: 18px; font-size: 54px; font-weight: 700; letter-spacing: 2px; margin-bottom: 2vh; }
+.finale-ja { font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS Mincho', 'DotGothic16', serif; color: #a8231a; font-size: 64px; }
+.finale-grid { flex: 1; width: 100%; max-width: 1700px; display: grid; gap: 2vh 2vw; align-content: center; }
+.finale-card { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.finale-fig { position: relative; width: 224px; height: 150px; display: grid; place-items: end center; }
+.finale-fig .avatar { filter: drop-shadow(0 4px 0 rgba(60, 40, 20, 0.25)); }
+.finale-name { margin-top: 6px; font-size: 30px; font-weight: 700; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.finale-plaques { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 6px; min-height: 120px; }
+
+/* плашка: выезжает из-под имени, когда падает её печать */
+.plaque {
+  color: #fff; font-size: 24px; font-weight: 700; letter-spacing: 1px; padding: 2px 16px 4px; border-radius: 3px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
+  opacity: 0; transform: translateY(-14px) scaleY(0.4);
+  transition: opacity 0.35s ease 0.25s, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1) 0.25s;
+}
+.plaque.on { opacity: 1; transform: none; }
+
+/* печать: квадрат с рамкой и кандзи цвета туши; падает сверху и «впечатывается» в бумагу */
+.hanko {
+  position: absolute; width: 68px; height: 68px; display: grid; place-items: center;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS Mincho', 'DotGothic16', serif; font-weight: 900;
+  font-size: 46px; line-height: 1; color: var(--c);
+  border: 5px solid var(--c); border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  mix-blend-mode: multiply; opacity: 0.95;
+  box-shadow: inset 0 0 0 2px rgba(239, 227, 200, 0.6);
+  transform: rotate(var(--rot));
+  animation: hanko-drop 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+.hanko::after {
+  /* неровный оттиск: белёсые пятна, будто краска легла не везде */
+  content: ''; position: absolute; inset: -5px; border-radius: 8px; pointer-events: none;
+  background:
+    radial-gradient(circle at 22% 30%, rgba(239, 227, 200, 0.7) 0 3px, transparent 4px),
+    radial-gradient(circle at 75% 70%, rgba(239, 227, 200, 0.6) 0 2px, transparent 3px),
+    radial-gradient(circle at 60% 15%, rgba(239, 227, 200, 0.5) 0 2px, transparent 3px);
+}
+.hanko.rainbow {
+  border-image: linear-gradient(135deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #8e24aa) 1;
+  border-radius: 0;
+  background: linear-gradient(135deg, #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #8e24aa);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+@keyframes hanko-drop {
+  0% { transform: rotate(var(--rot)) scale(3); opacity: 0; }
+  70% { transform: rotate(var(--rot)) scale(0.92); opacity: 0.95; }
+  85% { transform: rotate(var(--rot)) scale(1.04); }
+  100% { transform: rotate(var(--rot)) scale(1); opacity: 0.95; }
+}
+.finale-card.active .finale-fig { animation: finale-thud 0.3s ease 0.32s; }
+@keyframes finale-thud {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(3px) scale(0.98, 1.02); }
+  60% { transform: translateY(-1px); }
+}

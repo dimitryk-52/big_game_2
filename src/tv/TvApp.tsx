@@ -17,6 +17,7 @@ import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
 import { DragonTv } from './DragonTv';
+import { FinaleTv } from './FinaleTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { groupTableId, hasCustom, playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
@@ -270,7 +271,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {st.t === 'dragon' && s.dr && <DragonTv s={s} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
-      {st.t === 'end' && <EndScreen s={s} />}
+      {st.t === 'end' && (st.titles ? <FinaleTv s={s} titles={st.titles} /> : <EndScreen s={s} />)}
       {s.paused && <div class="paused">ПАУЗА</div>}
       {/* «вид из глаз» тех, кто играет в соло-игры — только поверх карты; скрываем, а не убираем, чтобы не сбить анимацию */}
       <PnPLayer s={s} hidden={!!sceneBg.src || ['question', 'rhythm', 'end', 'lobby'].includes(st.t)} />

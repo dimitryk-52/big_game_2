@@ -314,7 +314,8 @@ export type Stage =
   | { t: 'rhythm' }
   | { t: 'duelResult' }
   | { t: 'prize'; pid: string; text: string }
-  | { t: 'end' };
+  /** titles — титулы игроков (id из shared/titles.ts, самые редкие первыми) */
+  | { t: 'end'; titles?: Record<string, string[]> };
 
 export interface LogEntry {
   id: number;

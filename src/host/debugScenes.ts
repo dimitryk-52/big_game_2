@@ -4,6 +4,7 @@
 import type { BonusId, DebugView, GameState, PublicQuestion, Question, RewardType, Stage } from '../shared/types';
 import { PREF, PREF_CODES, neighbors, atDistance, path } from '../map/mapData';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
+import { TITLES } from '../shared/titles';
 
 export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'prefIntro', name: 'Интро префектуры', group: 'Префектура' },
@@ -160,7 +161,13 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     }
     case 'find': return view({ t: 'find', pid, kind: (sub ?? 'coin') as any, ...(sub === 'wallet' || sub === 'kitsune' ? { amount: 400 } : {}), ...(sub === 'kitsune' ? { from: other } : {}) });
     case 'epoch': return view({ t: 'epoch', epoch: Number(sub) || 1 });
-    case 'end': return view({ t: 'end' });
+    case 'end': {
+      // пример титулов: Император — первому, последнему — «Турист», остальным 1–3 случайных
+      const pool = TITLES.filter((t) => t.id !== 'emperor').map((t) => t.id).sort(() => Math.random() - 0.5);
+      const titles = Object.fromEntries(pids.map((id, i) => [id,
+        i === 0 ? ['emperor', ...pool.splice(0, 2)] : i === pids.length - 1 && pids.length > 2 ? ['tourist'] : pool.splice(0, 1 + (i % 3))]));
+      return view({ t: 'end', titles });
+    }
   }
   return null;
 }

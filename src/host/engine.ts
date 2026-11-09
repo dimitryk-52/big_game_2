@@ -18,6 +18,7 @@ import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { EPOCHS, FIND_INFO, epochFor, epochOf, median, netWorth, rewardYen, shopCost, type FindId } from '../shared/economy';
+import { computeTitles, placePoints, type Tally } from '../shared/titles';
 
 export interface HostIO {
   now(): number;
@@ -63,6 +64,8 @@ interface Secrets {
   ownTurns?: Record<string, number>;
   findAt?: Record<string, number>;
   findsRound?: { round: number; n: number };
+  /** счётчики для титулов в финале (shared/titles.ts) */
+  tally?: Tally;
 }
 
 type Waiter = { match: (m: InputMsg) => any; resolve: (v: any) => void };
@@ -289,7 +292,7 @@ export class GameEngine {
       }
       case 'end':
         this.s.phase = 'end';
-        this.setStage({ t: 'end' });
+        this.setStage({ t: 'end', titles: computeTitles(this.alivePids().map((id) => this.s.players[id]), this.sec.tally ?? {}) });
         this.abort();
         this.snapshot();
         break;
@@ -547,6 +550,9 @@ export class GameEngine {
     const p = this.s.players[pid];
     const st = this.s.settings;
     this.setStage({ t: 'turnStart', pid });
+    // Хозяин: сколько ходов (любых игроков) акита-ину бежала за ним
+    const dogOwner = Object.values(this.s.players).find((x) => x.akita);
+    if (dogOwner) this.bump('akitaTurns', dogOwner.id);
     await this.sleep(epoch, 1800);
 
     if (p.hp <= 0) await this.revive(epoch, p);
@@ -643,10 +649,13 @@ export class GameEngine {
   private async arrive(epoch: number, p: Player, to: number, landing = false) {
     const st = this.s.settings;
     const pid = p.id;
+    // Странник: пройденное расстояние в шагах между префектурами (синкансэн, рикша, ×2 — тоже по карте)
+    if (!landing && p.pref != null && p.pref !== to) this.bump('distance', pid, path(p.pref, to).length - 1);
     p.pref = to;
     if (this.sec.onsen) delete this.sec.onsen[pid];
     const ps = this.s.prefs[to];
     const firstVisit = !ps.rev;
+    if (firstVisit) this.bump('opened', pid);
     ps.rev = true;
     ps.visits++;
     // первый, кто дошёл до Акиты, получает собаку акита-ину (бонус от неё — потом)
@@ -775,6 +784,7 @@ export class GameEngine {
           if (c != null && c !== q.correct && !fs.banned.includes(flag.flagOpts[c])) fs.banned.push(flag.flagOpts[c]);
         }
         if (solved && !(this.sec.flagSolved ??= []).includes(to)) this.sec.flagSolved.push(to);
+        for (const id of pids) if (res[id] === q.correct) this.bump('flags', id);
       }
     }
     // цикличный без верного ответа: правильный не показываем — вопрос вернётся
@@ -846,6 +856,7 @@ export class GameEngine {
     await this.sleep(epoch, 2500);
     const q = this.pickQuestion((x) => x.topic === 'okinawa') ?? this.pickQuestion((x) => !x.special);
     p.hp = p.maxHp;
+    this.bump('revive', p.id);
     if (!q) return;
     const res = await this.ask(epoch, q, 'revive', 'Окинава · 沖縄', [p.id], q.time ?? st.questionTime);
     const results: Record<string, string> = {};
@@ -868,6 +879,7 @@ export class GameEngine {
     this.io.fx?.('duel');
     await this.sleep(epoch, 2800);
     const d = this.s.duel!;
+    this.bump('duelAttack', att.id);
     const hp0 = { [att.id]: att.hp, [def.id]: def.hp };
     // ставки зрителей: до выбора темы
     const spectators = this.alivePids().filter((id) => id !== att.id && id !== def.id);
@@ -905,6 +917,7 @@ export class GameEngine {
             const lose = win === asker ? target : asker;
             const dmg = win.stats.music ?? st.baseStrength;
             this.hit(lose, dmg);
+            this.bump('rhythmWin', win.id);
             this.log(`${win.name} побеждает в ритме: −${dmg} HP у ${lose.name}`);
           } else this.log('Ритм: ничья');
           this.setStage({ t: 'duelResult' });
@@ -917,6 +930,7 @@ export class GameEngine {
         let q: Question | null;
         if (pickV === 'special' || pickV.startsWith('special:')) {
           asker.specials--;
+          this.bump('specials', asker.id);
           d.special = true;
           const sTopic = pickV.startsWith('special:') ? pickV.slice(8) : null;
           if (sTopic) asker.specialTopics!.splice(asker.specialTopics!.indexOf(sTopic), 1);
@@ -956,11 +970,13 @@ export class GameEngine {
     if (loser) {
       const win = loser === att ? def : att;
       d.winner = win.id;
+      this.bump('duelWin', win.id);
       // победитель забирает часть денег проигравшего
       const stolen = Math.floor((loser.yen * (st.reward.duelStealPct ?? 15)) / 100 / 10) * 10;
       loser.yen -= stolen;
       win.yen += stolen;
       d.stolen = stolen;
+      this.bump('stolen', win.id, stolen);
       if (ko) {
         d.ko = true;
         win.yen += rewardYen(st.reward.duelWinYen, epochOf(this.s));
@@ -1016,6 +1032,7 @@ export class GameEngine {
       const back = d.winner ? (bets[d.winner] ?? 0) * 2 : staked;
       p.yen += back;
       payouts[pid] = back - staked;
+      this.bump('betNet', pid, back - staked);
     }
     d.payouts = payouts;
   }
@@ -1102,6 +1119,7 @@ export class GameEngine {
       this.log(`Кицунэ утащила ¥${amount} у ${leader.name} и принесла ${p.name}`);
     }
     if (kind === 'map') p.scouted = fog;
+    this.bump('finds', p.id);
     const turns = (this.sec.ownTurns ??= {});
     this.sec.findAt = { ...(this.sec.findAt ?? {}), [p.id]: turns[p.id] ?? 0 };
     if (this.sec.findsRound) this.sec.findsRound.n++;
@@ -1109,6 +1127,13 @@ export class GameEngine {
     this.setStage({ t: 'find', pid: p.id, kind, ...(amount ? { amount } : {}), ...(fromPid ? { from: fromPid } : {}) });
     await this.sleep(epoch, kind === 'kitsune' ? 6000 : 4000);
     return kind;
+  }
+
+  /** счётчик для титулов в финале */
+  private bump(metric: string, pid: string, n = 1) {
+    if (!n) return;
+    const m = ((this.sec.tally ??= {})[metric] ??= {});
+    m[pid] = (m[pid] ?? 0) + n;
   }
 
   private hit(p: Player, dmg: number) {
@@ -1340,6 +1365,7 @@ export class GameEngine {
       const p = this.s.players[id];
       if (lv < 0 || lv >= st.group.prizes.length || !p) continue;
       places[id] = lv + 1;
+      this.bump('group:' + g.game, id, placePoints(lv + 1));
       const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
       const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
@@ -1645,6 +1671,7 @@ export class GameEngine {
       const lv = levels.indexOf(d.alive.includes(id) ? Infinity : d.out[id]);
       if (lv < 0 || lv >= st.group.prizes.length) continue;
       places[id] = lv + 1;
+      this.bump('group:dragon', id, placePoints(lv + 1));
       const pr0 = st.group.prizes[lv] ?? { yen: 0, stars: 0 };
       const pr = { yen: rewardYen(pr0.yen, epochOf(this.s)), stars: pr0.stars };
       p.yen += pr.yen;
@@ -1750,6 +1777,7 @@ export class GameEngine {
     q.revealed = true;
     if (!hideCorrect) q.correct = this.curCorrect;
     q.choices = Object.fromEntries(q.participants.map((id) => [id, this.choices[id] ?? null]));
+    for (const id of q.participants) if (this.choices[id] === this.curCorrect) this.bump('correct', id);
     q.results = results;
     this.emit();
     this.io.fx?.('reveal', q);
@@ -1857,6 +1885,7 @@ export class GameEngine {
         if (item === 'special' && sTopics.length && !sTopics.includes(a.topic)) return reply(false, null, 'Выбери тему спецвопроса');
         if (!pay(cost)) return reply(false, null, 'Не хватает денег');
         if (coupon) p.bonuses.coupon--;
+        this.bump('shopSpent', p.id, cost.yen);
         if (item === 'special') { p.specials++; if (a.topic) (p.specialTopics ??= []).push(a.topic); }
         else if (item === 'hp') { p.maxHp += st.shop.hp.amount; p.hp += st.shop.hp.amount; }
         else if (item === 'stat') p.stats[a.topic]++;
@@ -1906,6 +1935,7 @@ export class GameEngine {
         const cost = balls * st.pachinko.yenPerBall;
         if (p.yen < cost) return reply(false, null, 'Не хватает йен');
         p.yen -= cost;
+        this.bump('pachiNet', p.id, -cost);
         p.busy = 'pachinko';
         this.emit();
         return reply(true, { balls });
@@ -1914,6 +1944,7 @@ export class GameEngine {
         const balls = Math.max(0, Math.min(20000, Math.floor(a.balls ?? 0)));
         const yen = balls * st.pachinko.yenPerBall;
         p.yen += yen;
+        this.bump('pachiNet', p.id, yen);
         if (a.exit) p.busy = null;
         if (yen > 0) this.log(`${p.name} обменял ${balls} шариков на ¥${yen}`);
         this.emit();
@@ -1928,6 +1959,7 @@ export class GameEngine {
           this.sec.onsen[p.id] = p.pref!;
           const healed = p.maxHp - p.hp;
           p.hp = p.maxHp;
+          if (healed > 0) this.bump('onsen', p.id);
           if (healed > 0) this.log(`♨️ ${p.name} отдохнул в онсэне: +${healed} HP`);
         }
         this.emit();
@@ -1961,6 +1993,7 @@ export class GameEngine {
         p.stars += info.stars ?? 0;
         if (res === 'fifty1' || res === 'fifty2' || res === 'move2' || res === 'turn2' || res === 'coin' || res === 'ticket' || res === 'scroll') p.bonuses[res] = (p.bonuses[res] ?? 0) + 1;
         if (res === 'special') p.specials++;
+        if (res !== 'miss') this.bump('ringPrizes', p.id);
         if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
         if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
         this.emit();
@@ -1976,6 +2009,7 @@ export class GameEngine {
         const d1 = 1 + randInt(6), d2 = 1 + randInt(6);
         const win = (a.guess === 'cho') === ((d1 + d2) % 2 === 0);
         p.yen += win ? bet : -bet;
+        this.bump('chohanNet', p.id, win ? bet : -bet);
         if (bet >= 500) this.log(`🎲 ${p.name} ${win ? 'выиграл' : 'проиграл'} в чо-хан ¥${bet}`);
         this.emit();
         this.io.fx?.('chohan', { pid: p.id, d1, d2, guess: a.guess, bet, win });
@@ -1991,6 +2025,7 @@ export class GameEngine {
         if (cur.done) return reply(false, null, 'Все судоку уже решены');
         const grid = Array.isArray(a.grid) ? a.grid.map(Number) : [];
         if (!isSolved(cur.puzzle!, grid, cur.size!)) return reply(false, null, 'Пока не решено');
+        this.bump('sudoku', p.id);
         const pr = st.sudoku?.rewards?.[cur.level] ?? { yen: 0, stars: 0 };
         p.yen += pr.yen;
         p.stars += pr.stars;
