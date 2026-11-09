@@ -322,6 +322,14 @@
 /* ───── Лапша ───── */
 .nood-tv { width: 100%; }
 .nood-row { display: flex; align-items: flex-end; gap: 1.2em; width: 100%; justify-content: center; }
+/* лапшичная: стена (art/noodles/shop.px.js) фоном от верха, прилавок — плиткой 32×30 внизу, в em: передняя стенка = высота подписи под стопкой.
+   Стопки стоят на столешнице, число/имя/статус — на передней стенке прилавка */
+.nood-tv .nood-row {
+  padding: 3em 1.5em 6px; border: 4px solid #fff; box-shadow: 6px 6px 0 var(--shadow); image-rendering: pixelated;
+  background: url('../img/noodles/noodle_counter.png') repeat-x left bottom / 6.8em 6.4em, url('../img/noodles/noodle_wall.png') center top / cover, #2e1a12;
+}
+.nood-tv .nood-card { text-shadow: 2px 2px 0 #000; }
+.nood-tv .nood-state { color: #e8d8b8; }
 .nood-server { width: clamp(90px, 9vw, 160px); image-rendering: pixelated; }
 .nood-players { display: flex; flex-wrap: wrap; gap: 0.6em 1em; justify-content: center; align-items: flex-end; flex: 1; }
 .nood-card { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 7em; }

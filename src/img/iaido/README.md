@@ -20,6 +20,7 @@
 
 Если пропорции меча выйдут другими — поправь `.iai-saya { top: 25%; height: 75% }` и `aspect-ratio` у `.iai-sword` в `src/styles/play.css`.
 Место самурая на картине — `.iai-sam` в `src/styles/tv.css` (сейчас `left: 38.5%; top: 65.5%`, ширина 23.8% картины; спрайты 380×296, исходники — `*_orig.png`, сжаты `pixelart.py --cell 4`).
+Катана и ножны — 91×160 (исходники `katana_orig.png`, `saya_orig.png`, сжаты `pixelart.py --cell 8.4`).
 
 ## Промпты (Nano Banana)
 

@@ -3,6 +3,20 @@
 // сантиметр у толстой спины весит намного больше сантиметра у хвоста.
 // Рисунок пиксельный: рыба рисуется в маленький холст и растягивается без сглаживания.
 import type { FishId } from '../shared/types';
+import { ART_FISH } from './sashimiProfiles';
+
+// картинки: src/img/sashimi/{tuna,squid,crab}_px.png и board_px.png (готовит scripts/sashimi-art.py);
+// профиль веса у этих рыб посчитан по силуэту картинки (sashimiProfiles.ts), так что разрез совпадает с рисунком
+const artFiles = import.meta.glob<string>('../img/sashimi/*_px.png', { eager: true, import: 'default', query: '?url' });
+const artImgs = new Map<string, HTMLImageElement>();
+/** картинка: 'ok' — загружена, 'wait' — грузится, null — файла нет */
+function art(name: string): HTMLImageElement | 'wait' | null {
+  const url = artFiles[`../img/sashimi/${name}_px.png`];
+  if (!url || typeof Image === 'undefined') return null;
+  let im = artImgs.get(name);
+  if (!im) { im = new Image(); im.src = url; artImgs.set(name, im); }
+  return im.complete && im.naturalWidth ? im : 'wait';
+}
 
 /** холст рыбы на разделочной доске, px */
 export const SW = 160;
@@ -54,6 +68,8 @@ export const FISH: Record<FishId, FishDef> = {
       [0.7, 7, 7, 0.22], [1, 4, 4, 0.12]],
   },
 };
+
+for (const [id, a] of Object.entries(ART_FISH)) if (a) FISH[id as FishId].profile = a.profile;
 
 function at(f: FishDef, t: number): [number, number, number] {
   const p = f.profile;
@@ -132,6 +148,12 @@ export function fishCanvas(fish: FishId): HTMLCanvasElement {
   c.width = SW;
   c.height = SH;
   const ctx = c.getContext('2d')!;
+  const pic = art(fish);
+  if (pic && pic !== 'wait') {
+    ctx.drawImage(pic, X0, CY - (ART_FISH[fish]?.cy ?? Math.floor(pic.height / 2)));
+    boardCache.set(key, c);
+    return c;
+  }
   const f = FISH[fish];
   const [back, side, belly, fin, spot] = f.colors;
   for (let x = X0; x < X1; x++) {
@@ -179,7 +201,7 @@ export function fishCanvas(fish: FishId): HTMLCanvasElement {
     ctx.fillRect(ex, ey, 2, 1);
     if (fish === 'squid') { ctx.fillRect(ex, ey + 6, 2, 2); }
   }
-  boardCache.set(key, c);
+  if (pic !== 'wait') boardCache.set(key, c); // картинка ещё грузится — нарисуем её, когда придёт
   return c;
 }
 
@@ -187,7 +209,7 @@ const darkCache = new Map<FishId, HTMLCanvasElement>();
 /** затемнённая рыба — обрезки, которые уйдут в отходы */
 function darkFish(fish: FishId): HTMLCanvasElement {
   let c = darkCache.get(fish);
-  if (c) return c;
+  if (c && boardCache.has(fish)) return c;
   const src = fishCanvas(fish);
   c = document.createElement('canvas');
   c.width = SW;
@@ -212,6 +234,9 @@ function wood(): HTMLCanvasElement {
   c.width = SW;
   c.height = SH;
   const ctx = c.getContext('2d')!;
+  const pic = art('board');
+  if (pic === 'wait') { ctx.fillStyle = '#e9cf9f'; ctx.fillRect(0, 0, SW, SH); return c; }
+  if (pic) { ctx.drawImage(pic, 0, 0); return (woodUrl = c); }
   ctx.fillStyle = '#e9cf9f';
   ctx.fillRect(0, 0, SW, SH);
   for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
