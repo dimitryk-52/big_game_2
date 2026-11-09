@@ -4,7 +4,7 @@ import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
 import { PREF, neighbors, prefName } from '../map/mapData';
-import { Avatar, BonusIcon, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg } from '../ui/common';
+import { Avatar, BonusIcon, HpBar, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, PixelImg, setTimerFreeze } from '../ui/common';
 import { finalRank } from '../shared/titles';
 import { BONUS_INFO, REWARD_INFO, SOLO_GAMES, machinesOf, prefIcons } from '../shared/settings';
 import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg';
@@ -36,6 +36,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const [panel, setPanel] = useState(false); // на ТВ кнопок нет: панель ведущего только по H (отладка)
   const [debug, setDebug] = useState(false);
   const s = viewState(host.state);
+  // пауза: полоски таймеров замирают
+  setTimerFreeze(s.paused ? s.pausedAt ?? null : null);
   useTvSounds(s);
 
   // подписка на события движка
@@ -206,6 +208,10 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   useEffect(() => { document.documentElement.dataset.epoch = String(ep); }, [ep]);
 
   const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
+  // список игроков: до 7 — одна колонка (6–7 — плотные карточки), больше — две
+  const nPlayers = s.joinOrder.filter((id) => s.players[id]).length;
+  const hasList = s.phase !== 'lobby' && st.t !== 'wheel' && st.t !== 'end';
+  const bigPanel = st.t === 'group' || (st.t === 'question' && !!(s.q?.answerImages || s.q?.media?.type === 'image' || s.q?.media?.type === 'video'));
 
   // фоновая музыка: карта всю игру, во время дуэли — боевая; тишина в ритм-батле (своя музыка)
   // и в вопросах с аудио/видео; в обычных вопросах тише
@@ -225,13 +231,13 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   useEffect(() => { setMusic(track, st.t === 'question' && (track === 'map' || track === 'duel')); }, [track, st.t]);
 
   return (
-    <div class={'tv' + (s.joinOrder.filter((id) => s.players[id]).length > 5 && s.phase !== 'lobby' ? ' wide-list' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '') + (st.t === 'dragon' && s.dr ? ' dragon-on' : '')}>
+    <div class={'tv' + (hasList ? ' has-list' : '') + (nPlayers > 7 && hasList ? ' wide-list' : '') + (bigPanel ? ' big-panel' : '') + (st.t === 'question' && s.q?.context === 'duel' && s.duel ? ' duel-q' : '') + (st.t === 'dragon' && s.dr ? ' dragon-on' : '')}>
       <div class="tv-map" ref={mapEl} />
       {sceneBg.src
         ? <img class={'tv-qbg' + (sceneZoom.current ? ' zoom' : '') + (sceneBg.smooth ? ' smooth' : '')} key="scene-bg" src={sceneBg.src} alt="" draggable={false} />
         : st.t === 'question' && <div class="tv-qdim" />}
       <TopBar s={s} />
-      {s.phase !== 'lobby' && st.t !== 'wheel' && <PlayerList s={s} />}
+      {hasList && <PlayerList s={s} />}
       {st.t === 'lobby' && <Lobby s={s} host={host} />}
       {st.t === 'banner' && <Banner key={st.text} text={st.text} sub={st.sub} big={st.big} />}
       {st.t === 'calibResult' && <CalibResult s={s} />}
@@ -358,13 +364,13 @@ function PlayerList({ s }: { s: GameState }) {
   const combat = s.settings.topics.filter((t) => t.combat);
   const ids = order.filter((id) => s.players[id]);
   return (
-    <div class={'plist' + (ids.length > 5 ? ' cols-2' : '')}>
+    <div class={'plist' + (ids.length > 7 ? ' cols-2' : ids.length > 5 ? ' dense' : '')}>
       {ids.map((id) => {
         const p = s.players[id];
         return (
           <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ '--frame': p.color } as any}>
             <div class="pc-top">
-              <Avatar p={p} size={56} dim={p.hp <= 0} />
+              <Avatar p={p} size={ids.length > 5 ? 48 : 56} dim={p.hp <= 0} />
               <div class="pc-info">
                 <div class="pc-name">
                   <span class="pname">{p.name}</span>

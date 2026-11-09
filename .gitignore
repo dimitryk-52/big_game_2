@@ -20,3 +20,8 @@ tools/pixelart/out/
 
 # патчи и архивы, которые оставляют другие сессии
 /patches/
+
+# исходники картинок до пикселизации и большие черновики — только локально
+*_orig.png
+/src/img/logo_text.png
+/src/img/bgs/hottub*.png

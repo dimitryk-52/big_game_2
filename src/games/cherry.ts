@@ -1,6 +1,8 @@
 // «Косточки» (Ямагата, Хигасинэ): плевок вишнёвой косточкой на дальность. Три попытки, ветер у попытки один на всех.
 // Телефон ловит угол и силу, дальность считает хост по этой же формуле.
-const files = import.meta.glob<string>('../img/cherry/*.png', { eager: true, import: 'default', query: '?url' });
+let files: Record<string, string> = {};
+// вне Vite (headless-симуляция, npm run sim) картинки не нужны
+try { files = import.meta.glob<string>('../img/cherry/*.png', { eager: true, import: 'default', query: '?url' }); } catch { /* нет import.meta.glob */ }
 export const cherryImg = (name: string) => files[`../img/cherry/${name}.png`] ?? '';
 
 export const PIT_TRIES = 3;

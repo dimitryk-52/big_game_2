@@ -32,6 +32,8 @@ export interface HostIO {
 }
 
 class Aborted extends Error {}
+/** игрока, чей сейчас ход, удалили — ход обрывается, игра идёт дальше */
+class Kicked extends Error {}
 const ANSWER_GRACE = 700; // мс: льгота на доставку ответа после дедлайна
 const LEAD = 700; // мс: задержка старта таймера, чтобы вопрос успел дойти до всех
 const PREF_INTRO_MS = 5000; // мс: интро префектуры при первом входе
@@ -122,6 +124,10 @@ export class GameEngine {
   private stageN = 0;
   private botKeys = new Set<string>();
   private rhythmDone: (() => void) | null = null;
+  /** чей сейчас ход (или высадка): если этого игрока удалят, ход оборвётся */
+  private turnPid: string | null = null;
+  /** таймеры ожиданий сценария: на паузе замирают, после неё идут дальше с того же места */
+  private pts = new Set<{ fire: () => void; left: number; at: number; id: any }>();
 
   constructor(private io: HostIO, room: string, settings: Settings, questions: Question[], snapshot?: { s: GameState; sec: Secrets } | null) {
     this.questions = questions;
@@ -136,6 +142,9 @@ export class GameEngine {
       this.s.g = null;
       this.s.dr = null;
       this.s.paused = false;
+      this.s.pausedAt = null;
+      // вращение призового кольца перезагрузку не переживает: попытку возвращаем
+      for (const id of Object.keys(this.sec.ring ?? {})) this.ringCancel(id);
       // ТВ перезагрузился посреди вращения: таймеров больше нет — выдаём выпавшее сразу
       for (const p of Object.values(this.s.players)) if (p.reel?.spin && !p.reel.done) this.grantReel(p, p.reel);
       const w = this.s.wheel;
@@ -197,9 +206,7 @@ export class GameEngine {
         this.skip();
         break;
       case 'pause':
-        this.s.paused = !this.s.paused;
-        if (!this.s.paused) this.pauseCbs.splice(0).forEach((c) => c());
-        this.emit();
+        this.setPaused(!this.s.paused);
         break;
       case 'kick':
         this.kick(args?.pid);
@@ -396,6 +403,53 @@ export class GameEngine {
 
   private check(epoch: number) {
     if (epoch !== this.epoch) throw new Aborted();
+    if (this.turnPid && !this.s.players[this.turnPid]) throw new Kicked();
+  }
+
+  /** время игры: на паузе стоит на месте (по нему сверяются дедлайны ответов) */
+  private get gameNow() {
+    return this.s.paused && this.s.pausedAt ? this.s.pausedAt : this.now;
+  }
+
+  /** таймер ожидания, который замирает на паузе */
+  private pT(fn: () => void, ms: number) {
+    const pt = { fire: () => { this.pts.delete(pt); fn(); }, left: Math.max(0, ms), at: this.now, id: null as any };
+    if (!this.s.paused) pt.id = setT(pt.fire, pt.left);
+    this.pts.add(pt);
+    return pt;
+  }
+
+  private pClear(pt: any) {
+    if (!pt) return;
+    clearT(pt.id);
+    this.pts.delete(pt);
+  }
+
+  /** пауза ведущего: таймеры вопросов, магазина, высадки и т. п. замирают, дедлайны на экранах сдвигаются.
+   *  Не касается того, что идёт в реальном времени: ритм-батл, шаги дракона, сигнал иайдо, вращения */
+  private setPaused(on: boolean) {
+    if (on === this.s.paused) return;
+    const t = this.now;
+    if (on) {
+      this.s.paused = true;
+      this.s.pausedAt = t;
+      for (const pt of this.pts) if (pt.id != null) { clearT(pt.id); pt.id = null; pt.left = Math.max(0, pt.left - (t - pt.at)); }
+    } else {
+      const d = Math.max(0, t - (this.s.pausedAt ?? t));
+      this.s.paused = false;
+      this.s.pausedAt = null;
+      const st: any = this.s.stage;
+      if (typeof st.deadline === 'number' && st.deadline) st.deadline += d;
+      if (st.pickTopic?.deadline) st.pickTopic.deadline += d;
+      const q = this.s.q;
+      if (q && !q.revealed && q.deadline) { q.startAt += d; q.deadline += d; }
+      const g = this.s.g;
+      if (g && g.deadline) { g.startAt += d; g.deadline += d; }
+      for (const pt of this.pts) if (pt.id == null) { pt.at = t; pt.id = setT(pt.fire, pt.left); }
+      this.pauseCbs.splice(0).forEach((c) => c());
+      this.closeIfAllAnswered();
+    }
+    this.emit();
   }
 
   /** ждать сообщение, подходящее под match (вернуть не-undefined), или таймаут/скип → null */
@@ -404,10 +458,10 @@ export class GameEngine {
       let timer: any;
       const w: Waiter = {
         match,
-        resolve: (v) => { clearT(timer); resolve(v); },
+        resolve: (v) => { this.pClear(timer); resolve(v); },
       };
       this.waiters.push(w);
-      if (ms != null) timer = setT(() => {
+      if (ms != null) timer = this.pT(() => {
         const i = this.waiters.indexOf(w);
         if (i >= 0) this.waiters.splice(i, 1);
         resolve(null);
@@ -428,8 +482,8 @@ export class GameEngine {
   /** пауза, которую можно пропустить кнопкой «Далее» */
   private sleep(epoch: number, ms: number): Promise<void> {
     return new Promise<void>((resolve) => {
-      const done = () => { clearT(t); this.skipCbs.delete(done); resolve(); };
-      const t = setT(done, ms);
+      const done = () => { this.pClear(t); this.skipCbs.delete(done); resolve(); };
+      const t = this.pT(done, ms);
       this.skipCbs.add(done);
     }).then(() => this.check(epoch));
   }
@@ -448,8 +502,8 @@ export class GameEngine {
     try {
       if (this.s.phase === 'lobby') {
         this.setStage({ t: 'lobby' });
-        await this.waitInput(epoch, (m: any) => (m.t === '__start' ? true : undefined), null);
-        if (!this.s.joinOrder.length) return this.run(epoch);
+        // «Далее» в лобби игру не запускает — только «Начать игру»
+        while (!(await this.waitInput(epoch, (m: any) => (m.t === '__start' ? true : undefined), null)) || !this.s.joinOrder.length) { /* ждём старта */ }
         this.s.phase = 'calib';
         this.initPrefs();
         this.s.epoch = 0;
@@ -547,7 +601,7 @@ export class GameEngine {
       const code = v ?? pick(allowed);
       this.log(`${p.name} высаживается: ${prefName(code)}`);
       // высадка — полноценный ход: интро, вопрос, магазин, групповая игра
-      await this.arrive(epoch, p, code, true);
+      await this.asTurn(pid, () => this.arrive(epoch, p, code, true));
       await this.checkEpoch(epoch);
       this.sec.landingIdx = i + 1;
       this.snapshot();
@@ -559,12 +613,15 @@ export class GameEngine {
 
   private async turns(epoch: number) {
     for (;;) {
+      // всех игроков удалили — ждём, а не крутим пустые круги
+      if (!this.s.turnOrder.length) { await this.sleep(epoch, 2000); continue; }
       while (this.s.turnIdx < this.s.turnOrder.length) {
         await this.gate(epoch);
+        this.s.turnIdx = Math.max(0, this.s.turnIdx);
         const pid = this.s.turnOrder[this.s.turnIdx];
-        if (this.s.players[pid]) await this.turn(epoch, pid);
+        if (this.s.players[pid]) await this.asTurn(pid, () => this.turn(epoch, pid));
         // редкий бонус: после хода можно сходить ещё раз
-        while (this.s.players[pid] && (await this.offerExtraTurn(epoch, pid))) await this.turn(epoch, pid);
+        while (this.s.players[pid] && (await this.asTurn(pid, () => this.offerExtraTurn(epoch, pid)))) await this.asTurn(pid, () => this.turn(epoch, pid));
         await this.checkEpoch(epoch);
         this.checkEndgame();
         this.s.turnIdx++;
@@ -576,6 +633,28 @@ export class GameEngine {
       this.snapshot();
       if (await this.roundEnd(epoch)) return;
       this.snapshot();
+    }
+  }
+
+  /** ход игрока pid: если его удалят посреди хода, ход обрывается (экран чистим), а игра идёт дальше */
+  private async asTurn<T>(pid: string, fn: () => Promise<T>): Promise<T | undefined> {
+    const ep = this.epoch;
+    this.turnPid = pid;
+    try {
+      return await fn();
+    } catch (e) {
+      if (!(e instanceof Kicked) || ep !== this.epoch) throw e;
+      this.turnPid = null;
+      this.s.q = null;
+      this.s.duel = null;
+      this.s.rhythm = null;
+      this.s.g = null;
+      this.s.dr = null;
+      this.setStage({ t: 'banner', text: 'Игрок удалён', sub: 'Ход переходит дальше' });
+      await this.sleep(ep, 1500);
+      return undefined;
+    } finally {
+      this.turnPid = null;
     }
   }
 
@@ -671,6 +750,8 @@ export class GameEngine {
     await this.sleep(epoch, 1800);
     // крутит призовое кольцо — ход начнётся, когда огонёк остановится (но не дольше 25 с)
     for (const t0 = Date.now(); (this.sec.ring[pid] || (this.ringSettle[pid] ?? 0) > Date.now()) && Date.now() - t0 < 25000;) await this.sleep(epoch, 300);
+    // СТОП так и не нажали (ушёл со страницы, телефон перезагрузился): попытку отменяем, иначе каждый ход ждал бы заново
+    this.ringCancel(pid);
     // барабан бонуса так и не покрутили — крутится сам (виден у игрока на телефоне)
     if (p.reel?.done) delete p.reel;
     else if (p.reel && !p.reel.spin) this.spinBonusReel(p);
@@ -828,10 +909,22 @@ export class GameEngine {
     // групповая игра — как в Марио Пати: ход закончен, играют все (один раз на префектуру)
     const game = st.groupPrefs?.[to];
     if (game && !ps.groupDone && this.s.joinOrder.filter((id) => this.s.players[id]).length >= 2) {
-      ps.groupDone = true;
       await this.gate(epoch);
       await this.groupGame(epoch, to, game);
+      // отмечаем после игры: если её оборвали (перезагрузка ТВ), она сыграется при следующем приходе
+      ps.groupDone = true;
     }
+  }
+
+  /** незавершённая попытка призового кольца: убрать и вернуть деньги */
+  private ringCancel(pid: string) {
+    if (!this.sec.ring?.[pid]) return;
+    delete this.sec.ring[pid];
+    const p = this.s.players[pid];
+    if (!p) return;
+    p.yen += this.s.settings.ring.cost;
+    if (p.busy === 'ring') p.busy = null;
+    this.log(`${p.name}: призовое кольцо остановлено, ¥${this.s.settings.ring.cost} возвращены`);
   }
 
   /** денежные соло-игры, которые закрываются от фарма (онсэн не в счёт: за лечение платят) */
@@ -1232,10 +1325,11 @@ export class GameEngine {
     const stage: Extract<Stage, { t: 'duelBet' }> = { t: 'duelBet', deadline: this.now + LEAD + ms, done: [] };
     d.bets = {};
     this.setStage(stage);
-    const end = stage.deadline + 300;
+    // дедлайн читаем из стадии: пауза его сдвигает
+    const end = () => stage.deadline + 300;
     const waiting = () => spectators.some((id) => !stage.done.includes(id) && (this.s.players[id]?.online || this.s.players[id]?.bot));
-    while (waiting() && this.now < end) {
-      const m = await this.waitInput(epoch, (x) => (x.t === 'pick' && x.kind === 'bet' && spectators.includes(x.pid) && !stage.done.includes(x.pid) ? x : undefined), end - this.now);
+    while (waiting() && this.gameNow < end()) {
+      const m = await this.waitInput(epoch, (x) => (x.t === 'pick' && x.kind === 'bet' && spectators.includes(x.pid) && !stage.done.includes(x.pid) ? x : undefined), end() - this.gameNow);
       if (!m || m.t !== 'pick') break;
       const p = this.s.players[m.pid];
       if (!p) continue;
@@ -1512,10 +1606,11 @@ export class GameEngine {
     const ms = this.s.settings.shopTime * 1000;
     const stage: Extract<Stage, { t: 'shop' }> = { t: 'shop', pid: p.id, deadline: this.now + ms, entered: false };
     this.setStage(stage);
-    const end = stage.deadline + 300;
-    while (this.now < end) {
+    // дедлайн читаем из стадии: пауза его сдвигает
+    const end = () => stage.deadline + 300;
+    while (this.gameNow < end()) {
       // без связи долго не ждём
-      const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'shop' && m.pid === p.id ? String(m.value) : undefined), p.online ? end - this.now : Math.min(end - this.now, 8000));
+      const v = await this.waitInput(epoch, (m) => (m.t === 'pick' && m.kind === 'shop' && m.pid === p.id ? String(m.value) : undefined), p.online ? end() - this.gameNow : Math.min(end() - this.gameNow, 8000));
       if (v === 'enter' && !stage.entered) {
         stage.entered = true;
         this.emit();
@@ -1596,9 +1691,9 @@ export class GameEngine {
       }, g.startAt - this.now + 5000 + i * 9000 + randInt(4000));
     }
     await new Promise<void>((resolve) => {
-      const done = () => { clearT(t); this.skipCbs.delete(done); this.groupDone = null; resolve(); };
+      const done = () => { this.pClear(t); this.skipCbs.delete(done); this.groupDone = null; resolve(); };
       // после конца времени ждём, пока рисунки долетят
-      const t = setT(done, g.deadline - this.now + 8000);
+      const t = this.pT(done, g.deadline - this.now + 8000);
       this.skipCbs.add(done);
       this.groupDone = () => { if (g.players.every((id) => g.submitted.includes(id) || !this.s.players[id])) done(); };
     });
@@ -2095,8 +2190,8 @@ export class GameEngine {
     const deadline = pq.deadline = pq.startAt + timeSec * 1000;
     this.emit();
     await new Promise<void>((resolve) => {
-      const done = () => { clearT(t); this.skipCbs.delete(done); this.qDone = null; resolve(); };
-      const t = setT(done, deadline - this.now + ANSWER_GRACE);
+      const done = () => { this.pClear(t); this.skipCbs.delete(done); this.qDone = null; resolve(); };
+      const t = this.pT(done, deadline - this.now + ANSWER_GRACE);
       this.skipCbs.add(done);
       this.qDone = done;
     });
@@ -2117,7 +2212,7 @@ export class GameEngine {
     const q = this.s.q;
     if (!q || q.revealed || q.reading || q.n !== m.n || !q.participants.includes(m.pid) || m.pid in this.choices) return;
     if (m.choice < 0 || m.choice > 3 || q.removed[m.pid]?.includes(m.choice)) return;
-    const t = this.now;
+    const t = this.gameNow;
     // ответ засчитывается по времени нажатия (в часах хоста), с защитой от подделки
     const at = Math.min(m.at ?? t, t);
     if (at > q.deadline + 150 || t > q.deadline + ANSWER_GRACE) return;
@@ -2125,6 +2220,13 @@ export class GameEngine {
     q.answered.push(m.pid);
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
+    this.closeIfAllAnswered();
+  }
+
+  /** все ответили — вопрос закрывается досрочно (на паузе — нет: закроется, когда паузу снимут) */
+  private closeIfAllAnswered() {
+    const q = this.s.q;
+    if (!q || q.revealed || q.reading || this.s.paused) return;
     if (q.participants.every((id) => id in this.choices || !this.s.players[id])) this.qDone?.();
   }
 
@@ -2206,10 +2308,14 @@ export class GameEngine {
     const idx = this.s.turnOrder.indexOf(pid);
     if (idx >= 0) {
       this.s.turnOrder.splice(idx, 1);
-      if (idx < this.s.turnIdx) this.s.turnIdx--;
+      // удалили ходящего — следующий по очереди встаёт на его место, его ход не пропадает
+      if (idx < this.s.turnIdx || (idx === this.s.turnIdx && this.s.phase === 'turns')) this.s.turnIdx--;
     }
+    delete this.sec.ring[pid];
     this.log(`${name} удалён из игры`);
-    this.qDone && this.s.q && this.s.q.participants.every((id) => id in this.choices || !this.s.players[id]) && this.qDone();
+    // ход удалённого обрывается сразу (см. asTurn)
+    if (this.turnPid === pid) this.skip();
+    this.closeIfAllAnswered();
     this.snapshot();
   }
 
@@ -2259,7 +2365,7 @@ export class GameEngine {
         if (b === 'cheat' && (q.context !== 'pref' || q.prize)) return reply(false, null, 'Шпаргалка — только для вопросов префектур');
         if (q.removed[p.id]?.length) return reply(false, null, 'Бонус уже использован');
         if (!(p.bonuses[b] > 0)) return reply(false, null, 'Нет бонуса');
-        if (this.now > q.deadline) return reply(false, null, 'Время вышло');
+        if (this.gameNow > q.deadline) return reply(false, null, 'Время вышло');
         p.bonuses[b]--;
         const wrong = shuffle([0, 1, 2, 3].filter((i) => i !== this.curCorrect));
         q.removed = { ...q.removed, [p.id]: wrong.slice(0, b === 'cheat' ? 3 : b === 'fifty2' ? 2 : 1) };
@@ -2276,7 +2382,7 @@ export class GameEngine {
         if (b !== 'coin') return reply(false, null, 'Нет такой монеты');
         if (q.coins?.[p.id]) return reply(false, null, 'Монетка уже брошена');
         if (!((p.bonuses[b] ?? 0) > 0)) return reply(false, null, 'Нет монеты');
-        if (this.now > q.deadline) return reply(false, null, 'Время вышло');
+        if (this.gameNow > q.deadline) return reply(false, null, 'Время вышло');
         p.bonuses[b]--;
         q.coins = { ...(q.coins ?? {}), [p.id]: b };
         this.log(`${p.name} бросает монетку`);
@@ -2332,6 +2438,7 @@ export class GameEngine {
       }
       case 'pachiCash': {
         const balls = Math.max(0, Math.min(20000, Math.floor(a.balls ?? 0)));
+        if (balls > 0 && !soloAt(st, p.pref).includes('pachinko')) return reply(false, null, 'Обменять шарики можно только у автомата пачинко');
         const yen = balls * st.pachinko.yenPerBall;
         p.yen += yen;
         this.bump('pachiNet', p.id, yen);

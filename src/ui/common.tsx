@@ -17,9 +17,13 @@ export function useFrame(active = true) {
   }, [active]);
 }
 
+/** пауза ведущего: все полоски таймеров стоят на этом времени хоста (null — идут как обычно) */
+let timerFreeze: number | null = null;
+export function setTimerFreeze(t: number | null) { timerFreeze = t; }
+
 export function TimerBar({ start, end, now, big }: { start: number; end: number; now: () => number; big?: boolean }) {
   useFrame(true);
-  const t = now();
+  const t = timerFreeze ?? now();
   const total = Math.max(1, end - start);
   const left = Math.max(0, Math.min(total, end - t));
   const frac = left / total;

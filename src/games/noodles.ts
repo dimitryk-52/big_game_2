@@ -1,7 +1,9 @@
 // «Лапша» (ванко-соба / рамен / удон): правила и картинки. Картинки — src/img/noodles/*.png (pxl-арт).
 import type { NoodleId } from '../shared/types';
 
-const files = import.meta.glob<string>('../img/noodles/*.png', { eager: true, import: 'default', query: '?url' });
+let files: Record<string, string> = {};
+// вне Vite (headless-симуляция, npm run sim) картинки не нужны
+try { files = import.meta.glob<string>('../img/noodles/*.png', { eager: true, import: 'default', query: '?url' }); } catch { /* нет import.meta.glob */ }
 export const noodleImg = (name: string) => files[`../img/noodles/${name}.png`] ?? '';
 
 export interface NoodleDef {

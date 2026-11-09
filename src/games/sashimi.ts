@@ -7,7 +7,9 @@ import { ART_FISH } from './sashimiProfiles';
 
 // картинки: src/img/sashimi/{tuna,squid,crab}_px.png и board_px.png (готовит scripts/sashimi-art.py);
 // профиль веса у этих рыб посчитан по силуэту картинки (sashimiProfiles.ts), так что разрез совпадает с рисунком
-const artFiles = import.meta.glob<string>('../img/sashimi/*_px.png', { eager: true, import: 'default', query: '?url' });
+let artFiles: Record<string, string> = {};
+// вне Vite (headless-симуляция, npm run sim) картинки не нужны
+try { artFiles = import.meta.glob<string>('../img/sashimi/*_px.png', { eager: true, import: 'default', query: '?url' }); } catch { /* нет import.meta.glob */ }
 const artImgs = new Map<string, HTMLImageElement>();
 /** картинка: 'ok' — загружена, 'wait' — грузится, null — файла нет */
 function art(name: string): HTMLImageElement | 'wait' | null {

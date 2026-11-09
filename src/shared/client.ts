@@ -138,9 +138,10 @@ export class GameClient {
     this.pin = null;
     this.notify();
   }
-  answer(n: number, choice: number) {
+  /** at — время нажатия по часам хоста (при повторной отправке — то же, первое) */
+  answer(n: number, choice: number, at = this.hostNow()) {
     if (!this.pid) return;
-    this.send({ t: 'answer', pid: this.pid, n, choice, at: this.hostNow() });
+    this.send({ t: 'answer', pid: this.pid, n, choice, at });
   }
   pick(kind: PickKind, value: any) {
     if (!this.pid) return;

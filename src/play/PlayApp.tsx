@@ -5,7 +5,7 @@ import { prefBgUrl } from '../shared/prefBg';
 import { viewState } from '../host/debugScenes';
 import { DebugMenu, phoneDebugEnabled, setPhoneDebug } from '../ui/DebugMenu';
 import { BOTS, CLOTH_COLORS, HAIRS, HAIR_COLORS, HATS, SKINS, TOPS, randomLook, type Look, type Part, type Tone } from '../shared/look';
-import { Avatar, BONUS_IDS, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar } from '../ui/common';
+import { Avatar, BONUS_IDS, BonusIcon, HpBar, Inventory, LETTERS, PixIcon, PrefIntro, ResText, SkillChips, SkillIcon, TimerBar, setTimerFreeze } from '../ui/common';
 import { BONUS_INFO, COIN_DMG, FARM_NO, PLAYER_COLORS, SOLO_GAMES, machinesOf, soloAt, prefIcons } from '../shared/settings';
 import { PREF, dirName, path as prefPath, prefName } from '../map/mapData';
 import { fmtYen, glue, vibrate } from '../shared/util';
@@ -47,6 +47,8 @@ export function PlayApp({ client, onLeaveRoom }: { client: GameClient; onLeaveRo
   useClient(client);
   const s = client.s && viewState(client.s);
   const me = client.me;
+  // пауза ведущего: полоски таймеров замирают
+  setTimerFreeze(s?.paused ? s.pausedAt ?? null : null);
 
   useEffect(() => {
     const f = () => { unlockAudio(); void keepAwake(); };
@@ -170,6 +172,23 @@ function Join({ client, s, onLeaveRoom }: { client: GameClient; s: GameState; on
 }
 
 // ───────── игра ─────────
+
+/**
+ * Выбор отправлен, а экран не сменился — сообщение могло потеряться: повторяем каждые 2 c,
+ * после трёх попыток возвращаем кнопки (giveUp). Экран сменился — компонент пропадает, и повторы прекращаются.
+ */
+function useResend(sent: boolean, send: () => void, giveUp: () => void) {
+  const fn = useRef({ send, giveUp });
+  fn.current = { send, giveUp };
+  useEffect(() => {
+    if (!sent) return;
+    let n = 0;
+    const t = setInterval(() => {
+      if (++n > 3) { clearInterval(t); fn.current.giveUp(); } else fn.current.send();
+    }, 2000);
+    return () => clearInterval(t);
+  }, [sent]);
+}
 
 const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
 
@@ -446,20 +465,39 @@ const myChoices = new Map<number, number>();
 function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; q: PublicQuestion; me: Player }) {
   const [choice, setChoice] = useState<number | null>(myChoices.get(q.n) ?? null);
   const [, force] = useState(0);
+  // ответ считается принятым, только когда хост показал нас среди ответивших; до тех пор повторяем отправку
+  const press = useRef({ at: 0, sent: 0, tries: 0 });
   useEffect(() => {
-    const t = setInterval(() => force((x) => x + 1), 250);
+    const t = setInterval(() => {
+      force((x) => x + 1);
+      const cq = client.s?.q;
+      const c = myChoices.get(q.n);
+      const p = press.current;
+      if (c == null || !cq || cq.n !== q.n || cq.revealed || cq.answered.includes(me.id)) return;
+      if (Date.now() - p.sent < 1500 || p.tries >= 8) return;
+      p.tries++;
+      p.sent = Date.now();
+      client.answer(q.n, c, p.at || undefined);
+    }, 250);
     return () => clearInterval(t);
   }, []);
   const removed = q.removed[me.id] ?? [];
-  const expired = !q.reading && client.hostNow() > q.deadline;
-  const locked = !!q.reading || choice !== null || expired || q.revealed || q.answered.includes(me.id);
+  // на паузе время стоит
+  const tNow = s.paused && s.pausedAt ? s.pausedAt : client.hostNow();
+  const expired = !q.reading && tNow > q.deadline;
+  const confirmed = q.answered.includes(me.id);
+  const locked = !!q.reading || choice !== null || expired || q.revealed || confirmed;
   const pickAns = (i: number) => {
     if (locked || removed.includes(i)) return;
     setChoice(i);
     myChoices.set(q.n, i);
-    client.answer(q.n, i);
+    press.current = { at: client.hostNow(), sent: Date.now(), tries: 1 };
+    client.answer(q.n, i, press.current.at);
     vibrate(30);
   };
+  // после раскрытия верим хосту: если наш ответ до него не дошёл, он не засчитан
+  const shown = q.revealed && q.choices ? q.choices[me.id] ?? null : choice;
+  const lost = q.revealed && !!q.choices && choice !== null && shown === null;
   const [usingBonus, setUsingBonus] = useState(false);
   // шпаргалка — только в вопросах префектур (не в призовых)
   const qb: ('fifty1' | 'fifty2' | 'cheat')[] = q.context === 'pref' && !q.prize ? ['cheat', 'fifty1', 'fifty2'] : ['fifty1', 'fifty2'];
@@ -475,7 +513,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
     try { await client.req('coin', { n: q.n, b }); vibrate([20, 40, 20]); } catch { /* время вышло */ }
     setUsingBonus(false);
   };
-  const ok = q.revealed && q.correct === (choice ?? q.choices?.[me.id]);
+  const ok = q.revealed && shown !== null && q.correct === shown;
   const imgs = q.answerImages;
   const bg = prefBgUrl(q.pref);
   return (
@@ -494,12 +532,12 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           const a = q.answers[i];
           const gone = removed.includes(i);
           let cls = 'q-btn';
-          if (choice === i) cls += ' chosen';
+          if (shown === i) cls += ' chosen';
           if (q.revealed && i === q.correct) cls += ' correct';
-          else if (q.revealed && choice === i) cls += ' wrong';
+          else if (q.revealed && shown === i) cls += ' wrong';
           if (gone) cls += ' gone';
           return (
-            <button class={cls} disabled={gone || (locked && choice !== i && !q.revealed)} onClick={() => pickAns(i)}>
+            <button class={cls} disabled={gone || (locked && shown !== i && !q.revealed)} onClick={() => pickAns(i)}>
               <span class="qletter">{LETTERS[pos]}</span>
               {a.image ? <img src={a.image} alt="" /> : <span>{a.text}</span>}
             </button>
@@ -521,11 +559,12 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
         </div>
       )}
       {q.context === 'duel' && myCoin && !q.revealed && <div class="q-coin muted"><BonusIcon b={myCoin} size={20} /> Монетка брошена: удар +{COIN_DMG[myCoin]}, если пройдёт</div>}
-      {!q.revealed && choice !== null && <div class="center muted">Ответ принят. Ждём остальных…</div>}
+      {!q.revealed && choice !== null && <div class="center muted">{confirmed ? 'Ответ принят. Ждём остальных…' : 'Отправляем ответ…'}</div>}
+      {!q.revealed && s.paused && <div class="center muted">Пауза — время стоит</div>}
       {!q.revealed && choice === null && expired && <div class="center muted">Время вышло</div>}
       {q.revealed && (
         <div class="q-result pop">
-          {ok ? <><PixIcon id="ui_check" size={28} /> Верно!</> : choice === null ? <><PixIcon id="ui_timer" size={28} /> Без ответа</> : <><PixIcon id="ui_cross" size={28} /> Неверно</>}
+          {ok ? <><PixIcon id="ui_check" size={28} /> Верно!</> : lost ? <><PixIcon id="ui_warn" size={28} /> Ответ не дошёл до ТВ</> : shown === null ? <><PixIcon id="ui_timer" size={28} /> Без ответа</> : <><PixIcon id="ui_cross" size={28} /> Неверно</>}
           {q.results?.[me.id] && <div class="q-res-sub"><ResText text={q.results[me.id]} topics={s.settings.topics} size={24} /></div>}
           {q.correct === undefined && <div class="q-res-sub muted small">Правильный ответ не показываем — вопрос вернётся</div>}
         </div>
@@ -590,7 +629,9 @@ function ExtraTurn({ client, s, me }: { client: GameClient; s: GameState; me: Pl
   const st = s.stage;
   const [sent, setSent] = useState(false);
   if (st.t !== 'extraTurn') return null;
-  const send = (v: boolean) => { if (sent) return; setSent(true); client.pick('extra', v); vibrate(30); };
+  const val = useRef(false);
+  useResend(sent, () => client.pick('extra', val.current), () => setSent(false));
+  const send = (v: boolean) => { if (sent) return; val.current = v; setSent(true); client.pick('extra', v); vibrate(30); };
   return (
     <div class="pad col center-screen">
       <div class="shop-door pop"><BonusIcon b="turn2" size={96} /></div>
@@ -609,7 +650,9 @@ function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Pla
   if (st.t !== 'duelPick' || !s.duel) return null;
   const d = s.duel;
   const foe = s.players[d.attacker === me.id ? d.defender : d.attacker];
-  const send = (v: string) => { if (sent) return; setSent(true); client.pick('duel', v); vibrate(30); };
+  const val = useRef('');
+  useResend(sent, () => client.pick('duel', val.current), () => setSent(false));
+  const send = (v: string) => { if (sent) return; val.current = v; setSent(true); client.pick('duel', v); vibrate(30); };
   return (
     <div class="pad col center-screen">
       <h2>Дуэль! Твой вопрос</h2>
@@ -702,10 +745,13 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
   useEffect(() => { const u = prefBgUrl(sel); if (u) new Image().src = u; }, [sel]);
   // на станцию, куда можно и пешком, идём пешком — билет не тратим
   function byRail(c: number) { return st.t === 'move' && rail.includes(c) && !st.options.includes(c) && !st.options2.includes(c); }
+  const sentVal = useRef<number | string>('');
+  useResend(sent, () => client.pick(mode, sentVal.current), () => setSent(false));
   const confirm = () => {
     if (!sel || sent) return;
+    sentVal.current = byRail(sel) ? 'rail:' + sel : sel;
     setSent(true);
-    client.pick(mode, byRail(sel) ? 'rail:' + sel : sel);
+    client.pick(mode, sentVal.current);
     vibrate(40);
   };
   return (
@@ -727,7 +773,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
           foeOpen
             ? <div class="opt-list challenge-list">
                 {st.challenge.map((id) => s.players[id] && (
-                  <button class="btn small primary" onClick={() => { setSent(true); client.pick('move', 'duel:' + id); vibrate([40, 40, 80]); }}>
+                  <button class="btn small primary" onClick={() => { sentVal.current = 'duel:' + id; setSent(true); client.pick('move', 'duel:' + id); vibrate([40, 40, 80]); }}>
                     <Avatar p={s.players[id]} size={22} /> {s.players[id].name}
                   </button>
                 ))}

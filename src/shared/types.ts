@@ -505,6 +505,8 @@ export interface GameState {
   log: LogEntry[];
   settings: Settings;
   paused: boolean;
+  /** время хоста, когда поставили паузу: таймеры на экранах стоят на нём */
+  pausedAt?: number | null;
   phase: 'lobby' | 'calib' | 'landing' | 'turns' | 'end';
   /** эпоха (0 — Эдо, 1 — Мэйдзи, 2 — Сёва): цены и награды, цвета интерфейса */
   epoch?: number;
