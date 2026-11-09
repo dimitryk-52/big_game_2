@@ -56,8 +56,25 @@ function Boot() {
     setRoomInUrl(r);
     location.reload();
   };
+  // новая игра с пульта: та же комната (пульт остаётся подключён), после перезагрузки стартуем с нуля
+  const freshSameRoom = () => {
+    sessionStorage.setItem('bg_tv_fresh', '1');
+    location.reload();
+  };
 
-  if (host) return <TvApp host={host} onNewGame={newGame} />;
+  // ?auto=1 (киоск из «Запустить ТВ.bat»): без кликов — ТВ ничем не управляют, всё с пульта.
+  // Есть незаконченная игра — продолжаем её, иначе новая в этой комнате.
+  const auto = getParam('auto') === '1';
+  useEffect(() => {
+    if (!auto || snap === undefined || host) return;
+    const fresh = sessionStorage.getItem('bg_tv_fresh') === '1';
+    sessionStorage.removeItem('bg_tv_fresh');
+    const resumable = snap && snap.s && snap.s.phase !== 'end' && Object.keys(snap.s.players ?? {}).length > 0;
+    void start(!fresh && !!resumable);
+  }, [snap]);
+
+  if (host) return <TvApp host={host} onNewGame={auto ? freshSameRoom : newGame} />;
+  if (auto && !err) return <div class="splash" />;
 
   const canResume = snap && snap.s && snap.s.phase !== 'end' && Object.keys(snap.s.players ?? {}).length > 0;
   return (

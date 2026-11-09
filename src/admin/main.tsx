@@ -271,6 +271,10 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
         {s?.phase === 'lobby' && <button class="btn" onClick={() => ctl('addBot')}>+ бот</button>}
         <button class="btn" onClick={() => ctl('reload')}>🔄 Обновить вопросы и настройки в игре</button>
         <button class="btn" onClick={() => { if (confirm('Завершить игру?')) ctl('end'); }}>🏁 Завершить</button>
+        <button class="btn" onClick={() => ctl('sound')}>🔈 Звук ТВ вкл/выкл</button>
+        <button class="btn" onClick={() => { if (confirm('Начать новую игру? Текущая будет потеряна. Комната останется той же.')) ctl('newGame'); }}>🆕 Новая игра</button>
+        <button class="btn" onClick={() => ctl('debug')}>🐞 Отладка на ТВ</button>
+        <button class="btn" onClick={() => ctl('panel')}>🛠 Панель ведущего на ТВ</button>
       </div>
       <div class="col remote-auto">
         {([

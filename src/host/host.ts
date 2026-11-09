@@ -8,6 +8,7 @@ import { soundMs } from '../shared/sounds';
 
 export type FxHandler = (kind: string, data?: any) => void;
 
+const TV_CMDS = ['newGame', 'sound', 'debug', 'panel'];
 export class Host {
   engine!: GameEngine;
   net: Transport;
@@ -46,6 +47,8 @@ export class Host {
     );
     this.net.listen('input', (m: InputMsg) => {
       if (m.t === 'ctl' && m.cmd === 'reload') return void this.reload();
+      // команды самому экрану ТВ (звук, новая игра, отладка) — с пульта, т.к. на ТВ кнопок нет
+      if (m.t === 'ctl' && TV_CMDS.includes(m.cmd)) return void this.onTvCmd?.(m.cmd, m.args);
       this.engine.handle(m);
     });
     this.net.onStatus((s) => { if (s === 'online') this.engine.sendFull(); });
@@ -83,6 +86,7 @@ export class Host {
     return this.engine.s;
   }
 
+  onTvCmd?: (cmd: string, args?: any) => void;
   ctl(cmd: string, args?: any) {
     this.engine.onCtl(cmd, args);
   }

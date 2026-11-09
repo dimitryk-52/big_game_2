@@ -32,7 +32,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const mapEl = useRef<HTMLDivElement>(null);
   const map = useRef<MapView | null>(null);
   const lastStageKey = useRef('');
-  const [panel, setPanel] = useState(true);
+  const [panel, setPanel] = useState(false); // на ТВ кнопок нет: панель ведущего только по H (отладка)
   const [debug, setDebug] = useState(false);
   const s = viewState(host.state);
   useTvSounds(s);
@@ -106,6 +106,17 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
     });
     return () => { dead = true; map.current?.destroy(); };
   }, []);
+
+  // команды экрану ТВ с пульта
+  useEffect(() => {
+    host.onTvCmd = (cmd, args) => {
+      if (cmd === 'newGame') onNewGame();
+      if (cmd === 'sound') { setSound(args?.on ?? !soundOn); refreshMusic(); }
+      if (cmd === 'debug') setDebug((x) => !x);
+      if (cmd === 'panel') setPanel((x) => !x);
+    };
+    return () => { host.onTvCmd = undefined; };
+  }, [host]);
 
   // клавиши ведущего
   useEffect(() => {
@@ -397,10 +408,6 @@ function Lobby({ s, host }: { s: GameState; host: Host }) {
             </div>
           ))}
           {!players.length && <div class="muted">Сканируйте QR-код телефоном…</div>}
-        </div>
-        <div class="row" style={{ marginTop: 24, gap: 16 }}>
-          <button class="btn primary" disabled={!players.length} onClick={() => host.ctl('start')}><PixIcon id="ui_play" /> Начать игру</button>
-          <button class="btn small" onClick={() => host.ctl('addBot')}>+ бот</button>
         </div>
       </div>
     </div>
