@@ -20,6 +20,9 @@ import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { EPOCHS, FIND_INFO, PRIZE_TIERS, TIER_INFO, epochFor, epochOf, epochRatesFor, fmtMul, median, netWorth, ratesOf, rewardYen, shopCost, tokensFor, tokensValue, type FindId, type PrizeTier } from '../shared/economy';
 import { computeTitles, placePoints, type Tally } from '../shared/titles';
 import { makeReelSpin, makeWheelSpin, wheelFinalRot } from '../shared/spin';
+import { CAR_LOST, carName, dealerAt, type CarId } from '../shared/cars';
+import { TRACKS, botRun, makeTrack, trackFor } from '../shared/race';
+import { priceYen } from '../shared/economy';
 
 export interface HostIO {
   now(): number;
@@ -80,7 +83,8 @@ interface Secrets {
 }
 
 /** барабан бонуса: одинаковые ячейки, повторы задают вероятность (как прежний пул наград «Бонус») */
-const BONUS_REEL: BonusId[] = ['fifty1', 'coin', 'fifty2', 'move2', 'fifty1', 'ticket', 'coin'];
+// сапога больше нет: его заменили машины (shared/cars.ts)
+const BONUS_REEL: BonusId[] = ['fifty1', 'coin', 'fifty2', 'ticket', 'fifty1', 'ticket', 'coin'];
 
 const plural = (n: number, one: string, few: string, many: string) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
 
@@ -139,6 +143,7 @@ export class GameEngine {
       this.s.q = null;
       this.s.duel = null;
       this.s.rhythm = null;
+      this.s.race = null;
       this.s.g = null;
       this.s.dr = null;
       this.s.paused = false;
@@ -194,6 +199,7 @@ export class GameEngine {
     }
     if (m.t === 'pick' && m.kind === 'noodle') return this.onNoodle(m.pid, m.value);
     if (m.t === 'pick' && m.kind === 'cherry') return this.onPit(m.pid, m.value);
+    if (m.t === 'pick' && m.kind === 'race') return this.onRace(m.pid, m.value);
     this.feed(m);
   }
 
@@ -648,6 +654,7 @@ export class GameEngine {
       this.s.q = null;
       this.s.duel = null;
       this.s.rhythm = null;
+      this.s.race = null;
       this.s.g = null;
       this.s.dr = null;
       this.setStage({ t: 'banner', text: 'Игрок удалён', sub: 'Ход переходит дальше' });
@@ -782,7 +789,8 @@ export class GameEngine {
     const from = p.pref!;
     const free = (c: number) => this.occupants(c, pid).length < 2;
     const options = neighbors(from).filter(free);
-    const options2 = p.bonuses.move2 > 0 || rickshaw ? atDistance(from, 2).filter(free) : [];
+    // машина: на 1 или 2 префектуры, сколько угодно раз; без неё — старый сапог из сохранённой игры или попутный рикша
+    const options2 = p.car || p.bonuses.move2 > 0 || rickshaw ? atDistance(from, 2).filter(free) : [];
     // билет на синкансэн: со станции — на любую другую станцию, где есть место
     const rail = st.shinkansen ?? [];
     const options3 = (p.bonuses.ticket ?? 0) > 0 && rail.includes(from) ? rail.filter((c) => c !== from && free(c)) : [];
@@ -844,7 +852,8 @@ export class GameEngine {
       this.log(`${p.name} едет на синкансэне: ${PREF[from]?.ru ?? from} → ${PREF[to]?.ru ?? to}`);
       this.io.fx?.('rail', { pid });
     } else if (!options.includes(to)) {
-      if (rickshaw) this.log(`${p.name} едет на рикше`);
+      if (p.car) { /* на машине — бесплатно */ }
+      else if (rickshaw) this.log(`${p.name} едет на рикше`);
       else {
         p.bonuses.move2--;
         this.log(`${p.name} использует «${BONUS_INFO.move2.short}»`);
@@ -852,6 +861,8 @@ export class GameEngine {
     }
     // разведка старой карты нужна только на этот ход
     if (p.scouted) delete p.scouted;
+    // Таксист: сколько префектур проехал на машине
+    if (p.car && !rode) this.bump('carCells', pid, options.includes(to) ? 1 : 2);
     this.setStage({ t: 'moving', pid, from, to, path: rode || options.includes(to) ? [from, to] : path(from, to) });
     await this.sleep(epoch, 1500);
     await this.arrive(epoch, p, to);
@@ -904,7 +915,7 @@ export class GameEngine {
     if (other && p.hp > 0) await this.duel(epoch, p, other);
     else await this.prefQuestion(epoch, p, to);
 
-    if (st.shopPrefs?.includes(to) && p.hp > 0) await this.shopVisit(epoch, p);
+    if ((st.shopPrefs?.includes(to) || dealerAt(st, to)) && p.hp > 0) await this.shopVisit(epoch, p);
 
     // групповая игра — как в Марио Пати: ход закончен, играют все (один раз на префектуру)
     const game = st.groupPrefs?.[to];
@@ -1186,7 +1197,7 @@ export class GameEngine {
     if (res[p.id] === q.correct) {
       const y = rewardYen(st.reward.reviveYen, ratesOf(this.s));
       p.yen += y;
-      const b = pick<BonusId>(['fifty1', 'fifty2', 'move2', 'coin']);
+      const b = pick<BonusId>(['fifty1', 'fifty2', 'ticket', 'coin']);
       p.bonuses[b]++;
       results[p.id] = `+¥${y} и бонус`; // какой — секрет, видно в инвентаре
     } else results[p.id] = 'Ожил';
@@ -1207,7 +1218,10 @@ export class GameEngine {
     // ставки зрителей: до выбора темы
     const spectators = this.alivePids().filter((id) => id !== att.id && id !== def.id);
     if (spectators.length) await this.duelBets(epoch, d, spectators);
-    outer: for (let r = 1; r <= st.duelRounds; r++) {
+    // машина против машины — всегда гонка: вопросов нет, HP не тратится; кража и ставки — как обычно
+    const racing = !!att.car && !!def.car;
+    const raceLoser = racing ? await this.raceBattle(epoch, d, att, def) : null;
+    outer: for (let r = 1; r <= (racing ? 0 : st.duelRounds); r++) {
       for (const asker of [att, def]) {
         if (att.hp <= 0 || def.hp <= 0) break outer;
         await this.gate(epoch);
@@ -1290,7 +1304,7 @@ export class GameEngine {
     // победитель: нокаут, иначе тот, кто потерял меньше HP; поровну — ничья
     const lostA = hp0[att.id] - att.hp, lostD = hp0[def.id] - def.hp;
     const ko = att.hp <= 0 ? att : def.hp <= 0 ? def : null;
-    const loser = ko ?? (lostA === lostD ? null : lostA > lostD ? att : def);
+    const loser = racing ? raceLoser : ko ?? (lostA === lostD ? null : lostA > lostD ? att : def);
     if (loser) {
       const win = loser === att ? def : att;
       d.winner = win.id;
@@ -1306,7 +1320,9 @@ export class GameEngine {
         win.yen += rewardYen(st.reward.duelWinYen, ratesOf(this.s));
         win.stars += st.reward.duelWinStars;
         this.log(`${win.name} побеждает в дуэли! ${loser.name} без сил`);
-      } else this.log(`${win.name} побеждает в дуэли по очкам`);
+      } else this.log(racing ? `${win.name} побеждает в гонке` : `${win.name} побеждает в дуэли по очкам`);
+      // любое поражение в дуэли — машины больше нет (в гонке — авария)
+      this.loseCar(loser, d, racing);
       if (stolen) {
         this.log(`${win.name} забирает ¥${stolen} у ${loser.name}`);
         this.io.fx?.('steal', { pid: win.id, from: loser.id, yen: stolen });
@@ -1314,8 +1330,9 @@ export class GameEngine {
     } else this.log('Дуэль окончена: ничья');
     this.settleBets(d);
     this.setStage({ t: 'duelResult' });
-    await this.sleep(epoch, 4500);
+    await this.sleep(epoch, d.carLost ? 7000 : 4500);
     this.s.duel = null;
+    this.s.race = null;
     this.emit();
   }
 
@@ -1602,9 +1619,15 @@ export class GameEngine {
 
   /** игрок пришёл в префектуру с магазином: решает, зайти ли; ассортимент видит только он */
   private async shopVisit(epoch: number, p: Player, force = false) {
-    if (p.bot && !force) return;
+    const dealer = p.pref != null ? dealerAt(this.s.settings, p.pref) : null;
+    if (p.bot && !force) {
+      // бот в магазин не заходит, но машину при деньгах иногда берёт
+      if (dealer && !p.car && p.yen >= this.carCost(p).yen && Math.random() < 0.7) this.buyCar(p, dealer);
+      return;
+    }
     const ms = this.s.settings.shopTime * 1000;
-    const stage: Extract<Stage, { t: 'shop' }> = { t: 'shop', pid: p.id, deadline: this.now + ms, entered: false };
+    const noShop = !(p.pref != null && this.s.settings.shopPrefs?.includes(p.pref)) && !!dealer && !force;
+    const stage: Extract<Stage, { t: 'shop' }> = { t: 'shop', pid: p.id, deadline: this.now + ms, entered: false, ...(dealer ? { dealer } : {}), ...(noShop ? { noShop } : {}) };
     this.setStage(stage);
     // дедлайн читаем из стадии: пауза его сдвигает
     const end = () => stage.deadline + 300;
@@ -1618,6 +1641,112 @@ export class GameEngine {
       }
       break;
     }
+  }
+
+  /** цена машины для игрока: растёт с эпохой; купон — половина */
+  private carCost(p: Player) {
+    const yen = priceYen(this.s.settings.car?.yen ?? 2000, ratesOf(this.s));
+    const coupon = (p.bonuses.coupon ?? 0) > 0;
+    return { yen: coupon ? Math.round(yen / 2 / 50) * 50 : yen, coupon };
+  }
+
+  /** покупка машины в автосалоне; старая (если была) уходит на металлолом за монетку */
+  private buyCar(p: Player, car: CarId): string | null {
+    if (p.car === car) return 'У тебя уже такая';
+    const c = this.carCost(p);
+    if (p.yen < c.yen) return 'Не хватает денег';
+    p.yen -= c.yen;
+    if (c.coupon) p.bonuses.coupon--;
+    this.bump('shopSpent', p.id, c.yen);
+    this.bump('carBought', p.id);
+    if (p.car) {
+      p.bonuses.coin = (p.bonuses.coin ?? 0) + 1;
+      this.log(`${p.name} сдал ${carName(p.car)} на металлолом за монетку`);
+    }
+    p.car = car;
+    this.log(`${p.name} купил машину: ${carName(car)}`);
+    this.io.fx?.('car', { pid: p.id, car });
+    this.emit();
+    return null;
+  }
+
+  /** проиграл дуэль — остался без машины: остов уходит на металлолом за монетку */
+  private loseCar(p: Player, d: NonNullable<GameState['duel']>, crash = false) {
+    if (!p.car) return;
+    const how = crash ? CAR_LOST[0] : pick([...CAR_LOST]);
+    d.carLost = { pid: p.id, car: p.car, how: how.id };
+    this.log(`${p.name} остался без машины (${carName(p.car)}): ${how.text.toLowerCase()} Металлолом — за монетку`);
+    delete p.car;
+    p.bonuses.coin = (p.bonuses.coin ?? 0) + 1;
+    this.bump('carsLost', p.id);
+    this.io.fx?.('carLost', { pid: p.id, how: how.id });
+  }
+
+  /**
+   * Гонка — дуэль «машина против машины». Трасса одна на двоих (общее зерно), каждый едет на своём телефоне
+   * от общего старта по времени хоста; сюда приходят отсечки и финиш. Возвращает проигравшего (null — ничья).
+   */
+  private raceDone: (() => void) | null = null;
+  private async raceBattle(epoch: number, d: NonNullable<GameState['duel']>, att: Player, def: Player): Promise<Player | null> {
+    const kind = trackFor(PREF[def.pref ?? att.pref ?? 0]?.region);
+    const tr = TRACKS[kind];
+    d.mode = 'race';
+    this.setStage({ t: 'banner', text: `ГОНКА! ${tr.ja}`, sub: `${tr.name} — ${tr.sub}. У обоих машины: решит трасса`, big: true });
+    await this.sleep(epoch, 3600);
+    const id = ++this.sec.rhythmN;
+    const pids = [att.id, def.id];
+    const race: NonNullable<GameState['race']> = {
+      id, seed: randInt(1e9), kind, startAt: this.now + 6500, players: pids,
+      cars: { [att.id]: att.car!, [def.id]: def.car! },
+      splits: { [att.id]: [], [def.id]: [] }, times: { [att.id]: null, [def.id]: null },
+    };
+    this.s.race = race;
+    this.setStage({ t: 'race' });
+    this.io.fx?.('race', { id });
+    await new Promise<void>((resolve) => {
+      let finished = false;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        clearT(t);
+        this.skipCbs.delete(done);
+        this.raceDone = null;
+        resolve();
+      };
+      // не доехал за три минуты — сход
+      const t = setT(done, race.startAt - this.now + 180000);
+      this.skipCbs.add(done);
+      this.raceDone = () => {
+        if (pids.every((p) => race.times[p] != null)) return done();
+        // соперник не на связи — ждать его незачем
+        const waiting = pids.filter((p) => race.times[p] == null);
+        if (waiting.length < pids.length && waiting.every((p) => !this.s.players[p]?.online && !this.s.players[p]?.bot)) done();
+      };
+    });
+    this.check(epoch);
+    race.over = true;
+    this.emit();
+    const ta = race.times[att.id], tb = race.times[def.id];
+    const fmt = (ms: number | null) => (ms == null ? 'сход' : (ms / 1000).toFixed(2) + ' с');
+    this.log(`Гонка: ${att.name} — ${fmt(ta)}, ${def.name} — ${fmt(tb)}`);
+    await this.sleep(epoch, 4000);
+    if (ta === tb) return null; // равное время (или оба сошли) — ничья, обе машины целы
+    const loser = tb == null || (ta != null && ta < tb) ? def : att;
+    this.bump('raceWin', loser === att ? def.id : att.id);
+    return loser;
+  }
+
+  private onRace(pid: string, v: any) {
+    const r = this.s.race;
+    if (!r || r.over || r.id !== v?.id || !r.players.includes(pid) || r.times[pid] != null) return;
+    const ms = Math.round(Number(v.ms));
+    if (!(ms > 0) || ms > 600000) return;
+    if (v.done) {
+      r.times[pid] = ms;
+      this.io.fx?.('raceFinish', { pid });
+    } else if (r.splits[pid].length < 16) r.splits[pid] = [...r.splits[pid], ms];
+    this.emit();
+    this.raceDone?.();
   }
 
   // ───────── групповые игры ─────────
@@ -2356,6 +2485,12 @@ export class GameEngine {
         this.emit();
         return reply(true);
       }
+      case 'buyCar': {
+        const ss = this.s.stage;
+        if (ss.t !== 'shop' || ss.pid !== p.id || !ss.entered || !ss.dealer) return reply(false, null, 'Машины — только в автосалоне');
+        const err = this.buyCar(p, ss.dealer);
+        return err ? reply(false, null, err) : reply(true);
+      }
       case 'qBonus': {
         // «убрать 1/2 неверных» во время вопроса: один бонус на вопрос, пока игрок не ответил
         const q = this.s.q;
@@ -2659,6 +2794,16 @@ export class GameEngine {
           const opts = g.order.map((_, i) => i + 1).filter((n) => g.order[n - 1] !== id && !mine.includes(n));
           if (opts.length) this.handle({ t: 'pick', pid: id, kind: 'vote', value: pick(opts) });
         });
+      }
+    }
+    const race = this.s.race;
+    if (st.t === 'race' && race && !race.over) {
+      for (const id of race.players) if (isBot(id) && race.times[id] == null && !this.botKeys.has('raceplan' + id + race.id)) {
+        this.botKeys.add('raceplan' + id + race.id);
+        const splits = botRun(makeTrack(race.seed, race.kind), 0.4 + Math.random() * 0.5, randInt(1e6));
+        const t0 = Math.max(0, race.startAt - this.now);
+        splits.forEach((ms, i) => this.botLater('race' + id + race.id + '_' + i, t0 + ms, () =>
+          this.onRace(id, { id: race.id, ms, done: i === splits.length - 1 })));
       }
     }
     const r = this.s.rhythm;

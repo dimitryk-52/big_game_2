@@ -11,6 +11,8 @@ import { sfx } from '../shared/sound';
 import { vibrate } from '../shared/util';
 import { ratesOf, shopCost } from '../shared/economy';
 import { BonusIcon, PixIcon, ResText, SkillIcon, TimerBar } from '../ui/common';
+import { CARS, carName } from '../shared/cars';
+import { priceYen } from '../shared/economy';
 
 type Item = keyof Settings['shop'];
 
@@ -20,12 +22,14 @@ const BG = artUrl('shop_bg.png');
 const SHELF = artUrl('shelf.png');
 
 /** порядок на полках: по три товара */
-const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'move2'], ['coin', 'ticket', 'food'], ['scroll']];
+/** сапога в продаже больше нет — его заменили машины (полка «Автосалон») */
+const SHELVES: Item[][] = [['special', 'stat', 'hp'], ['fifty1', 'fifty2', 'coin'], ['ticket', 'food', 'scroll']];
 
 export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<Item | null>(null);
+  const [carOpen, setCarOpen] = useState(false);
   const [topic, setTopic] = useState<string | null>(null);
   const st = s.stage;
   if (st.t !== 'shop') return null;
@@ -33,9 +37,9 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
   if (!st.entered) {
     return (
       <div class="pad col center-screen">
-        <div class="shop-door pop"><PixIcon id="shop" size={96} /></div>
-        <h2>Магазин!</h2>
-        <div class="muted">Зайдёшь? Остальные увидят только, что ты в магазине.</div>
+        <div class="shop-door pop">{st.noShop && st.dealer ? <PixIcon id={'car_' + st.dealer} size={78} /> : <PixIcon id="shop" size={96} />}</div>
+        <h2>{st.noShop && st.dealer ? `Автосалон ${CARS[st.dealer].brand}!` : st.dealer ? 'Магазин и автосалон!' : 'Магазин!'}</h2>
+        <div class="muted">Зайдёшь? Остальные увидят только, что ты {st.noShop ? 'в автосалоне' : 'в магазине'}.</div>
         {timer}
         <button class="btn yellow big-btn" onClick={() => client.pick('shop', 'enter')}>Зайти</button>
         <button class="btn big-btn" onClick={() => client.pick('shop', 'leave')}>Пройти мимо</button>
@@ -70,6 +74,22 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
     scroll: { name: BONUS_INFO.scroll.name, tag: 'вызов', icon: <BonusIcon b="scroll" size={44} />, desc: '果たし状 — вызов на поединок. В свой ход вместо шага отправь свиток любому игроку на карте: дуэль начнётся прямо там, где вы стоите, и никто не сможет помешать. После дуэли ход окончен.', have: `Есть: ${me.bonuses.scroll ?? 0}` },
   };
 
+  // автосалон: одна машина марки этой префектуры
+  const dealer = st.dealer ?? null;
+  const carYen = (() => { const y = priceYen(s.settings.car?.yen ?? 2000, ratesOf(s)); return coupon ? Math.round(y / 2 / 50) * 50 : y; })();
+  const buyCar = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      await client.req('buyCar', {});
+      sfx.coin();
+      vibrate([30, 40, 80]);
+      setMsg(`Ключи твои: ${dealer ? carName(dealer) : 'машина'}!`);
+      setCarOpen(false);
+    } catch (e: any) { setMsg(e.message); }
+    setBusy(false);
+  };
+
   const buy = async (item: Item) => {
     if (needsTopic(item) && !topic) return;
     setBusy(true);
@@ -94,11 +114,21 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
           {coupon && <span class="shop-wallet"><span class="chip">купон −50%</span></span>}
         </div>
         {/* на картинке — надпись прямо на занавесе, будто выкрашена на ткани */}
-        {BG && <div class="shop-noren"><span>店</span>МАГАЗИН</div>}
+        {BG && <div class="shop-noren"><span>{st.noShop ? '車' : '店'}</span>{st.noShop ? 'АВТОСАЛОН' : 'МАГАЗИН'}</div>}
       </div>
       <div class="pad-x">{timer}</div>
       {msg && <div class="status-card pop shop-msg">{msg}</div>}
-      {SHELVES.map((row) => (
+      {dealer && (
+        <div class="shelf car-shelf">
+          <div class="car-shelf-head"><PixIcon id={'emb_' + dealer} size={26} /> Автосалон {CARS[dealer].brand}</div>
+          <button class={'shelf-item car-item' + (me.yen >= carYen && me.car !== dealer ? '' : ' poor')} onClick={() => { setCarOpen(true); setMsg(''); }}>
+            <span class="shelf-icon car-icon"><PixIcon id={'car_' + dealer} size={72} /></span>
+            <span class="price-tag"><b>{CARS[dealer].model}</b><span>·</span><span>{me.car === dealer ? 'твоя' : `¥${carYen}`}</span></span>
+          </button>
+          <div class={'shelf-plank' + (SHELF ? ' art' : '')} style={SHELF ? { backgroundImage: `url(${SHELF})` } : undefined} />
+        </div>
+      )}
+      {!st.noShop && SHELVES.map((row) => (
         <div class="shelf">
           <div class="shelf-items">
             {row.map((item) => {
@@ -106,9 +136,9 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
               const ok = can(c);
               return (
                 <button class={'shelf-item' + (ok ? '' : ' poor')} onClick={() => choose(item)}>
-                  <span class="shelf-tag">{info[item].tag}</span>
                   <span class="shelf-icon">{info[item].icon}</span>
                   <span class="price-tag">
+                    <b>{info[item].tag}</b><span>·</span>
                     {c.yen > 0 && <span>¥{c.yen}</span>}
                     {c.stars > 0 && <span>{c.stars}<PixIcon id="stars" size={14} /></span>}
                   </span>
@@ -119,7 +149,27 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
           <div class={'shelf-plank' + (SHELF ? ' art' : '')} style={SHELF ? { backgroundImage: `url(${SHELF})` } : undefined} />
         </div>
       ))}
-      <div class="pad-x"><button class="btn primary big-btn" onClick={() => client.pick('shop', 'leave')}>Выйти из магазина</button></div>
+      <div class="pad-x"><button class="btn primary big-btn" onClick={() => client.pick('shop', 'leave')}>{st.noShop ? 'Выйти из автосалона' : 'Выйти из магазина'}</button></div>
+
+      {carOpen && dealer && (
+        <div class="sheet-back" onClick={() => setCarOpen(false)}>
+          <div class="sheet pop" onClick={(e) => e.stopPropagation()}>
+            <div class="car-sheet-art"><PixIcon id={'car_' + dealer} size={104} /></div>
+            <div class="row"><PixIcon id={'emb_' + dealer} size={30} /><b class="grow">{carName(dealer)}</b></div>
+            <div class="small-text">{CARS[dealer].note}</div>
+            <div class="small-text">
+              С машиной каждый ход можно ехать на <b>1 или 2</b> префектуры — сколько угодно раз.<br />
+              Проиграешь <b>любую</b> дуэль — машины не станет (металлолом сдашь за монетку). Страховки нет.<br />
+              Встретишь игрока на машине — вместо вопросов будет <b>гонка</b>.
+              {me.car && me.car !== dealer && <><br />Твоя {carName(me.car)} уйдёт на металлолом за монетку.</>}
+            </div>
+            <button class="btn yellow big-btn" disabled={busy || me.yen < carYen || me.car === dealer} onClick={buyCar}>
+              {me.car === dealer ? 'У тебя уже такая' : me.yen < carYen ? 'Не хватает' : <>Купить · ¥{carYen}</>}
+            </button>
+            <button class="btn small ghost" onClick={() => setCarOpen(false)}>Закрыть</button>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div class="sheet-back" onClick={() => setOpen(null)}>

@@ -10,7 +10,7 @@ export type RingPrize = 'miss' | 'yen200' | 'yen500' | 'yen1500' | 'star1' | 'st
 export const RING_SET: RingPrize[] = [
   'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'scroll', 'coin', 'ticket',
   'yen200', 'yen200', 'yen200', 'yen500', 'yen500', 'yen500', 'yen1500',
-  'star1', 'star1', 'star3', 'fifty1', 'fifty2', 'move2', 'special', 'turn2',
+  'star1', 'star1', 'star3', 'fifty1', 'fifty2', 'coin', 'special', 'turn2', // сапога больше нет (машины) — вместо него вторая монета
 ];
 export const RING_PRIZE_INFO: Record<RingPrize, { name: string; icon: string; color: string; yen?: number; stars?: number }> = {
   miss: { name: 'мимо', icon: '', color: '#2a2f5c' },

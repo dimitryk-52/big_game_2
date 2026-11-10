@@ -45,6 +45,30 @@ const until = async (cond: () => boolean, maxMs: number) => { const end = now() 
 
   // удаление ходящего
   ok('дошли до ходов', await until(() => eng.s.phase === 'turns' && eng.s.stage.t === 'move', 30 * 60000));
+  // машины: оба на машинах → дуэль = гонка; проигравший остаётся без машины и получает монетку
+  {
+    const st = eng.s.stage as any;
+    const a = eng.s.players[st.pid as string];
+    const b = Object.values(eng.s.players).find((p) => p.id !== a.id)!;
+    const to = st.options[0] as number;
+    for (const p of Object.values(eng.s.players)) if (p.pref === to) p.pref = null;
+    b.pref = to;
+    a.car = 'subaru';
+    b.car = 'mitsubishi';
+    const coins = { [a.id]: a.bonuses.coin, [b.id]: b.bonuses.coin };
+    eng.handle({ t: 'pick', pid: a.id, kind: 'move', value: to });
+    ok('машина против машины — гонка', await until(() => eng.s.stage.t === 'race' && eng.s.duel?.mode === 'race', 120000));
+    ok('гонка закончилась', await until(() => !!eng.s.duel?.over, 300000), `(${Object.values(eng.s.race?.times ?? {}).map((x) => (x == null ? 'сход' : (x / 1000).toFixed(1) + ' c')).join(' / ')})`);
+    const d = eng.s.duel!;
+    const loser = d.winner ? eng.s.players[d.winner === a.id ? b.id : a.id] : null;
+    if (loser) {
+      const win = eng.s.players[d.winner!];
+      ok('проигравший без машины, победитель с машиной', !loser.car && !!win.car && d.carLost?.pid === loser.id);
+      ok('металлолом — за монетку', loser.bonuses.coin === coins[loser.id] + 1);
+    } else ok('ничья — обе машины целы', !!a.car && !!b.car);
+    await until(() => eng.s.stage.t === 'move', 10 * 60000);
+  }
+
   const order = [...eng.s.turnOrder];
   const cur = (eng.s.stage as any).pid as string;
   const next = order[(order.indexOf(cur) + 1) % order.length];

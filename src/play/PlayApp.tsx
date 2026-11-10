@@ -26,6 +26,8 @@ import { BetPad, FindCard, ItemHelp, scoutNote } from './EconPad';
 import { BONUS_DESC, EPOCHS, epochOf, fmtMul, ratesOf } from '../shared/economy';
 import { BonusReelSheet, TopicReelPad, WheelPad } from './ReelPad';
 import { VsBadge } from '../ui/VsBadge';
+import { RacePad } from './RacePad';
+import { CARS, carName, dealersOf } from '../shared/cars';
 
 function useClient(c: GameClient) {
   const [, force] = useState(0);
@@ -192,7 +194,7 @@ function useResend(sent: boolean, send: () => void, giveUp: () => void) {
 
 const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
 
-type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | null;
+type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | 'race' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -207,6 +209,7 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'move' && st.pid === me.id) return 'move';
   if (st.t === 'duelPick' && st.pid === me.id) return 'duelPick';
   if (st.t === 'rhythm' && s.rhythm?.players.includes(me.id)) return 'rhythm';
+  if (st.t === 'race' && s.race?.players.includes(me.id)) return 'race';
   if (st.t === 'shop' && st.pid === me.id) return 'shop';
   if (st.t === 'extraTurn' && st.pid === me.id) return 'extraTurn';
   if (st.t === 'group' && s.g?.players.includes(me.id)) return 'group';
@@ -318,6 +321,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
             <RhythmBoard key={s.rhythm.id} r={s.rhythm} now={() => client.hostNow()} onDone={(score, hits, total) => client.send({ t: 'rhythm', pid: me.id, id: s.rhythm!.id, score, hits, total })} />
           </div>
         )}
+        {att === 'race' && s.race && <RacePad key={s.race.id} client={client} s={s} me={me} r={s.race} />}
         {!att && tab === 'home' && <Home client={client} s={s} me={me} />}
         {!att && myStart && tab !== 'home' && tab !== 'map' && tab !== 'ring' && <div class="pad col center-screen"><h2>Твой ход!</h2><div class="muted">Игра на паузе — вернёшься к ней после хода</div></div>}
         {!att && nextMine && SOLO_IDS.includes(tab as SoloGameId) && <div class="next-turn-note">Следующий ход — твой!</div>}
@@ -406,12 +410,13 @@ function stageText(s: GameState, me: Player): string {
     case 'question': return s.q ? 'Вопрос на ТВ: ' + s.q.title : 'Вопрос';
     case 'prefIntro': return PREF[st.code]?.ru ?? '';
     case 'reward': return `${n(st.pid)}: ${st.pid === me.id && st.secret ? st.secret : st.text}`;
-    case 'shop': return st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине {ico:shop}`;
+    case 'shop': return st.noShop ? (st.pid === me.id ? 'Ты у автосалона' : `${n(st.pid)} в автосалоне`) : st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине {ico:shop}`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
     case 'dragon': return '{ico:group_dragon} Джа-одори — смотри на ТВ!';
     case 'extraTurn': return `${n(st.pid)} заканчивает ход…`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
+    case 'race': return 'Гонка! Смотри на ТВ';
     case 'duelResult': return 'Итоги дуэли';
     case 'prize': return `🏆 ${n(st.pid)} получает приз!`;
     case 'end': return 'Игра окончена!';
@@ -432,6 +437,12 @@ function Home({ client, s, me }: { client: GameClient; s: GameState; me: Player 
       <div class="status-card slide-up" key={s.stage.t}><ResText text={stageText(s, me)} /></div>
       <div class="panel col">
         <div class="row"><span class="muted">Где ты:</span> <b>{me.pref ? `${PREF[me.pref].ru} ${PREF[me.pref].ja}` : '—'}</b></div>
+        {me.car && (
+          <div class="my-car">
+            <PixIcon id={'car_' + me.car} size={39} />
+            <div class="col" style={{ gap: 0 }}><b>{carName(me.car)}</b><span class="muted small-text">Ход на 1 или 2 префектуры. Проиграешь дуэль — машины не станет. Встретишь другую машину — гонка!</span></div>
+          </div>
+        )}
         <div class="muted">Сила</div>
         <SkillChips topics={topics} stats={me.stats} size={26} grid />
         <div class="muted">Инвентарь</div>
@@ -727,6 +738,7 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
       activePid: me.id,
       // при высадке значки магазинов и автоматов не нужны — только место
       machines: mode === 'move' ? machinesOf(s.settings) : undefined,
+      dealers: mode === 'move' ? dealersOf(s.settings) : undefined,
       shops: mode === 'move' ? s.settings.shopPrefs : undefined,
       showRewards: mode === 'move',
       huntRewards: !!s.endgame && s.endgame.step !== 'open',
@@ -784,11 +796,13 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
         {st.t === 'move' && !foeOpen && (
           <div class="opt-list">
             {st.options.map((c) => <button class={'btn small' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{optName(c)}</button>)}
-            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="move2" size={18} /> {optName(c)}</button>)}
+            {st.options2.map((c) => <button class={'btn small two' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}>{me.car ? <PixIcon id={'car_' + me.car} size={14} /> : <BonusIcon b="move2" size={18} />} {optName(c)}</button>)}
             {rail.filter(byRail).map((c) => <button class={'btn small rail' + (sel === c ? ' yellow' : '')} onClick={() => setSel(c)}><BonusIcon b="ticket" size={18} /> {PREF[c].ru}</button>)}
           </div>
         )}
-        {st.t === 'move' && st.options2.length > 0 && <div class="muted small-text"><BonusIcon b="move2" size={16} /> — ход на 2 префектуры (потратит сапог)</div>}
+        {st.t === 'move' && st.options2.length > 0 && (me.car
+          ? <div class="muted small-text"><PixIcon id={'car_' + me.car} size={14} /> — на машине можно сразу на 2 префектуры</div>
+          : <div class="muted small-text"><BonusIcon b="move2" size={16} /> — ход на 2 префектуры{(me.bonuses.move2 ?? 0) > 0 ? ' (потратит сапог)' : ' (рикша подвезёт)'}</div>)}
         {rail.length > 0 && <div class="muted small-text"><BonusIcon b="ticket" size={16} /> — синкансэн до станции (потратит билет)</div>}
         {st.t === 'landing' && <div class="muted small-text">Высадка — только на побережье. Тёмные префектуры заняты, рядом с соперниками или без выхода к морю. Тапни по карте.</div>}
         <button class="btn primary big-btn" disabled={!sel || sent} onClick={confirm}>
@@ -829,6 +843,7 @@ function FreeMap({ s, me }: { s: GameState; me: Player }) {
     activePid: me.id,
     machines: machinesOf(s.settings),
     shops: s.settings.shopPrefs,
+    dealers: dealersOf(s.settings),
     huntRewards: !!s.endgame && s.endgame.step !== 'open',
   });
   useEffect(upd, [s.v]);

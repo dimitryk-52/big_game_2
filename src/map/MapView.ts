@@ -7,7 +7,7 @@ import {
   CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { AKITA_H, CHAR_H, akitaCanvas, characterCanvas, pixelBadge, type BadgePart } from '../shared/sprites';
+import { AKITA_H, CHAR_H, akitaCanvas, characterCanvas, pixelBadge, pixelIcon, type BadgePart } from '../shared/sprites';
 import { TOKYO_PREF } from '../shared/look';
 import { SHINKANSEN_LINES } from '../shared/settings';
 
@@ -31,6 +31,8 @@ export interface MapUpdate {
   machines?: Record<string, number[]>;
   /** магазины: плашка видна, когда префектура открыта */
   shops?: number[];
+  /** автосалоны: код префектуры → марка (эмблема на плашке рядом с магазином) */
+  dealers?: Record<number, string>;
   /** старая карта: префектуры под туманом, что в них лежит, видит только нашедший (его телефон) */
   scouted?: number[];
   showRewards?: boolean;
@@ -63,6 +65,8 @@ interface Token {
   face: 1 | -1;
   /** сдвиг фазы покачивания */
   phase: number;
+  /** машина: спрайт поверх персонажа (он выглядывает из-за крыши) */
+  car: null | { s: Sprite; id: string };
   /** акита-ину бежит следом */
   dog: null | { s: Sprite; frames: Texture[]; x: number; y: number; face: 1 | -1 };
 }
@@ -342,6 +346,7 @@ export class MapView {
     for (const [icon, codes] of Object.entries(u.machines ?? {})) for (const c of codes) if (shown(c)) add(c, { id: icon, kind: 'machine' });
     // магазин под туманом не виден
     for (const c of u.shops ?? []) if (shown(c)) add(c, { id: 'shop', kind: 'machine' });
+    for (const [c, car] of Object.entries(u.dealers ?? {})) if (shown(+c)) add(+c, { id: 'emb_' + car, kind: 'machine' });
     for (const c of PREF_CODES) {
       if (u.showRewards !== false && shown(c) && !u.prefs[c].taken && (u.huntRewards || u.scouted?.includes(c))) add(c, { id: u.prefs[c].reward, kind: 'reward' });
     }
@@ -407,10 +412,22 @@ export class MapView {
         const face: 1 | -1 = old?.face ?? (tokyo.x >= target.x ? 1 : -1);
         t = {
           pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: old?.x ?? target.x, y: old?.y ?? target.y, tx: target.x, ty: target.y,
-          hop: old?.hop ?? null, goingTo: old?.goingTo ?? null, flash: 0, key, face, phase: Math.random() * 1000, dog: null,
+          hop: old?.hop ?? null, goingTo: old?.goingTo ?? null, flash: 0, key, face, phase: Math.random() * 1000, dog: null, car: null,
         };
         if (old?.dog) { old.dog.s.destroy(); }
         this.tokens.set(p.id, t);
+      }
+      // машина: купил — появилась, проиграл дуэль — пропала
+      if ((p.car ?? '') !== (t.car?.id ?? '')) {
+        t.car?.s.destroy();
+        t.car = null;
+        if (p.car) {
+          const cs = new Sprite(nearestTex(pixelIcon('car_' + p.car, 1)));
+          // якорь — под колёсами (ниже — тень иконки)
+          cs.anchor.set(0.5, (cs.texture.height - 2) / cs.texture.height);
+          t.root.addChildAt(cs, t.root.getChildIndex(t.body) + 1);
+          t.car = { s: cs, id: p.car };
+        }
       }
       if (p.akita && !t.dog) {
         const frames = ([0, 1] as const).map((f) => nearestTex(akitaCanvas(1, f)));
@@ -710,27 +727,38 @@ export class MapView {
         t.x = a.x + (b.x - a.x) * k;
         t.y = a.y + (b.y - a.y) * k;
         if (Math.abs(b.x - a.x) > 1) t.face = b.x > a.x ? 1 : -1;
-        t.body.y = -Math.sin(k * Math.PI) * 22;
+        // пешком — прыжками, на машине — едем, слегка подпрыгивая на кочках
+        t.body.y = t.car ? 3 - Math.abs(Math.sin(this.time / 70)) * 1.5 : -Math.sin(k * Math.PI) * 22;
         t.body.texture = t.frames[Math.floor(this.time / 120) % 2 ? 2 : 0];
+        if (t.car) t.body.texture = t.frames[0];
         if (t.hop.t >= t.hop.dur) { t.hop = null; t.body.y = 0; t.body.texture = t.frames[0]; }
       } else {
         // сдвиг хоть немного вправо/влево — поворачиваемся туда (по вертикали направление не меняем)
         if (Math.abs(t.tx - t.x) > 2) t.face = t.tx > t.x ? 1 : -1;
         t.x += (t.tx - t.x) * Math.min(1, dt / 120);
         t.y += (t.ty - t.y) * Math.min(1, dt / 120);
-        t.body.y = 0;
+        // в машине персонаж сидит ниже: из-за крыши видны голова и плечи
+        t.body.y = t.car ? 3 : 0;
         // покачивание: вдох каждые ~0.55 с
         t.body.texture = t.frames[Math.floor((this.time + t.phase) / 550) % 2];
       }
       t.body.scale.set(BODY_SCALE * t.face, BODY_SCALE);
+      if (t.car) {
+        t.car.s.scale.set(BODY_SCALE * t.face, BODY_SCALE);
+        t.car.s.y = t.hop ? t.body.y - 2 : 1;
+        t.car.s.alpha = t.body.alpha;
+        t.car.s.tint = t.body.tint;
+      }
       if (t.dog) {
         const d = t.dog;
-        const gx = t.x - t.face * 13, gy = t.y + 2;
+        // хозяин на машине — акита едет сзади, высунув голову; пешком — бежит следом
+        const gx = t.x - t.face * (t.car ? 10 : 13), gy = t.y + (t.car ? -9 : 2);
         const vx = (gx - d.x) * Math.min(1, dt / 260), vy = (gy - d.y) * Math.min(1, dt / 260);
         d.x += vx;
         d.y += vy;
-        const moving = Math.hypot(vx, vy) > 0.15;
-        if (Math.abs(vx) > 0.15) d.face = vx > 0 ? 1 : -1;
+        const moving = !t.car && Math.hypot(vx, vy) > 0.15;
+        if (t.car) d.face = t.face;
+        else if (Math.abs(vx) > 0.15) d.face = vx > 0 ? 1 : -1;
         else if (!moving) d.face = t.face;
         d.s.texture = d.frames[moving && Math.floor(this.time / 110) % 2 ? 1 : 0];
         d.s.position.set(d.x, d.y);

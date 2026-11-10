@@ -1,4 +1,5 @@
 import { DEFAULT_TOKENS, EPOCHS } from './economy';
+import { DEFAULT_CAR, DEFAULT_DEALERS } from './cars';
 import type { BonusId, DragonSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
@@ -74,6 +75,9 @@ export const DEFAULT_SETTINGS: Settings = {
     scroll: { yen: 1500, stars: 0 },
     ticket: { yen: 1000, stars: 0 },
   },
+  // машины: цена и автосалоны марок (Гумма, Канагава, Айти, Хёго, Хиросима, Кумамото)
+  car: { ...DEFAULT_CAR },
+  dealers: { ...DEFAULT_DEALERS },
   // станции синкансэна (см. SHINKANSEN_LINES): 11 из 47, по одной на крупный город линии
   shinkansen: [...SHINKANSEN_STATIONS],
   // соло-игры и групповые по префектурам: см. RECOMMENDED_LAYOUT
@@ -308,6 +312,8 @@ export function prefIcons(st: Settings, code: number, ps?: { reward: RewardType;
   if (ps && !ps.taken) out.push(ps.reward);
   out.push(...soloAt(st, code));
   if ((st.shopPrefs ?? []).includes(code)) out.push('shop');
+  const dealer = (st.dealers ?? DEFAULT_DEALERS)[code];
+  if (dealer) out.push('emb_' + dealer);
   const g = st.groupPrefs?.[code];
   if (g && !ps?.groupDone) out.push('group_' + g);
   return out;

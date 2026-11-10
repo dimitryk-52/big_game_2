@@ -4,6 +4,8 @@
 import type { Look } from './look';
 import type { EpochRates, FindId, PrizeTier } from './economy';
 import type { ReelSpin, WheelSpin } from './spin';
+import type { CarId, CarLostId } from './cars';
+import type { TrackKind } from './race';
 
 export type TopicId = string;
 export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food' | 'cheat' | 'neko' | 'coupon' | 'scroll';
@@ -60,6 +62,8 @@ export interface Player {
   hat: number;
   /** внешность (нет у старых сохранений — тогда DEFAULT_LOOK) */
   look?: Look;
+  /** машина: ход на 1 или 2 префектуры; пропадает при поражении в дуэли */
+  car?: CarId;
   /** собака акита-ину — у первого, кто пришёл в Акиту */
   akita?: boolean;
   pref: number | null;
@@ -274,7 +278,9 @@ export interface DuelPublic {
   asker: string | null;
   topic: TopicId | null;
   special: boolean;
-  mode: 'quiz' | 'rhythm' | null;
+  mode: 'quiz' | 'rhythm' | 'race' | null;
+  /** проигравший лишился машины: чья, какая и как именно */
+  carLost?: { pid: string; car: CarId; how: CarLostId };
   lastHit: null | { to: string; dmg: number; n: number };
   winner: string | null;
   over: boolean;
@@ -286,6 +292,22 @@ export interface DuelPublic {
   bets?: Record<string, Record<string, number>>;
   /** итог ставок: кто сколько выиграл (+) или проиграл (−) */
   payouts?: Record<string, number>;
+}
+
+/** гонка «машина против машины»: каждый едет на своём телефоне, сюда приходят только отсечки и финиш */
+export interface RacePublic {
+  id: number;
+  seed: number;
+  kind: TrackKind;
+  /** время хоста, когда гаснут огни светофора */
+  startAt: number;
+  players: string[];
+  cars: Record<string, CarId>;
+  /** отсечки по контрольным точкам, мс от старта */
+  splits: Record<string, number[]>;
+  /** время финиша, мс; null — ещё едет */
+  times: Record<string, number | null>;
+  over?: boolean;
 }
 
 export interface RhythmPublic {
@@ -318,7 +340,7 @@ export type Stage =
       /** спецвопрос: получатель выбирает спецтему до deadline */
       pickTopic?: { topics: TopicId[]; deadline: number } }
   /** игрок у магазина: сначала решает, зайти ли; содержимое видно только на его телефоне */
-  | { t: 'shop'; pid: string; deadline: number; entered: boolean }
+  | { t: 'shop'; pid: string; deadline: number; entered: boolean; /** автосалон этой марки (вместе с магазином или вместо него) */ dealer?: CarId; /** обычного магазина здесь нет — только автосалон */ noShop?: boolean }
   | { t: 'group' }
   | { t: 'dragon' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
@@ -335,6 +357,7 @@ export type Stage =
   | { t: 'wheel' }
   | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
   | { t: 'rhythm' }
+  | { t: 'race' }
   | { t: 'duelResult' }
   | { t: 'prize'; pid: string; text: string }
   /** titles — титулы игроков (id из shared/titles.ts, самые редкие первыми) */
@@ -399,6 +422,10 @@ export interface Settings {
   };
   /** станции синкансэна (коды префектур): билет перевозит с одной на любую другую */
   shinkansen: number[];
+  /** цена машины в автосалоне, йены (растёт с эпохой) */
+  car?: { yen: number };
+  /** автосалоны: код префектуры → марка */
+  dealers?: Record<number, CarId>;
   pachinkoPrefs: number[];
   /** префектуры с магазином: покупки только здесь, после вопроса */
   shopPrefs: number[];
@@ -500,6 +527,7 @@ export interface GameState {
   q: PublicQuestion | null;
   duel: DuelPublic | null;
   rhythm: RhythmPublic | null;
+  race?: RacePublic | null;
   g?: GroupPublic | null;
   dr?: DragonPublic | null;
   log: LogEntry[];
@@ -526,12 +554,13 @@ export interface DebugView {
   q?: PublicQuestion | null;
   duel?: DuelPublic | null;
   rhythm?: RhythmPublic | null;
+  race?: RacePublic | null;
   wheel?: WheelState | null;
 }
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic' | 'reel';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic' | 'reel' | 'race';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

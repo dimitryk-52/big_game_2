@@ -32,6 +32,10 @@ function loadImage(url: string) {
 }
 
 let assets: Promise<MapAssets> | null = null;
+/** кому принадлежит пиксель под туманом: префектура + её береговая кромка (пена, обводка снаружи) —
+ *  канал G в regions.png, собирает scripts/clean-map.py */
+let fogOwner = new Uint8Array(0);
+const FOG_PAD = 5;
 export function loadMapAssets() {
   assets ??= Promise.all([loadImage(mapUrl), loadImage(regionsUrl)]).then(([image, reg]) => {
     const c = document.createElement('canvas');
@@ -41,7 +45,11 @@ export function loadMapAssets() {
     ctx.drawImage(reg, 0, 0);
     const px = ctx.getImageData(0, 0, MAP_W, MAP_H).data;
     const regions = new Uint8Array(MAP_W * MAP_H);
-    for (let i = 0; i < regions.length; i++) regions[i] = Math.round(px[i * 4] / 5);
+    fogOwner = new Uint8Array(MAP_W * MAP_H);
+    for (let i = 0; i < regions.length; i++) {
+      regions[i] = Math.round(px[i * 4] / 5);
+      fogOwner[i] = regions[i] || Math.round(px[i * 4 + 1] / 5);
+    }
     return { image, regions };
   });
   return assets;
@@ -114,17 +122,18 @@ export function renderPrefMask(regions: Uint8Array, code: number) {
   return prefLayer(regions, code, 0, (_x, _y, inside) => (inside ? [255, 255, 255, 255] : null));
 }
 
-/** туман: светлые «облачные» пятна по форме префектуры, рисунок под ним едва виден */
-export function renderPrefFog(regions: Uint8Array, code: number) {
-  return prefLayer(regions, code, 0, (x, y, inside) => {
-    if (!inside) return null;
-    const n = hash(x >> 2, y >> 2) * 0.6 + hash(x >> 1, y >> 1) * 0.4;
-    const v = n > 0.66 ? 12 : n < 0.3 ? -10 : 0;
-    // у границы префектуры — тёмная кромка, чтобы соседние туманные области не сливались
-    const edge = codeAt(regions, x - 1, y) !== code || codeAt(regions, x + 1, y) !== code
-      || codeAt(regions, x, y - 1) !== code || codeAt(regions, x, y + 1) !== code;
-    if (edge) return [70, 80, 115, 235];
-    return [196 + v, 205 + v, 226 + v, 228];
+/** туман: тёмная грозовая пелена по форме префектуры (вместе с береговой кромкой), рисунок под ней едва виден */
+export function renderPrefFog(_regions: Uint8Array, code: number) {
+  const own = (x: number, y: number) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H ? 0 : fogOwner[y * MAP_W + x]);
+  return prefLayer(_regions, code, FOG_PAD, (x, y) => {
+    if (own(x, y) !== code) return null;
+    // крупные клубы + мелкая рябь: всего три тона, чтобы туман оставался пиксель-артом
+    const n = hash(x >> 3, y >> 2) * 0.55 + hash(x >> 1, y >> 1) * 0.45;
+    const v = n > 0.68 ? 1 : n < 0.3 ? -1 : 0;
+    // у границы — тёмная кромка, чтобы соседние туманные области не сливались
+    const edge = own(x - 1, y) !== code || own(x + 1, y) !== code || own(x, y - 1) !== code || own(x, y + 1) !== code;
+    if (edge) return [30, 34, 62, 255];
+    return [86 + v * 9, 96 + v * 9, 132 + v * 10, 244];
   });
 }
 

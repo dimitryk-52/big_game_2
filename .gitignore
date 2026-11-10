@@ -25,3 +25,6 @@ tools/pixelart/out/
 *_orig.png
 /src/img/logo_text.png
 /src/img/bgs/hottub*.png
+
+# сборка pxl (готовые спрайты копируются в src/img)
+art/**/out/

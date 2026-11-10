@@ -7,6 +7,7 @@ import { OKINAWA_NOTE } from '../shared/settings';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { TITLES } from '../shared/titles';
 import { makeReelSpin, makeWheelSpin } from '../shared/spin';
+import type { CarId } from '../shared/cars';
 
 export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'prefIntro', name: 'Интро префектуры', group: 'Префектура' },
@@ -35,6 +36,8 @@ export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'duelQuestion', name: 'Дуэль: вопрос', group: 'Дуэль' },
   { id: 'duelResult', name: 'Дуэль: итог', group: 'Дуэль' },
   { id: 'rhythm', name: 'Ритм-батл', group: 'Дуэль' },
+  { id: 'race', name: 'Гонка (машина против машины)', group: 'Дуэль' },
+  { id: 'carLost', name: 'Дуэль: итог, машина потеряна', group: 'Дуэль' },
   { id: 'duelBet', name: 'Дуэль: ставки зрителей', group: 'Дуэль' },
   { id: 'duelSteal', name: 'Дуэль: кража и выплаты ставок', group: 'Дуэль' },
   { id: 'end', name: 'Финал', group: 'Дуэль' },
@@ -158,6 +161,14 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       return view({ t: 'question' }, { q, duel: duel() });
     }
     case 'duelResult': return view({ t: 'duelResult' }, { duel: duel({ over: true, winner: pid, lastHit: { to: other, dmg: 3, n: 1 } }) });
+    case 'race': {
+      const players = [pid, other];
+      const k = Math.abs(base.n);
+      const cars = { [pid]: s.players[pid].car ?? 'subaru', [other]: s.players[other].car ?? 'mitsubishi' } as Record<string, CarId>;
+      return view({ t: 'race' }, { duel: duel({ mode: 'race' }), race: { id: base.n, seed: 4242 + k, kind: (['touge', 'wangan', 'snow', 'coast'] as const)[k % 4], startAt: now + 6500, players, cars, splits: { [pid]: [], [other]: [] }, times: { [pid]: null, [other]: null } } });
+    }
+    case 'carLost':
+      return view({ t: 'duelResult' }, { duel: duel({ over: true, winner: pid, stolen: 240, carLost: { pid: other, car: s.players[other].car ?? 'honda', how: (['crash', 'stall', 'tow', 'fine', 'tanuki'] as const)[Math.abs(base.n) % 5] } }) });
     case 'rhythm': {
       const players = [pid, other];
       return view({ t: 'rhythm' }, { duel: duel({ mode: 'rhythm' }), rhythm: { id: base.n, seed: 12345, bpm: 110, startAt: now + 2500, beats: 32, players, scores: Object.fromEntries(players.map((p) => [p, null])) } });
@@ -208,7 +219,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
 export function viewState(s: GameState): GameState {
   const d = s.debug;
   if (!d) return s;
-  return { ...s, stage: d.stage, q: d.q !== undefined ? d.q : s.q, duel: d.duel !== undefined ? d.duel : s.duel, rhythm: d.rhythm !== undefined ? d.rhythm : s.rhythm, wheel: d.wheel !== undefined ? d.wheel : s.wheel, paused: false };
+  return { ...s, stage: d.stage, q: d.q !== undefined ? d.q : s.q, duel: d.duel !== undefined ? d.duel : s.duel, rhythm: d.rhythm !== undefined ? d.rhythm : s.rhythm, race: d.race !== undefined ? d.race : s.race, wheel: d.wheel !== undefined ? d.wheel : s.wheel, paused: false };
 }
 
 export const ALL_PREFS = PREF_CODES;

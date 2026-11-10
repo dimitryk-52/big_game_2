@@ -1,4 +1,5 @@
 // Вкладка «Карта»: то же, что «Префектуры», но выбор префектуры — нажатием на карте
+import { DEFAULT_DEALERS } from '../shared/cars';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { PrefState, Question, RewardType, Settings, SoloGameId } from '../shared/types';
 import { PREF, PREF_CODES } from '../map/mapData';
@@ -44,6 +45,7 @@ export function PrefMap({ settings, questions, onSave }: { settings: Settings; q
       groupGames: s.groupPrefs,
       machines: machinesOf(s),
       shops: s.shopPrefs,
+      dealers: s.dealers ?? DEFAULT_DEALERS,
       huntRewards: true,
     });
   }, [view, s, sel]);

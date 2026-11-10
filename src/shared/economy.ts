@@ -62,6 +62,7 @@ export function netWorth(p: Player, st: Settings): number {
     const base = shop[b]?.yen ?? (b === 'turn2' ? 1000 : 400);
     items += (n ?? 0) * base * 0.5;
   }
+  if (p.car) items += (st.car?.yen ?? 2000) * 0.5;
   return p.yen + p.stars * STAR_YEN + items + p.specials * (st.shop.special.yen * 0.5 + st.shop.special.stars * STAR_YEN * 0.5) + (p.maxHp - st.startHp) * 300;
 }
 

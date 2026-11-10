@@ -4,8 +4,8 @@
 .tv { position: fixed; inset: 0; font-size: clamp(17px, 1.3vw, 28px); --plist: 0px; }
 /* --plist — ширина полосы со списком игроков справа (0, когда списка нет): всё, что по центру,
    центрируется в оставшейся части экрана и под список не залезает */
-.tv.has-list { --plist: calc(clamp(240px, 18vw, 340px) + 24px); }
-.tv.has-list.wide-list { --plist: calc(clamp(460px, 34vw, 660px) + 24px); }
+.tv.has-list { --plist: calc(clamp(260px, 19.5vw, 380px) + 24px); }
+.tv.has-list.wide-list { --plist: calc(clamp(460px, 35vw, 660px) + 24px); }
 .tv.duel-q, .tv.dragon-on { --plist: 0px; }
 /* размеры из base.css заданы в пикселях под телефон — на ТВ считаем от размера шрифта экрана */
 .tv .chip { font-size: 0.85em; }
@@ -33,24 +33,59 @@
 .logo-px-en { zoom: 2; margin-left: 3px; }
 .logo span { color: var(--pink); font-size: 0.7em; }
 
+/* ───── список игроков ─────
+   Карточка читается с дивана: имя — светлая плашка с тёмным текстом (у ходящего — жёлтая),
+   деньги и звёзды — крупно, HP — толстая полоса, скиллы — отдельной строкой.
+   Все размеры в em от шрифта экрана (1.3vw), поэтому на любом ТВ пропорции одни и те же. */
 /* слева запас под выезжающую карточку текущего игрока, справа и снизу — под тень (overflow её иначе режет) */
-.plist { position: absolute; top: 12px; right: 6px; bottom: 6px; padding: 0 6px 6px 14px; width: clamp(260px, calc(18vw + 20px), 360px); display: grid; grid-auto-rows: min-content; gap: 6px; overflow: hidden; align-content: start; }
-.plist.cols-2 { width: clamp(460px, calc(34vw + 20px), 660px); grid-template-columns: 1fr 1fr; }
-.pcard { background: rgba(27, 31, 58, 0.92); border: 3px solid #fff; padding: 6px 8px; box-shadow: 4px 4px 0 var(--shadow); display: flex; flex-direction: column; gap: 5px; transition: transform 0.2s; min-width: 0; }
-.pc-top { display: flex; gap: 8px; align-items: flex-end; }
-.pc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.pc-name { display: flex; align-items: center; gap: 6px; font-size: 1.05em; }
-.pc-money { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.95em; }
-/* 6–7 игроков: одна колонка, карточки плотнее — весь список помещается по высоте */
-.plist.dense { gap: 4px; }
-.plist.dense .pcard { padding: 3px 8px 4px; gap: 2px; border-width: 2px; }
-.plist.dense .pc-info { gap: 2px; }
-.pc-stars { display: inline-flex; align-items: center; gap: 3px; }
+.plist { position: absolute; top: 12px; right: 6px; bottom: 6px; padding: 0 6px 6px 14px; width: clamp(280px, calc(19.5vw + 20px), 400px); display: grid; grid-auto-rows: min-content; gap: 0.36em; overflow: hidden; align-content: start; }
+.plist.cols-2 { width: clamp(480px, calc(35vw + 20px), 680px); grid-template-columns: 1fr 1fr; }
+.pcard { --pc: #fff; background: rgba(27, 31, 58, 0.94); padding: 0; display: flex; flex-direction: column; transition: transform 0.2s; min-width: 0; }
+.pc-head { display: flex; align-items: center; gap: 0.3em; margin: 4px 4px 0; padding: 0.05em 0.4em 0.1em; background: #f4ecd6; color: #1b1730; box-shadow: inset 0 -3px 0 #cfc3a4, inset 0.3em 0 0 var(--pc); padding-left: 0.6em; min-width: 0; }
+.pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.5em; font-weight: 700; line-height: 1.05; letter-spacing: 0.02em; }
+.pc-head .pix-icon { width: 1.1em !important; height: 1.1em !important; }
+.pc-busy, .ans-check, .pc-car { display: inline-flex; align-items: center; flex: none; }
+.ans-check { background: #2fa84a; padding: 0.1em; outline: 2px solid #1b1730; }
+.pc-car img { height: 1.15em; image-rendering: pixelated; display: block; }
+.pc-off { flex: none; font-size: 0.8em; font-weight: 700; background: #b02a3e; color: #fff; padding: 0 0.4em 0.05em; }
+.pc-body { display: flex; gap: 0.5em; align-items: center; padding: 0.3em 0.5em 0; }
+.pc-av { flex: none; display: grid; place-items: center; }
+.pc-av .avatar { height: 3em !important; width: auto !important; }
+.pc-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.22em; }
+.pc-money { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5em; font-size: 1.45em; font-weight: 700; line-height: 1; white-space: nowrap; text-shadow: var(--tx-outline); }
+.pc-yen { color: var(--yellow); letter-spacing: 0.03em; }
+.pc-stars { display: inline-flex; align-items: center; gap: 0.15em; }
+.pc-stars .pix-icon { width: 0.9em !important; height: 0.9em !important; }
+.tv .pcard .hpbar { height: 1.15em; }
+.tv .pcard .hpbar span { font-size: 0.95em; }
+.pc-skills { padding: 0.25em 0.5em 0.4em; }
+.pcard .skill-chips { font-size: 1.15em; line-height: 1; --ic: 1em !important; gap: 0.1em 0.4em; }
+/* много тем (до 9): ровно в один ряд, колонок — по числу тем */
+.pc-skills.many .skill-chips.grid { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 0; font-size: 1.02em; }
+.pc-skills.many .skill-chip { gap: 1px; justify-content: center; min-width: 0; }
+.pc-skills.many .skill-chip b { letter-spacing: -0.02em; }
+.pcard .pc-skills.many .skill-icon { width: 0.9em !important; height: 0.9em !important; }
+.pcard .skill-chips .skill-icon { width: 1em !important; height: 1em !important; }
+.pcard .skill-chip b { text-shadow: var(--tx-outline); }
+/* 6–7 игроков: одна колонка, карточки плотнее — весь список помещается по высоте (7 карточек = 5.75em каждая) */
+.plist.dense { gap: 0.2em; }
+.plist.dense .pcard { font-size: 0.93em; }
+.plist.dense .pc-head { margin: 3px 3px 0; }
+.plist.dense .pname { font-size: 1.36em; }
+.plist.dense .pc-body { padding: 0.18em 0.45em 0; }
+.plist.dense .pc-skills { padding: 0.16em 0.4em 0.26em; }
+.plist.dense .pc-info { gap: 0.14em; }
+.plist.dense .pc-av .avatar { height: 2.55em !important; }
+.plist.dense .pc-money { font-size: 1.3em; }
+.tv .plist.dense .pcard .hpbar { height: 1em; }
+.tv .plist.dense .pcard .hpbar span { font-size: 0.88em; }
+.plist.dense .pcard .skill-chips { font-size: 1.05em; }
+.plist.dense .pc-skills.many .skill-chips.grid { font-size: 0.98em; }
 .calib-skill { text-align: center; font-weight: bold; font-size: 1.3em; }
 .pcard.current { animation: glow 1s steps(2) infinite; transform: translateX(-10px); }
+.pcard.current .pc-head { background: var(--yellow); box-shadow: inset 0 -3px 0 #c7860f, inset 0.3em 0 0 var(--pc); }
 .pcard.ko { opacity: 0.6; }
-.pname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ans-check { color: var(--green); }
+.pcard.ko .pc-head { background: #9a98a8; box-shadow: inset 0 -3px 0 #6f6d80, inset 0.3em 0 0 var(--pc); }
 
 
 .host-panel { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; align-items: center; z-index: 50; flex-wrap: wrap; }
@@ -148,6 +183,36 @@
 .qres { color: var(--yellow); }
 
 .bonus-prompt { position: absolute; bottom: 12vh; left: calc((100% - var(--plist)) / 2); transform: translateX(-50%); background: rgba(20, 23, 48, 0.95); border: 3px solid var(--yellow); padding: 10px 18px; z-index: 26; display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 420px; }
+
+/* ───── гонка ───── */
+.race-tv { position: absolute; inset: 12px max(12px, var(--plist)) 12px 12px; z-index: 25; display: flex; flex-direction: column; gap: 0.5em; }
+.race-tv-head { display: flex; align-items: baseline; gap: 0.7em; background: var(--bg2); border: 3px solid var(--outline, #0d0b1e); box-shadow: inset 0 0 0 3px #fff, 5px 5px 0 var(--shadow); padding: 0.3em 1em 0.4em; font-size: 1.3em; }
+.race-tv-ja { color: var(--pink); font-size: 1.3em; }
+.race-tv-clock { margin-left: auto; font-size: 1.5em; font-weight: 700; color: var(--yellow); letter-spacing: 0.06em; text-shadow: var(--tx-outline); }
+.race-tv-body { flex: 1; min-height: 0; display: flex; gap: 0.6em; align-items: stretch; }
+.race-map { position: relative; flex: 1; min-width: 0; border: 4px solid #0d0b1e; box-shadow: inset 0 0 0 3px #fff, 6px 6px 0 var(--shadow); background: #0b1030; overflow: hidden; }
+.race-map-cv { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.race-card { width: clamp(180px, 15vw, 290px); flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.35em; padding: 0.8em 0.5em; background: rgb(27, 31, 58); border: 4px solid #0d0b1e; box-shadow: inset 0 0 0 4px var(--frame, #fff), 6px 6px 0 var(--shadow); text-align: center; }
+.race-card.win { background: #1f6a30; }
+.race-card-name { font-size: 1.6em; font-weight: 700; background: #f4ecd6; color: #1b1730; padding: 0 0.5em 0.05em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.race-card-car { width: 86%; image-rendering: pixelated; }
+.race-card-time { font-size: 1.5em; font-weight: 700; color: var(--yellow); text-shadow: var(--tx-outline); }
+.race-card-gap { font-size: 1.5em; font-weight: 700; text-shadow: var(--tx-outline); }
+.race-card-gap.ahead { color: var(--green); }
+.race-card-gap.behind { color: var(--red); }
+.race-lights { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5em; background: #0d0b1e; padding: 0.5em 0.7em; border: 3px solid #fff; }
+.race-lights i { width: 2.2em; height: 2.2em; background: #3a0d16; border: 3px solid #000; }
+.race-lights i.on { background: #ff3b3b; box-shadow: 0 0 0 3px #ff9a9a; }
+.race-go { position: absolute; top: 30%; left: 0; right: 0; text-align: center; font-size: 6em; font-weight: 800; color: var(--green); text-shadow: 6px 6px 0 #000; animation: pop 0.3s both; }
+.race-how { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.3em 0.8em 0.4em; background: rgba(13, 11, 30, 0.85); text-align: center; font-size: 1.05em; }
+/* итог дуэли: машина потеряна */
+.car-lost { display: flex; align-items: center; gap: 1em; margin-top: 0.5em; padding: 0.5em 1em; background: #3a1418; border: 3px solid var(--red); text-align: left; animation: pop 0.4s 0.8s both; }
+.car-lost-img { width: 7em; image-rendering: pixelated; animation: carGone 2.4s 1.4s both; }
+.car-lost.how-stall .car-lost-img, .car-lost.how-fine .car-lost-img { animation-name: carFade; }
+.car-lost-text { display: flex; flex-direction: column; gap: 0.1em; }
+.car-lost-text b { font-size: 1.6em; color: var(--red); text-shadow: var(--tx-outline); }
+@keyframes carGone { 0% { transform: none; } 20% { transform: rotate(-8deg) translateY(-6px); } 45% { transform: rotate(14deg); } 100% { transform: rotate(172deg) translateY(-4px); filter: grayscale(1) brightness(0.6); } }
+@keyframes carFade { to { filter: grayscale(1) brightness(0.5); transform: translateY(3px); } }
 
 /* дуэль */
 .duel-hud { position: absolute; top: 10px; left: calc((100% - var(--plist)) / 2); transform: translateX(-50%); display: flex; align-items: center; gap: 1.5em; z-index: 30; background: rgba(40, 10, 20, 0.95); border: 4px solid var(--pink); padding: 10px 20px; box-shadow: 6px 6px 0 var(--shadow); }

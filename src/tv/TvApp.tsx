@@ -27,6 +27,10 @@ import { TopicReelTv, WheelTv } from './ReelTv';
 import { epochOf, ratesOf, rewardYen } from '../shared/economy';
 import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
 import { pixelIconUrl } from '../shared/sprites';
+import { CAR_LOST, carName, dealersOf } from '../shared/cars';
+import { carUrl } from '../ui/carArt';
+import { RaceTv } from './RaceTv';
+import { fmtRace } from '../shared/race';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -145,13 +149,15 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       prefs: s.prefs,
       players,
       highlight: st.t === 'move' ? st.options : undefined,
-      // сапог и билет — секрет до выбора: на ТВ подсвечиваем только обычные ходы
+      // билет — секрет до выбора; машину видят все, поэтому её дальние ходы подсвечены
+      highlight2: st.t === 'move' && s.players[st.pid]?.car ? st.options2 : undefined,
       rail: s.settings.shinkansen,
       blocked: st.t === 'landing' ? st.blocked : undefined,
       arrow: st.t === 'moving' ? st.path : null,
       activePid: s.phase === 'turns' ? activePid : null,
       machines: machinesOf(s.settings),
       shops: s.settings.shopPrefs,
+      dealers: dealersOf(s.settings),
       // награды префектур видны только с начала охоты за призами
       huntRewards: !!s.endgame && s.endgame.step !== 'open',
     });
@@ -207,7 +213,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const ep = epochOf(s);
   useEffect(() => { document.documentElement.dataset.epoch = String(ep); }, [ep]);
 
-  const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t);
+  const inDuel = !!s.duel && ['duelPick', 'question', 'rhythm', 'duelResult', 'bonus'].includes(st.t) && s.duel.mode !== 'race';
   // список игроков: до 7 — одна колонка (6–7 — плотные карточки), больше — две
   const nPlayers = s.joinOrder.filter((id) => s.players[id]).length;
   const hasList = s.phase !== 'lobby' && st.t !== 'wheel' && st.t !== 'end';
@@ -276,12 +282,13 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           <RhythmBoard r={s.rhythm} now={now} spectator players={s.players} />
         </div>
       )}
+      {st.t === 'race' && s.race && <RaceTv key={s.race.id} s={s} r={s.race} />}
       {st.t === 'duelResult' && s.duel && <DuelResult s={s} />}
       {st.t === 'reel' && <TopicReelTv s={s} />}
       {st.t === 'wheel' && <WheelTv s={s} />}
       {st.t === 'shop' && (
         <Prompt>
-          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> {st.entered ? 'в магазине' : 'у магазина'} <PixIcon id="shop" size={32} />
+          <Avatar p={s.players[st.pid]} size={40} /> <b>{s.players[st.pid]?.name}</b> {st.noShop ? (st.entered ? 'в автосалоне' : 'у автосалона') : st.entered ? 'в магазине' : 'у магазина'} {st.noShop ? <PixIcon id={'emb_' + st.dealer} size={32} /> : <PixIcon id="shop" size={32} />}
           <div class="prompt-timer"><TimerBar start={st.deadline - s.settings.shopTime * 1000} end={st.deadline} now={now} /></div>
         </Prompt>
       )}
@@ -367,26 +374,30 @@ function PlayerList({ s }: { s: GameState }) {
     <div class={'plist' + (ids.length > 7 ? ' cols-2' : ids.length > 5 ? ' dense' : '')}>
       {ids.map((id) => {
         const p = s.players[id];
+        const done = answered.has(id) && s.q && !s.q.revealed;
         return (
-          <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '')} style={{ '--frame': p.color } as any}>
-            <div class="pc-top">
-              <Avatar p={p} size={ids.length > 5 ? 48 : 56} dim={p.hp <= 0} />
+          <div key={id} class={'pcard' + (cur === id ? ' current' : '') + (p.hp <= 0 ? ' ko' : '') + (p.online ? '' : ' off')} style={{ '--frame': p.color, '--pc': p.color } as any}>
+            {/* имя — светлая плашка с тёмным текстом: читается с дивана; у ходящего она жёлтая */}
+            <div class="pc-head">
+              <span class="pname">{p.name}</span>
+              {p.car && <span class="pc-car"><img src={carUrl(p.car)} alt="" /></span>}
+              {p.busy && <span class="pc-busy" title={SOLO_GAMES[p.busy]?.doing}><PixIcon id={p.busy} size={20} /></span>}
+              {done && <span class="ans-check"><PixIcon id="ui_check" size={20} /></span>}
+              {!p.online && <span class="pc-off">нет связи</span>}
+            </div>
+            <div class="pc-body">
+              <div class="pc-av"><Avatar p={p} size={56} dim={p.hp <= 0} /></div>
               <div class="pc-info">
-                <div class="pc-name">
-                  <span class="pname">{p.name}</span>
-                  {answered.has(id) && s.q && !s.q.revealed && <span class="ans-check"><PixIcon id="ui_check" /></span>}
-                  {p.busy && <span class="pc-busy" title={SOLO_GAMES[p.busy]?.doing}><PixIcon id={p.busy} size={20} /></span>}
-                  <span class={'dot ' + (p.online ? 'on' : 'off')} title={p.online ? 'на связи' : 'нет связи'} />
-                </div>
-                <HpBar hp={p.hp} max={p.maxHp} />
                 <div class="pc-money">
-                  <span>{fmtYen(p.yen)}</span>
-                  <span class="pc-stars"><PixIcon id="stars" size={18} />{p.stars}</span>
+                  <span class="pc-yen">{fmtYen(p.yen)}</span>
+                  <span class="pc-stars"><PixIcon id="stars" size={20} />{p.stars}</span>
                   {/* бонусы и спецвопросы секретны: на ТВ их не показываем, раскрываются только при использовании */}
                 </div>
+                <HpBar hp={p.hp} max={p.maxHp} />
               </div>
             </div>
-            <SkillChips topics={combat} stats={p.stats} size={20} grid />
+            {/* скиллы — одной строкой во всю ширину: боевых тем бывает 9 */}
+            <div class={'pc-skills' + (combat.length > 5 ? ' many' : '')} style={{ '--n': combat.length } as any}><SkillChips topics={combat} stats={p.stats} size={22} grid /></div>
           </div>
         );
       })}
@@ -612,14 +623,33 @@ function DuelResult({ s }: { s: GameState }) {
     <div class="banner">
       <div class="banner-inner pop">
         {d.over ? (
-          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает{d.ko ? ' нокаутом!' : ' по очкам!'}</div>{d.ko && <div class="banner-sub">+¥{rewardYen(s.settings.reward.duelWinYen, ratesOf(s))} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div>}<DuelSpoils s={s} /></>
-            : <><div class="banner-text">Ничья</div><DuelSpoils s={s} /></>
+          w ? <><Avatar p={w} size={90} /><div class="banner-text">{w.name} побеждает{d.mode === 'race' ? ' в гонке!' : d.ko ? ' нокаутом!' : ' по очкам!'}</div>{d.mode === 'race' && s.race && <div class="banner-sub">{s.race.players.map((id) => `${s.players[id]?.name}: ${s.race!.times[id] != null ? fmtRace(s.race!.times[id]!) : 'сход'}`).join(' · ')}</div>}{d.ko && <div class="banner-sub">+¥{rewardYen(s.settings.reward.duelWinYen, ratesOf(s))} · +{s.settings.reward.duelWinStars} <PixIcon id="stars" size={32} /></div>}<DuelSpoils s={s} /></>
+            : <><div class="banner-text">{d.mode === 'race' ? 'Ничья — обе машины целы' : 'Ничья'}</div><DuelSpoils s={s} /></>
         ) : d.mode === 'rhythm' && s.rhythm ? (
           <>
             <div class="banner-text">Ритм: итог</div>
             {s.rhythm.players.map((id) => <div class="banner-sub">{s.players[id]?.name}: {s.rhythm!.scores[id] ?? '—'}</div>)}
           </>
         ) : null}
+        {d.over && <CarLost s={s} />}
+      </div>
+    </div>
+  );
+}
+
+/** проигравший остался без машины: как именно — случайная история */
+function CarLost({ s }: { s: GameState }) {
+  const lost = s.duel?.carLost;
+  const p = lost ? s.players[lost.pid] : null;
+  if (!lost || !p) return null;
+  const how = CAR_LOST.find((x) => x.id === lost.how) ?? CAR_LOST[0];
+  return (
+    <div class={'car-lost how-' + how.id}>
+      <img class="car-lost-img" src={carUrl(lost.car, 6)} alt="" />
+      <div class="car-lost-text">
+        <b>{how.text}</b>
+        <span>{p.name}: {carName(lost.car)} — {how.sub}</span>
+        <span class="muted">Остов сдан на металлолом — за монетку{p.akita ? '. Акита-ину выпрыгнула и дальше бежит сама' : ''}</span>
       </div>
     </div>
   );

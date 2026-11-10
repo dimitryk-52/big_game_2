@@ -20,6 +20,8 @@ export interface TitleDef {
   metric?: string;
   /** меньше — лучше (Скряга) */
   min?: boolean;
+  /** титул тем, у кого счётчик нулевой, — если у кого-то он не нулевой (Пешеход) */
+  zero?: boolean;
 }
 
 export type HankoShape = 'square' | 'circle' | 'diamond' | 'hexagon' | 'octagon' | 'triangle';
@@ -50,6 +52,11 @@ export const TITLES: TitleDef[] = [
   { id: 'pioneer', name: 'Первопроходец', kanji: '拓', color: GREEN, shape: 'diamond', metric: 'opened' },
   { id: 'wanderer', name: 'Странник', kanji: '旅', color: GREEN, shape: 'triangle', metric: 'distance' },
   { id: 'master', name: 'Хозяин', kanji: '犬', color: GREEN, shape: 'circle', metric: 'akitaTurns' },
+  // машины
+  { id: 'racer', name: 'Гонщик', kanji: '走', color: GREEN, shape: 'hexagon', metric: 'raceWin' },
+  { id: 'kamikaze', name: 'Камикадзе', kanji: '壊', color: GREEN, shape: 'octagon', metric: 'carsLost' },
+  { id: 'taxi', name: 'Таксист', kanji: '車', color: GREEN, shape: 'square', metric: 'carCells' },
+  { id: 'walker', name: 'Пешеход', kanji: '歩', color: GREEN, shape: 'circle', metric: 'carBought', zero: true },
   // деньги
   { id: 'magnate', name: 'Магнат', kanji: '富', color: GOLD, shape: 'octagon' },
   { id: 'spender', name: 'Транжира', kanji: '散', color: GOLD, shape: 'diamond', metric: 'shopSpent' },
@@ -112,7 +119,9 @@ export function computeTitles(players: Player[], tally: Tally): Record<string, s
     } else if (t.id === 'magnate') win = best(ids, (id) => byId[id].yen);
     else if (t.metric) {
       const m = tally[t.metric] ?? {};
-      if (t.min) {
+      if (t.zero) {
+        if (Object.values(m).some((v) => v > 0)) win = ids.filter((id) => !(m[id] > 0));
+      } else if (t.min) {
         // Скряга — только если в магазине вообще кто-то тратился
         if (Object.values(m).some((v) => v > 0)) win = best(ids, (id) => m[id] ?? 0, true);
       } else win = best(ids, (id) => m[id] ?? 0);
