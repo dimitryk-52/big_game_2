@@ -145,7 +145,10 @@ export class GameEngine {
       this.s = snapshot.s;
       this.sec = snapshot.sec;
       this.s.settings = settings;
-      for (const p of Object.values(this.s.players)) { p.online = !!p.bot; p.busy = null; }
+      // ТВ перезагрузился: телефоны никуда не делись, но отзовутся только со следующим пингом (до 15 c).
+      // Считаем всех на связи — иначе ходящего за эти секунды передвинуло бы случайно, а магазин закрылся бы сам.
+      // Кто на самом деле пропал — отметится «не на связи» через 45 c молчания (host.ts)
+      for (const p of Object.values(this.s.players)) { p.online = true; p.busy = null; this.lastSeen[p.id] = Date.now(); }
       this.s.q = null;
       this.s.duel = null;
       this.s.rhythm = null;
@@ -332,6 +335,23 @@ export class GameEngine {
       case 'debugFx':
         this.io.fx?.(args?.k, args?.d);
         break;
+      case 'endgame': {
+        // пульт: ускорить конец игры, если вечер затянулся. 'hunt' — открыть всю карту (после круга начнётся охота за призами);
+        // 'final' — охоту не ждём: после текущего круга — финальные круги, сумо и титулы
+        if (this.s.phase !== 'turns' || this.s.endgame?.step === 'sumo') break;
+        const eg = this.s.endgame;
+        if (args?.to === 'hunt' && !eg) {
+          for (const c of Object.keys(this.s.prefs)) this.s.prefs[+c].rev = true;
+          this.s.endgame = { step: 'open' };
+          this.log('Ведущий открыл всю карту — доигрываем круг, потом охота за призами');
+        } else if (args?.to === 'final' && eg?.step !== 'final' && eg?.step !== 'huntDone') {
+          this.s.endgame = { step: 'huntDone' };
+          this.log('Ведущий объявил финал — доигрываем круг');
+        } else break;
+        this.emit();
+        this.snapshot();
+        break;
+      }
       case 'revealAll':
         for (const c of Object.keys(this.s.prefs)) this.s.prefs[+c].rev = true;
         this.emit();
@@ -483,6 +503,21 @@ export class GameEngine {
         resolve(null);
       }, ms);
     }).then((v) => { this.check(epoch); return v; });
+  }
+
+  /** ждать выбор хода: на связи — сколько угодно (ведущий может пропустить кнопкой «Далее»), бот — 20 c,
+   *  без связи 15 c подряд — случайный ход. Связь проверяем каждые 3 c: вернулся — ждём дальше, пропал посреди хода — пошёл отсчёт */
+  private async waitMove<T>(epoch: number, p: Player, match: (m: InputMsg) => T | undefined): Promise<T | null> {
+    let off = 0;
+    for (;;) {
+      const ms = p.bot ? 20000 : 3000;
+      const t = this.gameNow;
+      const v = await this.waitInput(epoch, match, ms);
+      if (v != null || p.bot) return v;
+      if (this.gameNow - t < ms - 100) return null; // «Далее»
+      off = p.online ? 0 : off + ms;
+      if (off >= 15000) return null;
+    }
   }
 
   private feed(m: InputMsg) {
@@ -834,7 +869,7 @@ export class GameEngine {
     // выбор: код префектуры; 'rail:<код>' — поездка по билету (на соседнюю станцию можно и пешком, и поездом); 'lure' — корм
     let choice: number | string | null | undefined;
     for (;;) {
-      choice = await this.waitInput(epoch, (m) => {
+      choice = await this.waitMove(epoch, p, (m) => {
         if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
         if (m.value === 'lure') return dogNear() ? 'lure' : undefined;
         if (m.value === 'lureCat') return catNear() ? 'lureCat' : undefined;
@@ -845,7 +880,7 @@ export class GameEngine {
         }
         const c = Number(m.value);
         return options.includes(c) || options2.includes(c) ? c : undefined;
-      }, p.bot ? 20000 : p.online ? null : 15000); // без связи — случайный ход через 15 c
+      }); // без связи — случайный ход через 15 c
       if (choice === 'lureCat') {
         const owner = Object.values(this.s.players).find((x) => x.cat)!;
         owner.cat = false;
@@ -1018,11 +1053,11 @@ export class GameEngine {
       return;
     }
     this.setStage({ t: 'move', pid, options, options2: [] });
-    const choice = await this.waitInput(epoch, (m) => {
+    const choice = await this.waitMove(epoch, p, (m) => {
       if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
       const c = Number(m.value);
       return options.includes(c) ? c : undefined;
-    }, p.bot ? 20000 : p.online ? null : 15000);
+    });
     const to = choice ?? pick(options);
     this.setStage({ t: 'moving', pid, from: at, to, path: [at, to] });
     await this.sleep(epoch, 1500);

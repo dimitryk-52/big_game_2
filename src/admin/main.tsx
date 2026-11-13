@@ -362,6 +362,13 @@ function RemoteTuning({ s, settings, ctl, onSave }: { s: GameState | null; setti
           : eg.step === 'huntDone' ? 'Призы разыграны — доигрываем круг, потом финальные круги.'
           : `Финальные круги: сыграно ${eg.played ?? 0} из ${finalRounds}.`}
       </div>
+      {s?.phase === 'turns' && eg?.step !== 'sumo' && (!eg || eg.step === 'open' || eg.step === 'hunt') && (
+        <div class="row wrap">
+          <span>Вечер затянулся?</span>
+          {!eg && <button class="btn small" onClick={() => { if (confirm('Открыть всю карту? После этого круга начнётся охота за призами.')) ctl('endgame', { to: 'hunt' }); }}>⏩ Открыть карту → охота за призами</button>}
+          <button class="btn small" onClick={() => { if (confirm('Перейти к финалу? Охоту за призами не ждём: после этого круга — финальные круги, сумо и итоги.')) ctl('endgame', { to: 'final' }); }}>⏩ Сразу к финальным кругам</button>
+        </div>
+      )}
       <div class="row wrap">
         <span>Кругов свободного перемещения в финале:</span>
         {[1, 2, 3, 4].map((n) => <button class={'btn small' + (finalRounds === n ? ' yellow' : '')} onClick={() => apply({ finalRounds: n })}>+{n}</button>)}

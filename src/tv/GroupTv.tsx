@@ -199,8 +199,8 @@ function SashimiShow({ s, g, head }: { s: GameState; g: GroupPublic; head: any }
     <div class="group-show sashimi-show">
       {head}
       <div class="group-sub">Кусок {g.showIdx + 1} из {g.order.length}{g.showIdx === g.order.length - 1 ? ' · самый точный' : ''}</div>
-      {p && <div class="sashimi-who pop" key={id}><Avatar p={p} size={48} /> {p.name}</div>}
-      <FishBoard key={id} fish={g.fish ?? 'tuna'} view={{ cut: g.cuts?.[id] ?? null }} scale={5} class="big" />
+      {p && <div class="sashimi-who pop" key={'who' + id}><Avatar p={p} size={48} /> {p.name}</div>}
+      <FishBoard key={'fish' + id} fish={g.fish ?? 'tuna'} view={{ cut: g.cuts?.[id] ?? null }} scale={5} class="big" />
       <div class="sashimi-scale-row">
         <CountUp key={id} to={grams} target={g.target ?? 0} />
         <div class={'sashimi-diff' + (done ? ' pop' : '')} style={{ visibility: done ? 'visible' : 'hidden' }}>
