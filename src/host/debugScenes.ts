@@ -195,7 +195,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
     case 'final': return view({ t: 'banner', text: 'Осталось 3 круга', sub: 'Призы разыграны — финал: свободное перемещение по карте', big: true });
     case 'wheel': {
       const left = { common: 6, uncommon: 4, rare: 2 };
-      const segs = [{ id: 'common' as const, w: 18 }, { id: 'uncommon' as const, w: 12 }, { id: 'rare' as const, w: 2 }];
+      const segs = [{ id: 'common' as const, w: 30 }, { id: 'uncommon' as const, w: 20 }, { id: 'rare' as const, w: 2 }];
       return view({ t: 'wheel' }, {
         wheel: {
           left, segs, spinner: pid, spin: makeWheelSpin(segs.map((x) => x.w), now + 600), last: null,

@@ -886,6 +886,7 @@ export class GameEngine {
         owner.cat = false;
         p.cat = true;
         p.bonuses.sashimi--;
+        this.bump('lured', pid);
         this.log(`${p.name} переманил ириомотейскую кошку кусочком сашими у ${owner.name}`);
         this.io.fx?.('lureCat', { pid, from: owner.id });
         this.setStage({ t: 'banner', text: 'Кошка убежала!', sub: `${owner.name} → ${p.name}: на запах свежей рыбы`, big: true });
@@ -898,6 +899,7 @@ export class GameEngine {
       owner.akita = false;
       p.akita = true;
       p.bonuses.food--;
+      this.bump('lured', pid);
       this.log(`${p.name} переманил акиту-ину кормом у ${owner.name}`);
       this.io.fx?.('lure', { pid, from: owner.id });
       this.setStage({ t: 'banner', text: 'Акита-ину убежала!', sub: `${owner.name} → ${p.name}: на запах корма`, big: true });
@@ -1296,6 +1298,8 @@ export class GameEngine {
     await this.sleep(epoch, 2800);
     const d = this.s.duel!;
     this.bump('duelAttack', att.id);
+    // «крыса»: напал на того, кто беднее (по чистой стоимости)
+    if (netWorth(def, st) < netWorth(att, st)) this.bump('attackWeak', att.id);
     const hp0 = { [att.id]: att.hp, [def.id]: def.hp };
     // ставки зрителей: до выбора темы
     const spectators = this.alivePids().filter((id) => id !== att.id && id !== def.id);
@@ -1399,6 +1403,7 @@ export class GameEngine {
       win.yen += stolen;
       d.stolen = stolen;
       this.bump('stolen', win.id, stolen);
+      if (win === att && stolen > 0) this.bump('robbed', win.id);
       if (ko) {
         d.ko = true;
         win.yen += rewardYen(st.reward.duelWinYen, ratesOf(this.s));
@@ -1406,7 +1411,7 @@ export class GameEngine {
         this.log(`${win.name} побеждает в дуэли! ${loser.name} без сил`);
       } else this.log(racing ? `${win.name} побеждает в гонке` : `${win.name} побеждает в дуэли по очкам`);
       // любое поражение в дуэли — машины больше нет (в гонке — авария)
-      this.loseCar(loser, d, racing);
+      if (this.loseCar(loser, d, racing)) this.bump('carWreck', win.id);
       if (stolen) {
         this.log(`${win.name} забирает ¥${stolen} у ${loser.name}`);
         this.io.fx?.('steal', { pid: win.id, from: loser.id, yen: stolen });
@@ -1459,6 +1464,7 @@ export class GameEngine {
       p.yen += back;
       payouts[pid] = back - staked;
       this.bump('betNet', pid, back - staked);
+      this.gamble(pid, staked);
     }
     d.payouts = payouts;
   }
@@ -1572,6 +1578,12 @@ export class GameEngine {
     m[pid] = (m[pid] ?? 0) + n;
   }
 
+  /** азартные игры (пачинко, кольцо, чо-хан, ставки на дуэль) — для приза «Азартный игрок» на пульте */
+  private gamble(pid: string, yen: number) {
+    this.bump('gambleN', pid);
+    this.bump('gambleYen', pid, yen);
+  }
+
   private hit(p: Player, dmg: number) {
     p.hp = Math.max(0, p.hp - dmg);
     if (this.s.duel) this.s.duel.lastHit = { to: p.id, dmg, n: this.stageN };
@@ -1676,7 +1688,7 @@ export class GameEngine {
       w.left[tier] = Math.max(0, w.left[tier] - 1);
       w.history.push({ pid, tier });
       w.last = { pid, tier };
-      this.log(`${this.s.players[pid]?.name ?? '?'}: ${TIER_INFO[tier].name.toLowerCase()} приз`);
+      this.log(`${this.s.players[pid]?.name ?? '?'}: приз «${TIER_INFO[tier].name}»`);
       this.io.fx?.('prize', { pid });
     }
     this.emit();
@@ -1755,8 +1767,8 @@ export class GameEngine {
   }
 
   /** проиграл дуэль — остался без машины: остов уходит на металлолом за монетку */
-  private loseCar(p: Player, d: NonNullable<GameState['duel']>, crash = false) {
-    if (!p.car) return;
+  private loseCar(p: Player, d: NonNullable<GameState['duel']>, crash = false): boolean {
+    if (!p.car) return false;
     const how = crash ? CAR_LOST[0] : pick([...CAR_LOST]);
     d.carLost = { pid: p.id, car: p.car, how: how.id };
     this.log(`${p.name} остался без машины (${carName(p.car)}): ${how.text.toLowerCase()} Металлолом — за монетку`);
@@ -1764,6 +1776,7 @@ export class GameEngine {
     p.bonuses.coin = (p.bonuses.coin ?? 0) + 1;
     this.bump('carsLost', p.id);
     this.io.fx?.('carLost', { pid: p.id, how: how.id });
+    return true;
   }
 
   /**
@@ -2968,6 +2981,7 @@ export class GameEngine {
         if (p.yen < cost) return reply(false, null, 'Не хватает йен');
         p.yen -= cost;
         this.bump('pachiNet', p.id, -cost);
+        this.gamble(p.id, cost);
         p.busy = 'pachinko';
         this.playedSolo(p);
         this.emit();
@@ -3004,6 +3018,7 @@ export class GameEngine {
         if (!soloAt(st, p.pref).includes('ring')) return reply(false, null, 'Здесь нет призовой машины');
         if (p.closed?.code === p.pref) return reply(false, null, FARM_NO.ring);
         if (!pay({ yen: st.ring.cost, stars: 0 })) return reply(false, null, 'Не хватает йен');
+        this.gamble(p.id, st.ring.cost);
         this.playedSolo(p);
         const seed = randInt(1e9);
         const t0 = this.now + 1200;
@@ -3054,6 +3069,7 @@ export class GameEngine {
         const win = (a.guess === 'cho') === ((d1 + d2) % 2 === 0);
         p.yen += win ? bet : -bet;
         this.bump('chohanNet', p.id, win ? bet : -bet);
+        this.gamble(p.id, bet);
         if (bet >= 500) this.log(`🎲 ${p.name} ${win ? 'выиграл' : 'проиграл'} в чо-хан ¥${bet}`);
         this.emit();
         this.io.fx?.('chohan', { pid: p.id, d1, d2, guess: a.guess, bet, win });

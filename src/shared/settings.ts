@@ -4,7 +4,7 @@ import { KAIJU_DEFAULT } from '../games/kaiju';
 import type { BonusId, DragonSettings, KaijuSettings, SumoSettings, GroupGameId, GroupTask, Question, RewardType, Settings, SoloGameId } from './types';
 
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
-export const ECON_VERSION = 3;
+export const ECON_VERSION = 4;
 /** версия раскладки игр по префектурам (см. mergeSettings) */
 export const LAYOUT_V = 4;
 /** магазины и призовые машины до LAYOUT_V 3 (автосалоны тогда стояли отдельно от магазинов) */
@@ -219,6 +219,8 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
   // v3: звёзды в групповых играх — только победителю
   if (econ < 3) out.group = { ...out.group, prizes: structuredClone(GROUP_PRIZES) };
   out.tokens = { ...d.tokens!, ...(saved.tokens ?? {}), prizes: { ...d.tokens!.prizes, ...(saved.tokens?.prizes ?? {}) } };
+  // v4: призы колеса стали «Носки / Не носки / VIP» (9/10/9) — старые количества заменяем
+  if (econ < 4) out.tokens.prizes = structuredClone(d.tokens!.prizes);
   out.epochRates = d.epochRates!.map((x, i) => ({ ...x, ...(saved.epochRates?.[i] ?? {}) }));
   out.econ = ECON_VERSION;
   // в старых настройках награды только за 3 места — остальные места берём стандартные

@@ -19,6 +19,7 @@ import { GroupEditor } from './GroupEditor';
 import { PrefMap } from './PrefMap';
 import { IntrosTab, SoundsTab } from './Sounds';
 import { fmtYen, uid } from '../shared/util';
+import { RAT_RULES, computeAwards, type AwardRow } from '../shared/awards';
 import { DEFAULT_TOKENS, EPOCHS, PRIZE_TIERS, TIER_INFO, epochOf, epochRatesFor, fmtMul, tokensFor } from '../shared/economy';
 
 type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'sounds' | 'intros' | 'settings' | 'remote';
@@ -300,6 +301,7 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
         {settings.hostPaced === false && <div class="muted small">Ведущий не управляет вопросами (галочка в «Настройках» снята) — всё и так идёт само.</div>}
       </div>
       <RemoteTuning s={s} settings={settings} ctl={ctl} onSave={onSave} />
+      {s && s.phase !== 'lobby' && <IndividualPrizes room={room.toUpperCase()} s={s} />}
       {s && (
         <table class="qtable">
           <thead><tr><th>Игрок</th><th>Где</th><th>HP</th><th>¥</th><th>★</th><th>Связь</th><th>Выдать (¥ / ★ / HP / приз)</th><th></th></tr></thead>
@@ -332,6 +334,55 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+/** пульт: три индивидуальных приза — по счётчикам из сохранённой партии (одно чтение базы по кнопке) */
+function IndividualPrizes({ room, s }: { room: string; s: GameState }) {
+  const [tally, setTally] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+  const load = async () => {
+    setBusy(true);
+    try { setTally((await getStore().loadSnapshot(room))?.sec?.tally ?? {}); } finally { setBusy(false); }
+  };
+  // в конце игры пересчитываем сами
+  useEffect(() => { void load(); }, [s.phase === 'end']);
+  const players = s.joinOrder.map((id) => s.players[id]).filter(Boolean);
+  const aw = tally ? computeAwards(players, tally) : null;
+  const block = (id: string, title: string, rows: AwardRow[], hint: string) => {
+    const top = rows[0] && rows[0].score > 0 ? rows.filter((r) => r.key === rows[0].key) : [];
+    return (
+      <div class="prize-card">
+        <b>{title}</b>
+        {top.length ? top.map((r) => <div class="row"><Avatar p={r.p} size={28} /> <b>{r.p.name}</b> <span class="muted small">{r.detail}</span></div>)
+          : <div class="muted small">пока никого</div>}
+        {top.length > 1 && <div class="muted small">ничья — решай сам</div>}
+        <button class="btn small" onClick={() => setOpen(open === id ? null : id)}>{open === id ? 'Скрыть' : 'Все игроки'}</button>
+        {open === id && (
+          <div class="col">
+            {rows.map((r, i) => <div class="row small"><span class="muted">{i + 1}.</span> {r.p.name} <span class="muted">{id === 'rat' ? `${r.score} очк. · ` : ''}{r.detail}</span></div>)}
+            <div class="muted small">{hint}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  return (
+    <div class="col prize-box">
+      <div class="row wrap">
+        <h3 style={{ margin: 0 }}>🎁 Индивидуальные призы</h3>
+        <button class="btn small" disabled={busy} onClick={load}>{busy ? '…' : '🔄 Пересчитать'}</button>
+        <span class="muted small">видно только тебе; данные — из последнего сохранения партии</span>
+      </div>
+      {aw && (
+        <div class="row wrap prize-cards">
+          {block('winner', '👑 Победитель игры', aw.winner, 'Звёзды, потом йены (призы от ведущего не считаются).')}
+          {block('gambler', '🎰 Азартный игрок', aw.gambler, 'Число игр: покупка шариков пачинко, запуск призового кольца, бросок чо-хан, ставка на дуэль (одна за дуэль). При равенстве — у кого больше поставлено.')}
+          {block('rat', '🐀 Главная крыса', aw.rat, RAT_RULES.map((r) => `${r.icon} ${r.label} — ${r.pts}`).join(' · ') + '. При равенстве — больше уведённых животных, потом больше отобранных денег.')}
+        </div>
       )}
     </div>
   );
@@ -409,7 +460,7 @@ function RemoteTuning({ s, settings, ctl, onSave }: { s: GameState | null; setti
         {PRIZE_TIERS.map((k) => (
           <label class="row"><span class="tier-dot" style={{ background: TIER_INFO[k].color }} /> {TIER_INFO[k].name} <input class="inp-s num" type="number" min={0} value={tok.prizes[k]} onInput={(e) => setTok({ ...tok, prizes: { ...tok.prizes, [k]: Math.max(0, Math.floor(Number((e.target as HTMLInputElement).value) || 0)) } })} /></label>
         ))}
-        <span class="muted small">всего {prizes}; сектор = призов этой редкости (обычные и необычные ×3), выпавший приз убирается с колеса</span>
+        <span class="muted small">всего {prizes}; сектор = призов этой категории (носки и не носки ×5), выпавший приз убирается с колеса</span>
       </div>
       <div class="row wrap">
         <button class="btn small primary" onClick={() => apply({ tokens: tok })}>Применить курс и призы</button>
@@ -425,7 +476,7 @@ function RemoteTuning({ s, settings, ctl, onSave }: { s: GameState | null; setti
         {s?.phase !== 'end' && <span class="muted small">Колесо призов запускается после конца игры.</span>}
       </div>
       {s?.wheel && (
-        <div class="muted small">Колесо: осталось {PRIZE_TIERS.map((k) => `${TIER_INFO[k].name.toLowerCase()} ${s.wheel!.left[k]}`).join(', ')} · жетонов у игроков {Object.values(s.wheel.tokens).reduce((a, b) => a + b, 0)}</div>
+        <div class="muted small">Колесо: осталось {PRIZE_TIERS.map((k) => `${TIER_INFO[k].name} ${s.wheel!.left[k]}`).join(', ')} · жетонов у игроков {Object.values(s.wheel.tokens).reduce((a, b) => a + b, 0)}</div>
       )}
     </div>
   );

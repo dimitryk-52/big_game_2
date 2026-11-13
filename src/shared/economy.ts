@@ -94,15 +94,15 @@ export const FIND_INFO: Record<FindId, { name: string; icon: string; desc: strin
 
 // ───── финальная призовая игра: жетоны и колесо ─────
 
-/** редкость приза: размер сектора = призов этой редкости (у обычных и необычных — ×3) */
+/** категория приза: размер сектора = призов этой категории (у носков и не носков — ×5) */
 export type PrizeTier = 'common' | 'uncommon' | 'rare';
 export const PRIZE_TIERS: PrizeTier[] = ['common', 'uncommon', 'rare'];
 export const TIER_INFO: Record<PrizeTier, { name: string; color: string; mul: number }> = {
-  common: { name: 'Обычный', color: '#8d93b8', mul: 3 },
-  uncommon: { name: 'Необычный', color: '#3cb54a', mul: 3 },
-  rare: { name: 'Редкий', color: '#c77dff', mul: 1 },
+  common: { name: 'Носки', color: '#e03c3c', mul: 5 },
+  uncommon: { name: 'Не носки', color: '#9b4dff', mul: 5 },
+  rare: { name: 'VIP', color: '#f2b51c', mul: 1 },
 };
-export const DEFAULT_TOKENS = { starsPer: 3, yenPer: 3000, prizes: { common: 8, uncommon: 5, rare: 3 } as Record<PrizeTier, number> };
+export const DEFAULT_TOKENS = { starsPer: 3, yenPer: 3000, prizes: { common: 9, uncommon: 10, rare: 9 } as Record<PrizeTier, number> };
 
 /** жетонов в обмен на звёзды и деньги (дробные части складываются) */
 export function tokensValue(p: Pick<Player, 'stars' | 'yen'>, st: Settings): number {

@@ -605,7 +605,7 @@ export interface EndgameState {
   played?: number;
 }
 
-/** колесо призов: сектор = призов этой редкости (обычные и необычные ×3), выпавший приз убирается */
+/** колесо призов: сектор = призов этой категории (носки и не носки ×5), выпавший приз убирается */
 export interface WheelState {
   left: Record<PrizeTier, number>;
   tokens: Record<string, number>;

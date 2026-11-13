@@ -115,8 +115,8 @@ export function WheelPad({ client, s, me }: { client: GameClient; s: GameState; 
         ) : <div class="muted">Жетонов нет</div>}
       </div>
       <div class="token-count"><PixIcon id="token" size={26} /> × <b>{mine}</b></div>
-      {myLast && !busy && <div class="reel-label done" style={{ color: TIER_INFO[myLast].color }}>Твой приз: {TIER_INFO[myLast].name.toLowerCase()}!</div>}
-      {won.length > 0 && <div class="muted small-text">Выиграно: {won.map((h) => TIER_INFO[h.tier].name.toLowerCase()).join(', ')}</div>}
+      {myLast && !busy && <div class="reel-label done" style={{ color: TIER_INFO[myLast].color }}>Твой приз: {TIER_INFO[myLast].name}!</div>}
+      {won.length > 0 && <div class="muted small-text">Выиграно: {won.map((h) => TIER_INFO[h.tier].name).join(', ')}</div>}
       {err && <div class="muted small-text">{err}</div>}
     </div>
   );

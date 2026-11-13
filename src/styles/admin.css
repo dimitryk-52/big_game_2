@@ -139,3 +139,8 @@ label { display: inline-flex; gap: 6px; align-items: center; }
 .qb.diff-hard { border-color: #ff7a7a; color: #ff7a7a; }
 .qb.calib { border-color: #c08cff; color: #c08cff; }
 .qb.note { border-style: dashed; }
+
+/* пульт: индивидуальные призы */
+.prize-box { border: 3px solid #f2b51c; background: #2a2350; padding: 10px 12px; margin: 10px 0; gap: 8px; }
+.prize-cards { align-items: flex-start; gap: 10px; }
+.prize-card { display: flex; flex-direction: column; gap: 6px; min-width: 230px; flex: 1 1 230px; background: #1d1838; border: 2px solid #4a4280; padding: 8px; }

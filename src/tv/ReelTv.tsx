@@ -52,7 +52,7 @@ export function WheelTv({ s }: { s: GameState }) {
         {segs.length ? <Wheel segs={segs} spin={w.spin} now={now} size={Math.min(620, Math.round(window.innerHeight * 0.68))} sound /> : <div class="banner-text">Все призы разыграны!</div>}
         <div class={'wheel-label' + (lab.done ? ' done' : '')}>
           {spinner ? <><Avatar p={spinner} size={40} /> {spinner.name} крутит колесо…</>
-            : last && w.last ? <><Avatar p={last} size={40} /> {last.name}: <span style={{ color: TIER_INFO[w.last.tier].color }}>{TIER_INFO[w.last.tier].name.toLowerCase()} приз!</span></>
+            : last && w.last ? <><Avatar p={last} size={40} /> {last.name}: <span style={{ color: TIER_INFO[w.last.tier].color }}>приз «{TIER_INFO[w.last.tier].name}»!</span></>
             : prizesLeft ? 'Опусти жетон в слот на телефоне' : ''}
         </div>
       </div>
