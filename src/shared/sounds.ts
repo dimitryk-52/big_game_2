@@ -41,6 +41,15 @@ export const groupTableId = (g: GroupGameId) => `groupTable:${g}`;
 /** все события, которые звучат на ТВ. id — постоянные: по ним хранятся назначения */
 export const SOUND_GROUPS: SoundGroup[] = [
   {
+    id: 'start', name: 'Начало игры', note: 'Музыка интро, тропы и калибровки — внизу, в «Фоновой музыке».', events: [
+      { id: 'introSting', name: 'Интро: вылет логотипа', when: 'Ведущий нажал «Далее: интро» — логотип вылетает на экран. Песня интро начнётся, когда этот звук доиграет', synth: sfx.fanfare },
+      { id: 'count3', name: 'Отсчёт: «3»', when: 'Ведущий нажал «Начать игру» — на экране «3»', synth: sfx.click },
+      { id: 'count2', name: 'Отсчёт: «2»', when: 'Через секунду — «2»', synth: sfx.click },
+      { id: 'count1', name: 'Отсчёт: «1»', when: 'Ещё через секунду — «1»', synth: sfx.click },
+      { id: 'toMap', name: 'Переход на карту', when: 'Белая вспышка после «1» — открывается карта', synth: sfx.reveal },
+    ],
+  },
+  {
     id: 'game', name: 'Игра и ходы', events: [
       { id: 'join', name: 'Игрок подключился', when: 'В лобби, когда новый игрок заходит с телефона', synth: sfx.join },
       { id: 'banner', name: 'Объявление на экране', when: 'Большая плашка по центру: «Калибровка», «Высадка», начало круга и т. п.' },
@@ -170,6 +179,9 @@ export const INTRO_LIST: { kind: IntroKind; id: string; name: string; sub: strin
  *  music/map.mp3 и music/duel.mp3; у остальных без файла — тишина (как раньше) */
 export const musicId = (k: string) => `music:${k}`;
 export const MUSIC_LIST: { id: string; name: string; when: string; dflt?: string }[] = [
+  { id: musicId('intro'), name: 'Интро', when: 'После вылета логотипа (когда доиграет звук «Интро: вылет логотипа»); дальше — на тропе, если у тропы нет своей' },
+  { id: musicId('lobby'), name: 'Тропа (лобби)', when: 'Экран с QR, пока игроки заходят. Нет файла — продолжает играть песня интро' },
+  { id: musicId('calib'), name: 'Калибровка', when: 'От вспышки после отсчёта до конца калибровки. Нет файла — как обычно (карта / вопросы)' },
   { id: musicId('map'), name: 'Карта', when: 'Всю игру, пока видна карта', dflt: 'music/map.mp3' },
   { id: musicId('duel'), name: 'Дуэль', when: 'Вся дуэль: выбор темы, вопросы, итог', dflt: 'music/duel.mp3' },
   { id: musicId('race'), name: 'Гонка', when: 'Вся гонка, от плашки «ГОНКА!» до финиша. Нет файла — музыка дуэли' },

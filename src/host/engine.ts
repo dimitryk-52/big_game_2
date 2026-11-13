@@ -13,6 +13,7 @@ import { NOODLES, noodleOf, noodleScore, parseNoodle } from '../games/noodles';
 import { ANGLE_MAX, ANGLE_MIN, PIT_TRIES, parsePits, pitDistance, randomWind } from '../games/cherry';
 import { buildDebugScene } from './debugScenes';
 import { OKINAWA, PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, prefName } from '../map/mapData';
+import { COUNTDOWN_MS } from '../shared/types';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/look';
 import { RHYTHM_LEAD_BEATS, RING_CELLS, RING_PRIZE_INFO, RING_SLOW_MAX, RING_SLOW_MIN, RING_SLOW_MS, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
@@ -166,7 +167,7 @@ export class GameEngine {
       if (w?.spinner && w.spin) this.wheelDone(w, w.spinner, w.segs[w.spin.result]?.id);
     } else {
       this.s = {
-        v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
+        v: 0, room, stage: { t: 'lobby', show: 'blank' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
         prefs: {}, q: null, duel: null, rhythm: null, g: null, dr: null, kj: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
       };
       this.sec = { pins: {}, used: [], qn: 0, logN: 0, calibIdx: 0, landingIdx: 0, rhythmN: 0, ring: {} };
@@ -219,9 +220,17 @@ export class GameEngine {
       case 'start':
         if (this.s.phase === 'lobby' && this.s.joinOrder.length) this.feed({ t: '__start' } as any);
         break;
-      case 'next':
+      case 'next': {
+        // лобби: пустой фон → интро → тропа с QR; игру «Далее» не запускает — только «Начать игру»
+        const st = this.s.stage;
+        if (this.s.phase === 'lobby' && st.t === 'lobby' && st.show && st.show !== 'walk') {
+          this.setStage({ t: 'lobby', show: st.show === 'blank' ? 'intro' : 'walk', at: this.now });
+          this.snapshot();
+          break;
+        }
         this.skip();
         break;
+      }
       case 'pause':
         this.setPaused(!this.s.paused);
         break;
@@ -552,13 +561,16 @@ export class GameEngine {
   private async run(epoch: number): Promise<void> {
     try {
       if (this.s.phase === 'lobby') {
-        this.setStage({ t: 'lobby' });
+        // подэтап лобби (пустой фон / интро / тропа) переживает перезагрузку ТВ
+        if (this.s.stage.t !== 'lobby') this.setStage({ t: 'lobby', show: 'blank' });
         // «Далее» в лобби игру не запускает — только «Начать игру»
         while (!(await this.waitInput(epoch, (m: any) => (m.t === '__start' ? true : undefined), null)) || !this.s.joinOrder.length) { /* ждём старта */ }
         this.s.phase = 'calib';
         this.initPrefs();
         this.s.epoch = 0;
         this.s.rates = epochRatesFor(this.s.settings, 0);
+        // отсчёт 3-2-1 поверх тропы; дальше — карта и калибровка (calibration ждёт конца отсчёта)
+        this.setStage({ t: 'countdown', at: this.now });
         this.snapshot();
       }
       if (this.s.phase === 'calib') await this.calibration(epoch);
@@ -590,8 +602,11 @@ export class GameEngine {
     const topics = this.combatTopics();
     const total = this.s.settings.calibRounds * topics.length;
     if (this.sec.calibIdx === 0) {
-      this.setStage({ t: 'banner', text: 'Калибровка', sub: 'Отвечайте на вопросы — так мы узнаем ваши сильные стороны', big: true });
-      await this.sleep(epoch, 4000);
+      const st = this.s.stage;
+      if (st.t === 'countdown') await this.sleep(epoch, Math.max(0, st.at + COUNTDOWN_MS - this.now));
+      // карта и музыка калибровки; сами вопросы — по «Далее» ведущего
+      this.setStage({ t: 'banner', text: 'Калибровка', sub: 'Отвечайте на вопросы — так мы узнаем ваши сильные стороны', big: true, wait: this.hostPaced });
+      await this.sleep(epoch, this.hostPaced ? 36e5 : 4000);
     }
     for (let i = this.sec.calibIdx; i < total; i++) {
       await this.gate(epoch);

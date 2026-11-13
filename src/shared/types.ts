@@ -429,9 +429,17 @@ export interface RhythmPublic {
   scores: Record<string, number | null>;
 }
 
+export type LobbyShow = 'blank' | 'intro' | 'walk';
+/** длина отсчёта 3-2-1 до вспышки, мс: цифры на 0.5 / 1.5 / 2.5 c, вспышка на 3.5 c */
+export const COUNTDOWN_MS = 3600;
+
 export type Stage =
-  | { t: 'lobby' }
-  | { t: 'banner'; text: string; sub?: string; big?: boolean }
+  /** show — подэтап начала: пустой фон → интро (логотип + песня) → тропа с QR (нет — тропа, старые сохранения) */
+  | { t: 'lobby'; show?: LobbyShow; at?: number }
+  /** «Начать игру»: отсчёт 3-2-1 поверх тропы, потом вспышка и карта (at — время хоста начала отсчёта) */
+  | { t: 'countdown'; at: number }
+  /** wait — ждём «Далее» ведущего (перед калибровкой) */
+  | { t: 'banner'; text: string; sub?: string; big?: boolean; wait?: boolean }
   | { t: 'calibResult' }
   | { t: 'landing'; pid: string; deadline: number; blocked: number[] }
   | { t: 'turnStart'; pid: string }

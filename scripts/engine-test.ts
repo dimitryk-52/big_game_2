@@ -32,6 +32,11 @@ const until = async (cond: () => boolean, maxMs: number) => { const end = now() 
   eng.onCtl('start');
   await wait(500);
   ok('«Начать игру» запускает', eng.s.phase !== 'lobby');
+  ok('после «Начать» — отсчёт 3-2-1', eng.s.stage.t === 'countdown');
+  await until(() => eng.s.stage.t === 'banner', 10000);
+  await wait(1500);
+  ok('калибровка ждёт «Далее» ведущего', eng.s.stage.t === 'banner' && !eng.s.q);
+  eng.onCtl('next');
 
   // пауза на вопросе калибровки
   await until(() => !!eng.s.q && !eng.s.q.revealed && eng.s.q.deadline > 0, 60000);

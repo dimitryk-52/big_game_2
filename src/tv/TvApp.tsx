@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import QRCode from 'qrcode';
 import type { GameState, Player, PublicQuestion } from '../shared/types';
 import type { Host } from '../host/host';
 import { MapView } from '../map/MapView';
@@ -22,12 +21,14 @@ import { KaijuTv } from './KaijuTv';
 import { SumoTv } from './SumoTv';
 import { FinaleTv } from './FinaleTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
+import { soundMs } from '../shared/sounds';
 import { groupTableId, hasCustom, playSound } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
+import { LobbyTv, MapFlash } from './LobbyTv';
 import { BetBoard, DuelSpoils, EpochBanner, EpochChip, FindPopup } from './EconTv';
 import { TopicReelTv, WheelTv } from './ReelTv';
 import { epochOf, ratesOf, rewardYen } from '../shared/economy';
-import { LOGO_TEXT_URL, LOGO_URL, pixelLogoUrl } from '../shared/logo';
+import { LOGO_TEXT_URL, pixelLogoUrl } from '../shared/logo';
 import { pixelIconUrl } from '../shared/sprites';
 import { CAR_LOST, carName, dealersOf } from '../shared/cars';
 import { carUrl } from '../ui/carArt';
@@ -212,6 +213,20 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   });
 
   const st = s.stage;
+  // белая вспышка над картой сразу после отсчёта
+  const prevStage = useRef(st.t);
+  const [flash, setFlash] = useState(0);
+  useEffect(() => {
+    if (prevStage.current === 'countdown' && st.t !== 'countdown') {
+      setFlash((x) => x + 1);
+    }
+    prevStage.current = st.t;
+  }, [st.t]);
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(0), 1300);
+    return () => clearTimeout(t);
+  }, [flash]);
   // фон префектуры — один слой от интро до конца вопроса (и выбора бонусов между ними),
   // чтобы при переходе интро → вопрос он не затухал и не мелькала карта
   const sceneCode = useRef<number | null>(null);
@@ -257,7 +272,19 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // гонка: музыка трассы → общая музыка гонки → музыка дуэли
   const raceKind = s.duel?.mode === 'race' ? s.race?.kind ?? trackFor(PREF[s.players[s.duel.defender]?.pref ?? 0]?.region) : null;
   const raceTrack = raceKind ? (hasMusic('race:' + raceKind) ? 'race:' + raceKind : hasMusic('race') ? 'race' : 'duel') : null;
-  const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null
+  // начало игры: интро — песня после вылета логотипа; тропа — своя музыка или та же песня; отсчёт — тишина
+  const introAt = st.t === 'lobby' && st.show === 'intro' ? st.at ?? 0 : 0;
+  const [introSong, setIntroSong] = useState(false);
+  useEffect(() => {
+    setIntroSong(false);
+    if (!introAt) return;
+    const t = setTimeout(() => setIntroSong(true), Math.max(0, introAt + (soundMs('introSting') || 1500) - now()));
+    return () => clearTimeout(t);
+  }, [introAt]);
+  const lobbyTrack = st.t === 'lobby' ? (st.show === 'intro' ? (introSong ? 'intro' : null) : st.show === 'blank' ? null : hasMusic('lobby') ? 'lobby' : 'intro') : null;
+  const calibTrack = s.phase === 'calib' && hasMusic('calib') && !qMedia ? 'calib' : null;
+  const track = st.t === 'lobby' ? lobbyTrack : st.t === 'countdown' ? null : calibTrack ? calibTrack
+    : st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null
     : raceTrack ? raceTrack : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
   useEffect(() => { setMusic(track, st.t === 'question' && (track === 'map' || track === 'duel')); }, [track, st.t]);
 
@@ -267,9 +294,10 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       {sceneBg.src
         ? <img class={'tv-qbg' + (sceneZoom.current ? ' zoom' : '') + (sceneBg.smooth ? ' smooth' : '')} key="scene-bg" src={sceneBg.src} alt="" draggable={false} />
         : st.t === 'question' && <div class="tv-qdim" />}
-      <TopBar s={s} />
+      {st.t !== 'lobby' && st.t !== 'countdown' && <TopBar s={s} />}
       {hasList && <PlayerList s={s} />}
-      {st.t === 'lobby' && <Lobby s={s} host={host} />}
+      {(st.t === 'lobby' || st.t === 'countdown') && <Lobby s={s} host={host} />}
+      {flash > 0 && <MapFlash key={flash} />}
       {st.t === 'banner' && <Banner key={st.text} text={st.text} sub={st.sub} big={st.big} />}
       {st.t === 'calibResult' && <CalibResult s={s} />}
       {st.t === 'landing' && (
@@ -434,38 +462,11 @@ function PlayerList({ s }: { s: GameState }) {
 
 function Lobby({ s, host }: { s: GameState; host: Host }) {
   const url = joinUrl(s.room, host.net.mode);
-  const [qr, setQr] = useState('');
-  useEffect(() => { QRCode.toDataURL(url, { margin: 1, scale: 8 }).then(setQr); }, [url]);
   const local = ['localhost', '127.0.0.1'].includes(location.hostname);
-  const players = s.joinOrder.map((id) => s.players[id]).filter(Boolean);
-  return (
-    <div class="lobby pop">
-      <div class="lobby-left">
-        {LOGO_URL ? <img class="lobby-logo" src={LOGO_URL} alt="BIG GAME 2" /> : <><h1>BIG GAME 2</h1><div class="jp-title">ビッグゲーム 2</div></>}
-        {qr && <img class="qr" src={qr} alt="QR" />}
-        <div class="room">Комната: <b>{s.room}</b></div>
-        <div class="url">{url}</div>
-        {local && /localhost|127.0.0.1/.test(url) && (
-          <div class="warn">
-            <PixIcon id="ui_warn" /> QR ведёт на localhost — телефоны не смогут открыть его.{' '}
-            {host.net.mode === 'supabase' ? 'Добавь VITE_PUBLIC_URL (адрес GitHub Pages) в .env и перезапусти.' : 'Открой эту страницу по сетевому адресу (см. вывод npm run dev).'}
-          </div>
-        )}
-      </div>
-      <div class="lobby-right">
-        <h2>Игроки ({players.length}/10)</h2>
-        <div class="lobby-players">
-          {players.map((p) => (
-            <div class="lobby-p pop" key={p.id}>
-              <Avatar p={p} size={72} />
-              <div>{p.name}</div>
-            </div>
-          ))}
-          {!players.length && <div class="muted">Сканируйте QR-код телефоном…</div>}
-        </div>
-      </div>
-    </div>
-  );
+  const warn = local && /localhost|127.0.0.1/.test(url)
+    ? 'QR ведёт на localhost — телефоны не смогут открыть его. ' + (host.net.mode === 'supabase' ? 'Добавь VITE_PUBLIC_URL (адрес GitHub Pages) в .env и перезапусти.' : 'Открой эту страницу по сетевому адресу (см. вывод npm run dev).')
+    : null;
+  return <LobbyTv s={s} url={url} warn={warn} />;
 }
 
 function Banner({ text, sub, big, avatar }: { text: string; sub?: string; big?: boolean; avatar?: Player }) {

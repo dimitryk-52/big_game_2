@@ -487,8 +487,14 @@ void loadIcons().then(() => render(<App />, document.getElementById('app')!));
 
 /** что сделает «Далее» сейчас — подсказка ведущему на пульте */
 function nextLabel(s: GameState | null) {
-  if (!s || s.settings.hostPaced === false) return 'Далее';
+  if (!s) return 'Далее';
   const st = s.stage;
+  if (st.t === 'lobby' && st.show === 'blank') return 'Далее: интро';
+  if (st.t === 'lobby' && st.show === 'intro') return 'Далее: тропа и QR';
+  if (st.t === 'lobby') return 'Далее (ждём игроков)';
+  if (st.t === 'countdown') return 'Отсчёт…';
+  if (st.t === 'banner' && st.wait) return 'Далее: начать калибровку';
+  if (s.settings.hostPaced === false) return 'Далее';
   if (st.t === 'prefIntro') return 'Далее: показать вопрос';
   if (st.t === 'group' && s.g?.phase === 'intro') return 'Далее: начать игру';
   if (st.t === 'group' && s.g?.phase === 'results') return 'Далее: закрыть итоги';

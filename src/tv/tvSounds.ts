@@ -22,7 +22,7 @@ export function useTvSounds(s: GameState) {
 
   const prev = useRef<{ stage: string; group: string; dragon: string; busy: Record<string, string | null>; paused: boolean } | null>(null);
   const st = s.stage as any;
-  const stageKey = st.t + ':' + (st.pid ?? '') + ':' + (st.t === 'moving' ? st.to : st.t === 'banner' ? st.text : st.t === 'prefIntro' ? st.code : '');
+  const stageKey = st.t + ':' + (st.pid ?? '') + ':' + (st.t === 'moving' ? st.to : st.t === 'banner' ? st.text : st.t === 'prefIntro' ? st.code : st.t === 'lobby' ? st.show ?? '' : '');
   const g = s.g;
   const groupKey = g && st.t === 'group' ? `${g.id}:${g.phase}:${g.phase === 'show' ? g.showIdx : ''}` : '';
   const dr = s.dr;
@@ -52,6 +52,10 @@ export function useTvSounds(s: GameState) {
     if (s.paused && !p.paused) playSound('pause');
     if (stageKey !== p.stage) {
       if (st.t === 'prefIntro') playSound(introId('pref', st.code));
+      // интро игры: логотип вылетает под свой звук (песня включится, когда он доиграет — TvApp)
+      else if (st.t === 'lobby' && st.show === 'intro') playSound('introSting');
+      // «Калибровка» сразу после вспышки отсчёта — у вспышки свой звук
+      else if (st.t === 'banner' && st.wait) { /* тишина */ }
       // плашка «ГОНКА!»: свой звук гонки, если назначен, иначе — как обычное объявление
       else if (st.t === 'banner' && s.duel?.mode === 'race' && hasCustom('raceIntro')) playSound('raceIntro');
       else if (STAGE_SOUND[st.t]) playSound(STAGE_SOUND[st.t]);
