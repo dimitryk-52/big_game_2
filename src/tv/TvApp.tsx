@@ -110,8 +110,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'raceFinish': playSound('raceFinish'); break;
         case 'race': {
           // схема трассы, потом светофор 3–2–1 и «СТАРТ!» — точно по времени старта хоста
-          // своего звука трассы нет — звучит «Гонка: объявление» (нет и его — тишина)
-          playSound(hasCustom('raceTrack') ? 'raceTrack' : 'raceIntro');
+          // своего звука трассы нет — ничего не запускаем: звук «Гонка: объявление» просто доигрывает
+          if (hasCustom('raceTrack')) playSound('raceTrack');
           const r = host.state.race;
           if (r) for (const [ms, id] of [[3000, 'raceLight'], [2000, 'raceLight'], [1000, 'raceLight'], [0, 'raceGo']] as const) {
             const left = r.startAt - ms - now();
