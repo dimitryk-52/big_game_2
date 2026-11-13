@@ -28,6 +28,8 @@ export interface SoundEvent {
   synth?: () => void;
   /** без своего файла играет другое событие — подпись для админки */
   fallback?: string;
+  /** какое событие играет вместо него (для прослушки в админке; по умолчанию «Приз / победа») */
+  fallbackTo?: string;
   /** подложка (длинный звук под действием), а не короткий fx */
   bed?: boolean;
 }
@@ -104,8 +106,8 @@ export const SOUND_GROUPS: SoundGroup[] = [
     id: 'cars', name: 'Машины и гонка', note: 'Музыка самой гонки — внизу, в «Фоновой музыке». Итог гонки звучит как «Итог дуэли».', events: [
       { id: 'carBuy', name: 'Купил машину', when: 'Игрок купил машину в автосалоне', synth: sfx.coin },
       { id: 'carLost', name: 'Машины не стало', when: 'Проигравший дуэль остался без машины (авария, эвакуатор, тануки…)', synth: sfx.wrong },
-      { id: 'raceIntro', name: 'Гонка: объявление', when: 'Плашка «ГОНКА!» — встретились две машины', fallback: 'как «Объявление на экране»' },
-      { id: 'raceTrack', name: 'Гонка: трасса', when: 'На ТВ появилась схема трассы, до старта ~6 c' },
+      { id: 'raceIntro', name: 'Гонка: объявление', when: 'Плашка «ГОНКА!» — встретились две машины', fallback: 'как «Объявление на экране»', fallbackTo: 'banner' },
+      { id: 'raceTrack', name: 'Гонка: трасса', when: 'На ТВ появилась схема трассы, до старта ~6 c', fallback: 'как «Гонка: объявление»', fallbackTo: 'raceIntro' },
       { id: 'raceLight', name: 'Гонка: светофор', when: 'Каждый из трёх огней перед стартом (3 — 2 — 1)', synth: sfx.click },
       { id: 'raceGo', name: 'Гонка: старт!', when: 'Зелёный — «СТАРТ!»', synth: () => { sfx.click(); setTimeout(sfx.answered, 80); } },
       { id: 'raceFinish', name: 'Гонка: финиш', when: 'Игрок пересёк финиш (звучит на каждого)', synth: sfx.fanfare },

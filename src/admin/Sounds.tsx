@@ -98,16 +98,17 @@ function preview(id: string, cfg: SoundCfg | undefined) {
   SOUND_EVENTS[id]?.synth?.();
 }
 
-/** событие, которое без своего файла играет звук «Приз / победа» */
+/** событие, которое без своего файла играет другое (fallbackTo, по умолчанию «Приз / победа») */
 function fallbackPreview(id: string, cfg: SoundCfg | undefined) {
   if (cfg?.file || cfg?.mute) return preview(id, cfg);
-  const prize = soundMap().prize;
-  if (prize?.file && !prize.mute) {
+  const to = SOUND_EVENTS[id]?.fallbackTo ?? 'prize';
+  const alt = soundMap()[to];
+  if (alt?.file && !alt.mute) {
     unlockAudio();
     stopAll();
-    return track(id, playFile(prize.file, prize.vol ?? 1));
+    return track(id, playFile(alt.file, alt.vol ?? 1));
   }
-  preview('prize', prize);
+  preview(to, alt);
 }
 
 /** где ещё стоит файл (кроме события except) — названия событий */
