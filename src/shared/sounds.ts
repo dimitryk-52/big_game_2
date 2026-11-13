@@ -7,6 +7,7 @@ import { GROUP_GAMES, SOLO_GAMES } from './settings';
 import { OKINAWA, PREF, PREFS } from '../map/mapData';
 import type { GroupGameId, SoloGameId } from './types';
 import { now } from './util';
+import { TRACKS, type TrackKind } from './race';
 
 export interface SoundCfg {
   /** имя файла в sounds/; пусто — встроенный звук */
@@ -46,6 +47,17 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'land', name: 'Высадка на карту', when: 'Игрок выбрал префектуру высадки в начале игры', synth: sfx.land },
       { id: 'turnStart', name: 'Начало хода', when: 'Плашка «Ход: Имя» — камера наезжает на игрока' },
       { id: 'moving', name: 'Фишка пошла', when: 'Игрок выбрал, куда идти, фишка поехала по стрелке' },
+      { id: 'cat', name: 'Кошка', when: 'Первый игрок на Окинаве получил ириомотейскую кошку; кошку переманили кусочком сашими', synth: sfx.meow },
+      { id: 'sumo:start', name: 'Сумо: начало', when: 'Финальная схватка начинается', synth: sfx.duel },
+      { id: 'sumo:push', name: 'Сумо: толчок', when: 'После вопроса кого-то отодвинули к краю', synth: sfx.stamp },
+      { id: 'sumo:out', name: 'Сумо: вылетел', when: 'Сумоиста вытолкнули за круг', synth: sfx.stumble },
+      { id: 'sumo:win', name: 'Сумо: ёкодзуна', when: 'На дохё остался один', synth: sfx.fanfare },
+      { id: 'kaiju:stomp', name: 'Годзилла: сломал дом', when: 'Годзилла наступил на целый дом', synth: sfx.stamp },
+      { id: 'kaiju:fire', name: 'Годзилла: выстрел', when: 'Охотник выпустил снаряд', synth: sfx.step },
+      { id: 'kaiju:boom', name: 'Годзилла: мимо', when: 'Снаряд упал, но не попал', synth: sfx.chop },
+      { id: 'kaiju:hit', name: 'Годзилла: попадание', when: 'Снаряд попал в Годзиллу', synth: sfx.hit },
+      { id: 'kaiju:down', name: 'Годзилла повержен', when: 'У Годзиллы кончились жизни', synth: sfx.fanfare },
+      { id: 'kaiju:win', name: 'Годзилла ушёл', when: 'Время вышло, Годзилла выжил', synth: sfx.stumble },
       { id: 'lure', name: 'Акиту переманили', when: 'Игрок потратил корм — акита-ину убежала к нему', synth: sfx.woof },
       { id: 'akita', name: 'Акита не пускает', when: 'Игрок пришёл к хозяину акиты — собака кусает и прогоняет', synth: sfx.woof },
       { id: 'rail', name: 'Синкансэн', when: 'Игрок поехал по билету на синкансэн', synth: sfx.rail },
@@ -77,6 +89,17 @@ export const SOUND_GROUPS: SoundGroup[] = [
       { id: 'duelPick', name: 'Выбор темы дуэли', when: 'Нападающий выбирает тему вопроса' },
       { id: 'hit', name: 'Удар', when: 'Игрок получил урон (полоска силы уменьшилась)', synth: sfx.hit },
       { id: 'duelResult', name: 'Итог дуэли', when: 'Экран результата дуэли' },
+    ],
+  },
+  {
+    id: 'cars', name: 'Машины и гонка', note: 'Музыка самой гонки — внизу, в «Фоновой музыке». Итог гонки звучит как «Итог дуэли».', events: [
+      { id: 'carBuy', name: 'Купил машину', when: 'Игрок купил машину в автосалоне', synth: sfx.coin },
+      { id: 'carLost', name: 'Машины не стало', when: 'Проигравший дуэль остался без машины (авария, эвакуатор, тануки…)', synth: sfx.wrong },
+      { id: 'raceIntro', name: 'Гонка: объявление', when: 'Плашка «ГОНКА!» — встретились две машины', fallback: 'как «Объявление на экране»' },
+      { id: 'raceTrack', name: 'Гонка: трасса', when: 'На ТВ появилась схема трассы, до старта ~6 c' },
+      { id: 'raceLight', name: 'Гонка: светофор', when: 'Каждый из трёх огней перед стартом (3 — 2 — 1)', synth: sfx.click },
+      { id: 'raceGo', name: 'Гонка: старт!', when: 'Зелёный — «СТАРТ!»', synth: () => { sfx.click(); setTimeout(sfx.answered, 80); } },
+      { id: 'raceFinish', name: 'Гонка: финиш', when: 'Игрок пересёк финиш (звучит на каждого)', synth: sfx.fanfare },
     ],
   },
   {
@@ -128,6 +151,7 @@ export const PHONE_SOUNDS: { name: string; when: string; synth: () => void }[] =
   { name: 'Судоку: решено', when: 'Решённое судоку принято', synth: sfx.jackpot },
   { name: 'Магазин: покупка', when: 'Игрок купил бонус', synth: sfx.coin },
   { name: 'Сашими: разрез', when: 'Игрок отрезал кусок на своём телефоне', synth: sfx.chop },
+  { name: 'Гонка: отбойник', when: 'Не вписался в поворот на своём телефоне', synth: sfx.wrong },
 ];
 
 export const SOUND_EVENTS: Record<string, SoundEvent> = Object.fromEntries(SOUND_GROUPS.flatMap((g) => g.events.map((e) => [e.id, e])));
@@ -148,6 +172,9 @@ export const musicId = (k: string) => `music:${k}`;
 export const MUSIC_LIST: { id: string; name: string; when: string; dflt?: string }[] = [
   { id: musicId('map'), name: 'Карта', when: 'Всю игру, пока видна карта', dflt: 'music/map.mp3' },
   { id: musicId('duel'), name: 'Дуэль', when: 'Вся дуэль: выбор темы, вопросы, итог', dflt: 'music/duel.mp3' },
+  { id: musicId('race'), name: 'Гонка', when: 'Вся гонка, от плашки «ГОНКА!» до финиша. Нет файла — музыка дуэли' },
+  ...(Object.keys(TRACKS) as TrackKind[]).map((k) => ({ id: musicId('race:' + k), name: `Гонка: ${TRACKS[k].name}`, when: `Только на этой трассе (${TRACKS[k].sub}). Нет файла — общая музыка гонки` })),
+  { id: musicId('sumo'), name: 'Финальное сумо', when: 'Вся финальная схватка (нет файла — музыка вопросов и дуэлей по обычным правилам)' },
   { id: musicId('question'), name: 'Обычные вопросы', when: 'Вопросы префектур, калибровки, Окинавы (кроме вопросов с аудио/видео)' },
   ...(Object.keys(GROUP_GAMES) as GroupGameId[]).map((g) => ({
     id: musicId('group:' + g), name: GROUP_GAMES[g].name,

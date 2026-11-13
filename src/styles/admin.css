@@ -134,3 +134,8 @@ label { display: inline-flex; gap: 6px; align-items: center; }
 @media (max-width: 760px) { .qp { grid-template-columns: 1fr; } .qp-side { position: static; max-height: 260px; } .qparams { grid-template-columns: 1fr; } }
 .qmodal { width: min(900px, 100%); overflow-x: hidden; }
 .qmodal > * { flex-shrink: 0; }
+.qb.diff-easy { border-color: #5ce16b; color: #5ce16b; }
+.qb.diff-medium { border-color: #ffc94d; color: #ffc94d; }
+.qb.diff-hard { border-color: #ff7a7a; color: #ff7a7a; }
+.qb.calib { border-color: #c08cff; color: #c08cff; }
+.qb.note { border-style: dashed; }

@@ -8,7 +8,7 @@ import type { CarId, CarLostId } from './cars';
 import type { TrackKind } from './race';
 
 export type TopicId = string;
-export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food' | 'cheat' | 'neko' | 'coupon' | 'scroll';
+export type BonusId = 'fifty1' | 'fifty2' | 'move2' | 'turn2' | 'coin' | 'ticket' | 'food' | 'cheat' | 'neko' | 'coupon' | 'scroll' | 'sashimi';
 export type RewardType = 'money' | 'stars' | 'bonus' | 'special' | 'turn2' | 'prize';
 
 export interface Topic {
@@ -51,7 +51,19 @@ export interface Question {
   order?: number;
   /** 'flag' — «выбери флаг префектуры»: варианты собирает игра, answers пустые */
   kind?: 'flag';
+  /** сложность: для калибровки (лёгкий + средний от темы), фильтра в админке и щадящего выбора спецвопроса */
+  difficulty?: Difficulty;
+  /** точно попадает в калибровку (раньше случайных той же сложности) */
+  calib?: boolean;
+  /** id вопроса, раньше которого этот появиться не может (вопросы связаны) */
+  after?: string;
+  /** код префектуры: вопрос не появится, пока её не открыли */
+  afterPref?: number;
+  /** заметка для ведущего (видна только в админке), например какое фото найти */
+  note?: string;
 }
+
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 export type QMode = 'once' | 'cycle';
 
@@ -66,6 +78,8 @@ export interface Player {
   car?: CarId;
   /** собака акита-ину — у первого, кто пришёл в Акиту */
   akita?: boolean;
+  /** ириомотейская кошка — у первого, кто попал на Окинаву; подсказывает ответы по своей теме (биология) */
+  cat?: boolean;
   pref: number | null;
   hp: number;
   maxHp: number;
@@ -108,7 +122,7 @@ export interface PrefState {
 export type SoloGameId = 'pachinko' | 'ring' | 'onsen' | 'chohan' | 'sudoku';
 
 /** групповые игры: запускаются в префектурах, отмеченных в админке */
-export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon' | 'noodles' | 'cherry';
+export type GroupGameId = 'calligraphy' | 'fukuwarai' | 'senryu' | 'iaido' | 'sashimi' | 'dragon' | 'noodles' | 'cherry' | 'godzilla';
 /** какая лапша в «Лапше» */
 export type NoodleId = 'soba' | 'ramen' | 'udon';
 /** что режем в «Сашими» */
@@ -196,6 +210,99 @@ export interface IaiRound {
   times?: Record<string, number>;
 }
 
+/** финальная схватка: все — сумоисты на дохё; неверный ответ отодвигает к краю, за краем — выбыл */
+export interface SumoPublic {
+  id: number;
+  phase: 'intro' | 'pick' | 'push' | 'results';
+  /** места на дохё по дуге (порядок ходов) */
+  ring: string[];
+  alive: string[];
+  /** выбывшие по порядку: первый — последнее место */
+  out: string[];
+  /** насколько сумоист отодвинут к краю: 0 — центр, 1 — край (сами числа урона не показываем) */
+  pos: Record<string, number>;
+  /** где стояли до последнего толчка — для анимации */
+  prev?: Record<string, number>;
+  /** только что вылетели */
+  fell?: string[];
+  asker: string | null;
+  circle: number;
+  places?: Record<string, number>;
+  awards?: Record<string, string>;
+}
+
+export interface SumoSettings {
+  enabled: boolean;
+  /** сколько пропущенных ударов средней силы выдерживает сумоист */
+  misses: number;
+  /** кругов, в которых никто не вылетает (останавливаются на краю) */
+  grace: number;
+  /** с какого круга толчки усиливаются и на сколько за круг (доля) */
+  rampFrom: number;
+  ramp: number;
+  /** множитель наград групповой лестницы */
+  mult: number;
+}
+
+/** «Годзилла» (Токио): лидер топчет город, остальные обстреливают его по клеткам */
+export interface KaijuPublic {
+  id: number;
+  pref: number;
+  phase: 'intro' | 'play' | 'results';
+  zilla: string;
+  hunters: string[];
+  cols: number;
+  rows: number;
+  /** время хоста: старт и конец раунда */
+  startAt: number;
+  endAt: number;
+  /** клетка Годзиллы и куда он смотрит */
+  pos: number;
+  face: 1 | -1;
+  hp: number;
+  maxHp: number;
+  /** после попадания Годзилла неуязвим до этого момента */
+  stunUntil: number;
+  /** растоптанные клетки (включая стартовую) и сколько домов растоптано */
+  down: number[];
+  stomped: number;
+  /** летящие снаряды: клетка и момент падения (время хоста) */
+  shells: { n: number; pid: string; cell: number; at: number }[];
+  /** когда охотник сможет выстрелить снова (время хоста) */
+  ready: Record<string, number>;
+  hits: Record<string, number>;
+  shots: Record<string, number>;
+  cfg: { stepMs: number; smashMs: number; fuseMs: number; reloadMs: number };
+  /** до какого момента Годзилла занят (шагает или ломает дом) — время хоста */
+  busyUntil: number;
+  awards?: Record<string, string>;
+  stars?: string[];
+}
+
+export interface KaijuSettings {
+  /** длительность, сек; жизни Годзиллы; размер города */
+  time: number;
+  hp: number;
+  cols: number;
+  rows: number;
+  /** шаг Годзиллы, полёт снаряда, перезарядка охотника, неуязвимость после попадания — мс */
+  stepMs: number;
+  /** сколько Годзилла ломает целый дом (стоит на нём и не может шагнуть), мс */
+  smashMs: number;
+  fuseMs: number;
+  reloadMs: number;
+  stunMs: number;
+  /** Годзилла выжил: база + за каждый дом (и звезда); свалили — утешительные */
+  zillaWinYen: number;
+  houseYen: number;
+  zillaLoseYen: number;
+  /** охотники, если Годзилла выжил: база + за попадание; если свалили: база + за попадание (и звезда самому меткому) */
+  hunterYen: number;
+  hitYen: number;
+  hunterWinYen: number;
+  hitWinYen: number;
+}
+
 /** джа-одори (танец дракона, Нагасаки): все шагают Л-П в такт, сбившийся выбывает со своим куском дракона */
 export interface DragonPublic {
   id: number;
@@ -231,7 +338,7 @@ export interface DragonPublic {
   awards?: Record<string, string>;
 }
 
-export type QContext = 'calib' | 'pref' | 'duel' | 'revive';
+export type QContext = 'calib' | 'pref' | 'duel' | 'revive' | 'sumo';
 
 /** Публичная часть активного вопроса (правильный ответ появляется только после reveal) */
 export interface PublicQuestion {
@@ -260,6 +367,8 @@ export interface PublicQuestion {
   removed: Record<string, number[]>;
   /** дуэль: монетка, брошенная игроком на этот вопрос (+урон, если его удар пройдёт) */
   coins?: Record<string, 'coin'>;
+  /** кошка: хозяину на телефоне лапа отмечает этот ответ (вопросы её темы) */
+  paw?: Record<string, number>;
   /** порядок кнопок на телефоне игрока (позиция → индекс ответа), у всех разный — от подглядывания */
   orders?: Record<string, number[]>;
   revealed: boolean;
@@ -327,7 +436,7 @@ export type Stage =
   | { t: 'landing'; pid: string; deadline: number; blocked: number[] }
   | { t: 'turnStart'; pid: string }
   /** options3 — станции синкансэна, куда можно уехать по билету */
-  | { t: 'move'; pid: string; options: number[]; options2: number[]; options3?: number[]; /** корм: акита у соседа — её можно переманить (видит только ходящий на телефоне) */ lure?: boolean; /** свиток-вызов: кого можно вызвать на дуэль вместо хода (видит только ходящий на телефоне) */ challenge?: string[] }
+  | { t: 'move'; pid: string; options: number[]; options2: number[]; options3?: number[]; /** корм: акита у соседа — её можно переманить (видит только ходящий на телефоне) */ lure?: boolean; /** кусок сашими: кошка у соседа — её можно переманить */ lureCat?: boolean; /** свиток-вызов: кого можно вызвать на дуэль вместо хода (видит только ходящий на телефоне) */ challenge?: string[] }
   | { t: 'moving'; pid: string; from: number | null; to: number; path: number[] }
   | { t: 'bonus'; pids: string[]; deadline: number; offers: Record<string, BonusId[]>; picked: Record<string, BonusId | 'none'> }
   | { t: 'question' }
@@ -343,6 +452,7 @@ export type Stage =
   | { t: 'shop'; pid: string; deadline: number; entered: boolean; /** автосалон этой марки (вместе с магазином или вместо него) */ dealer?: CarId; /** обычного магазина здесь нет — только автосалон */ noShop?: boolean }
   | { t: 'group' }
   | { t: 'dragon' }
+  | { t: 'kaiju' }
   /** после хода: игрок с бонусом «доп. ход» решает, ходить ли ещё раз */
   | { t: 'extraTurn'; pid: string; deadline: number }
   /** ставки зрителей перед дуэлью; done — кто уже закончил ставить */
@@ -355,7 +465,8 @@ export type Stage =
   | { t: 'reel'; pid: string; why: 'pref' | 'duel'; segs: TopicId[]; deadline: number; spin: ReelSpin | null }
   /** финальная призовая игра: колесо жетонов (s.wheel) */
   | { t: 'wheel' }
-  | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean }
+  | { t: 'duelPick'; pid: string; deadline: number; topics: TopicId[]; canSpecial: boolean; canRhythm: boolean; /** финальное сумо: тему выбирает ведущий круга, бьёт по всем */ sumo?: boolean }
+  | { t: 'sumo' }
   | { t: 'rhythm' }
   | { t: 'race' }
   | { t: 'duelResult' }
@@ -449,6 +560,8 @@ export interface Settings {
     prizes: { yen: number; stars: number }[];
     /** джа-одори: темп, ускорение, разминка */
     dragon?: DragonSettings;
+    /** «Годзилла»: баланс и награды */
+    kaiju?: Partial<KaijuSettings>;
     /** версия раскладки новых игр: старые сохранённые настройки один раз получают новые игры в свободных префектурах */
     layoutV?: number;
   };
@@ -475,6 +588,8 @@ export interface Settings {
   epochRates?: EpochRates[];
   /** пульт: сколько кругов свободного перемещения в финале (1–4) */
   finalRounds?: number;
+  /** финальная схватка сумо после последнего круга */
+  sumo?: Partial<SumoSettings>;
   /** пульт: курс обмена звёзд и денег на жетоны и призы колеса по редкости */
   tokens?: { starsPer: number; yenPer: number; prizes: Record<PrizeTier, number> };
   /** пульт: в последнем круге дать жетон аутсайдеру (тому, у кого меньше всего на жетоны) */
@@ -485,7 +600,7 @@ export interface Settings {
 
 /** конец игры: вся карта открыта → доигрываем круг → охота за призами → доигрываем круг → финальные круги */
 export interface EndgameState {
-  step: 'open' | 'hunt' | 'huntDone' | 'final';
+  step: 'open' | 'hunt' | 'huntDone' | 'final' | 'sumo';
   /** сыграно финальных кругов */
   played?: number;
 }
@@ -530,6 +645,8 @@ export interface GameState {
   race?: RacePublic | null;
   g?: GroupPublic | null;
   dr?: DragonPublic | null;
+  kj?: KaijuPublic | null;
+  sumo?: SumoPublic | null;
   log: LogEntry[];
   settings: Settings;
   paused: boolean;
@@ -560,7 +677,7 @@ export interface DebugView {
 
 // ───── Сообщения ─────
 
-export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic' | 'reel' | 'race';
+export type PickKind = 'landing' | 'move' | 'bonus' | 'duel' | 'shop' | 'vote' | 'extra' | 'iaido' | 'bet' | 'noodle' | 'cherry' | 'specialTopic' | 'reel' | 'race' | 'kaiju';
 
 /** телефон/админ → хост (канал input) */
 export type InputMsg =

@@ -1,7 +1,9 @@
 // Админка: групповые игры — задания, время, награды за места.
 import { useEffect, useState } from 'preact/hooks';
+import { KAIJU_DEFAULT } from '../games/kaiju';
+import type { KaijuSettings } from '../shared/types';
 import type { DragonSettings, FaceId, FishId, GroupGameId, IaiSceneId, NoodleId, Settings } from '../shared/types';
-import { DEFAULT_SETTINGS, GROUP_GAMES, dragonSettings, groupTime, iaidoRounds } from '../shared/settings';
+import { DEFAULT_SETTINGS, GROUP_GAMES, kaijuSettings, dragonSettings, groupTime, iaidoRounds } from '../shared/settings';
 import { FACES } from '../games/faces';
 import { FISH } from '../games/sashimi';
 import { NOODLES } from '../games/noodles';
@@ -43,6 +45,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {game === 'calligraphy' && <>Каллиграфия:</>}
         {game === 'fukuwarai' && <>Фукуварай: на телефоне пустое лицо и детали. Детали перетаскивают на лицо, и они сразу исчезают — собираем вслепую. Не успел — оставшиеся детали падают куда попало. Потом лица раскрываются на ТВ и все голосуют.<br /></>}
         {game === 'sashimi' && <>Сашими: на телефоне рыба на доске и нож. Нужно отрезать кусок заданного веса (цель случайная, 15–55% от веса целиком). Вес зависит от толщины: у спины сантиметр весит больше, чем у хвоста. Потом куски взвешиваются на ТВ по одному, места — по точности, без голосования. В префектуре рыбы ({(Object.keys(FISH) as FishId[]).map((f) => `${FISH[f].name} — ${FISH[f].prefs.map((c) => PREF[c]?.ru).join(', ')}`).join('; ')}) берутся её задания, в остальных — любые.<br /></>}
+        {game === 'godzilla' && <>Годзилла: лидер по состоянию играет за Годзиллу, остальные — охотники. Годзилла шагает крестовиной по клеткам города: по руинам быстро, целый дом ломает (в это время стоит на месте). Охотник тапает клетку на телефоне — снаряд падает туда после задержки, тень видна на ТВ; потом перезарядка (рассчитана на 6 охотников: если их меньше, она короче). Деньги получают все: Годзилла выжил — база + за каждый дом и звезда; свалили — утешительные, а самому меткому охотнику звезда (ничья — всем метким). Прикинуть баланс на ботах: <code>npx tsx scripts/kaiju-sim.ts</code>.<br /></>}
         {game === 'dragon' && <>Джа-одори (танец дракона): все игроки несут дракона цепочкой и жмут на телефоне ЛЕВУЮ и ПРАВУЮ по очереди в такт барабану на ТВ.
           Сначала разминка без зачёта, потом гонг и зачёт; каждые 8 шагов темп растёт. Сбился — выбыл, остальные смыкаются. Места — по тому, кто дольше нёс;
           сбились все оставшиеся на одном шаге — прощаются. Картинки дракона и улицы — в <code>src/img/dragon/</code>.<br /></>}
@@ -55,8 +58,8 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         и все голосуют цифрами за 1, 2 и 3 место (3, 2 и 1 очко), за свою работу нельзя. Одинаковые очки — одно место, награду получают все.
         <br /></>}Где запускается: <b>{prefs.length ? prefs.join(', ') : 'нигде'}</b> — отметь на вкладке «Префектуры». Задание с префектурой играется именно там; в префектуре без своего задания выпадает любое свободное (не привязанное к другой префектуре), по очереди в случайном порядке.
       </div>
-      {game !== 'dragon' && <h3 style={{ margin: '8px 0 0' }}>Задания</h3>}
-      {game !== 'dragon' && tasks.map((t, i) => (
+      {game !== 'dragon' && game !== 'godzilla' && <h3 style={{ margin: '8px 0 0' }}>Задания</h3>}
+      {game !== 'dragon' && game !== 'godzilla' && tasks.map((t, i) => (
         <div class="row">
           <b title="Номер задания: на вкладке «Префектуры» оно выбирается как «{GROUP_GAMES[game].name} {i + 1}»" style={{ minWidth: 28, textAlign: 'right' }}>{i + 1}.</b>
           {game === 'fukuwarai' && (
@@ -91,7 +94,7 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
           <button class="btn small" onClick={() => upd((c) => { c.groupTasks = c.groupTasks.filter((x) => x.id !== t.id); })}>🗑</button>
         </div>
       ))}
-      {game !== 'dragon' && <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}), ...(game === 'sashimi' ? { fish: 'tuna' as FishId } : {}), ...(game === 'noodles' ? { noodle: 'soba' as NoodleId } : {}) }); })}>+ Задание</button></div>}
+      {game !== 'dragon' && game !== 'godzilla' && <div class="row"><button class="btn small" onClick={() => upd((c) => { c.groupTasks.push({ id: uid(8), game, text: '', ...(game === 'fukuwarai' ? { face: 'okame' as FaceId } : {}), ...(game === 'sashimi' ? { fish: 'tuna' as FishId } : {}), ...(game === 'noodles' ? { noodle: 'soba' as NoodleId } : {}) }); })}>+ Задание</button></div>}
       <h3 style={{ margin: '8px 0 0' }}>Время и награды</h3>
       <div class="settings-grid">
         {num('Каллиграфия: время на рисунок, сек', () => s.group.drawTime, (c, v) => (c.group.drawTime = v))}
@@ -101,6 +104,24 @@ export function GroupEditor({ settings, onSave }: { settings: Settings; onSave: 
         {num('Сашими: время, сек', () => groupTime(s, 'sashimi'), (c, v) => { (c.group.times ??= {}).sashimi = v; })}
         {num('Лапша: время, сек', () => groupTime(s, 'noodles'), (c, v) => { (c.group.times ??= {}).noodles = v; })}
         {num('Косточки: время, сек', () => groupTime(s, 'cherry'), (c, v) => { (c.group.times ??= {}).cherry = v; })}
+        {game === 'godzilla' && ([
+          ['Годзилла: длительность, сек', 'time'],
+          ['Жизней у Годзиллы', 'hp'],
+          ['Город: клеток в ширину', 'cols'],
+          ['Город: клеток в высоту', 'rows'],
+          ['Шаг по руинам, мс', 'stepMs'],
+          ['Слом целого дома, мс', 'smashMs'],
+          ['Полёт снаряда, мс', 'fuseMs'],
+          ['Перезарядка охотника (при 6 охотниках), мс', 'reloadMs'],
+          ['Неуязвимость после попадания, мс', 'stunMs'],
+          ['Годзилла выжил: база, ¥ (+1★)', 'zillaWinYen'],
+          ['Годзилла выжил: за каждый дом, ¥', 'houseYen'],
+          ['Годзилла повержен: утешительные, ¥', 'zillaLoseYen'],
+          ['Охотник (Годзилла выжил): база, ¥', 'hunterYen'],
+          ['Охотник (Годзилла выжил): за попадание, ¥', 'hitYen'],
+          ['Охотник (свалили): база, ¥', 'hunterWinYen'],
+          ['Охотник (свалили): за попадание, ¥', 'hitWinYen'],
+        ] as [string, keyof KaijuSettings][]).map(([l, k]) => num(l, () => kaijuSettings(s)[k] ?? KAIJU_DEFAULT[k], (c, v) => { c.group.kaiju = { ...(c.group.kaiju ?? {}), [k]: v }; }))}
         {game === 'dragon' && ([
           ['Джа-одори: темп в начале, ударов/мин', 'bpm'],
           ['Ускорение каждые 8 шагов, %', 'accel'],

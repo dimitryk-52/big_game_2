@@ -18,6 +18,8 @@ import { resolveMedia } from './localMedia';
 import { MediaBox } from './MediaBox';
 import { GroupTv } from './GroupTv';
 import { DragonTv } from './DragonTv';
+import { KaijuTv } from './KaijuTv';
+import { SumoTv } from './SumoTv';
 import { FinaleTv } from './FinaleTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { groupTableId, hasCustom, playSound } from '../shared/sounds';
@@ -30,7 +32,7 @@ import { pixelIconUrl } from '../shared/sprites';
 import { CAR_LOST, carName, dealersOf } from '../shared/cars';
 import { carUrl } from '../ui/carArt';
 import { RaceTv } from './RaceTv';
-import { fmtRace } from '../shared/race';
+import { fmtRace, trackFor } from '../shared/race';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -47,6 +49,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // подписка на события движка
   useEffect(() => {
     let raf: any = 0;
+    const raceTimers: ReturnType<typeof setTimeout>[] = [];
     const off = host.onFx((k, d) => {
       if (k === 'state') {
         // таймер, а не rAF: в фоновой вкладке rAF замирает
@@ -75,6 +78,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           if (m && a && b) { m.focus([a, b], true, 2.6); m.fly(a, b, pixelIconUrl('bonus_scroll')); }
           break;
         }
+        case 'cat': playSound('cat'); break;
+        case 'lureCat': playSound('cat'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
         case 'lure': playSound('lure'); { const c = host.state.players[d.pid]?.pref; if (c) m?.puff(c, 0xfff27a); } break;
         case 'akita': playSound('akita'); if (d.code) m?.puff(d.code, 0xe2453c); break;
         case 'bonusUsed': if (d.b === 'coin') playSound('coinToss'); break;
@@ -82,6 +87,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'iaiCut': playSound('iaiCut'); break;
         case 'iaiEarly': playSound('iaiEarly'); break;
         case 'dragonOut': playSound('dragonOut'); break;
+        case 'kaiju': playSound('kaiju:' + d.kind); break;
+        case 'sumo': playSound('sumo:' + d.kind); break;
         case 'prize': {
           // таблица групповой игры: свой звук игры, если назначен
           playSound(d.game && hasCustom(groupTableId(d.game)) ? groupTableId(d.game) : 'prize');
@@ -97,10 +104,23 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'chop': playSound('chop'); break;
         case 'noodleBurst': playSound('noodleBurst'); break;
         case 'pit': playSound('pit'); break;
+        case 'car': playSound('carBuy'); break;
+        case 'carLost': playSound('carLost'); break;
+        case 'raceFinish': playSound('raceFinish'); break;
+        case 'race': {
+          // схема трассы, потом светофор 3–2–1 и «СТАРТ!» — точно по времени старта хоста
+          playSound('raceTrack');
+          const r = host.state.race;
+          if (r) for (const [ms, id] of [[3000, 'raceLight'], [2000, 'raceLight'], [1000, 'raceLight'], [0, 'raceGo']] as const) {
+            const left = r.startAt - ms - now();
+            if (left > -200) raceTimers.push(setTimeout(() => { if (host.state.race?.id === r.id) playSound(id); }, Math.max(0, left)));
+          }
+          break;
+        }
         case 'sudoku': pnpBus.emit(d.pid, { k: 'sudokuWin', ...d }); break;
       }
     });
-    return () => { off(); clearTimeout(raf); };
+    return () => { off(); clearTimeout(raf); raceTimers.forEach(clearTimeout); };
   }, [host]);
 
   // карта
@@ -225,15 +245,20 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // иайдо — в тишине, чтобы был слышен «кин!»; джа-одори — под свои барабаны
   const iaiQuiet = st.t === 'group' && s.g?.game === 'iaido' && s.g.phase === 'draw';
   // музыка карты — только пока видна карта: интро префектуры, её вопрос и групповые игры идут в тишине
-  const mapHidden = !!bgCode || st.t === 'prefIntro' || st.t === 'group' || st.t === 'dragon';
+  const mapHidden = !!bgCode || st.t === 'prefIntro' || st.t === 'group' || st.t === 'dragon' || st.t === 'kaiju' || !!s.sumo;
   // своя музыка (вкладка «Звуки» → «Фоновая музыка»): у обычных вопросов и у каждой групповой игры
   const ownTrack = s.duel ? null
     : (st.t === 'question' || st.t === 'bonus') && hasMusic('question') ? 'question'
     : st.t === 'group' && s.g && s.g.phase !== 'intro' ? 'group:' + s.g.game
     : st.t === 'dragon' && s.dr ? 'group:dragon'
+    : st.t === 'kaiju' && s.kj ? 'group:godzilla'
+    : s.sumo && hasMusic('sumo') ? 'sumo'
     : null;
+  // гонка: музыка трассы → общая музыка гонки → музыка дуэли
+  const raceKind = s.duel?.mode === 'race' ? s.race?.kind ?? trackFor(PREF[s.players[s.duel.defender]?.pref ?? 0]?.region) : null;
+  const raceTrack = raceKind ? (hasMusic('race:' + raceKind) ? 'race:' + raceKind : hasMusic('race') ? 'race' : 'duel') : null;
   const track = st.t === 'lobby' || st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null
-    : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
+    : raceTrack ? raceTrack : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
   useEffect(() => { setMusic(track, st.t === 'question' && (track === 'map' || track === 'duel')); }, [track, st.t]);
 
   return (
@@ -300,6 +325,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
       )}
       {st.t === 'group' && s.g && <GroupTv s={s} imgs={host.engine.groupImgs} iaiSignal={host.engine.iaiSignal} />}
       {st.t === 'dragon' && s.dr && <DragonTv s={s} />}
+      {st.t === 'kaiju' && s.kj && <KaijuTv s={s} />}
+      {s.sumo && (st.t === 'sumo' || st.t === 'duelPick' || st.t === 'reel') && <SumoTv s={s} picking={st.t !== 'sumo'} />}
       {st.t === 'reward' && <RewardPopup s={s} />}
       {st.t === 'prize' && <PrizePopup s={s} />}
       {st.t === 'end' && (st.titles ? <FinaleTv s={s} titles={st.titles} /> : <EndScreen s={s} />)}

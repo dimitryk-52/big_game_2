@@ -120,7 +120,9 @@ export function Shop({ client, s, me }: { client: GameClient; s: GameState; me: 
       {msg && <div class="status-card pop shop-msg">{msg}</div>}
       {dealer && (
         <div class="shelf car-shelf">
-          <div class="car-shelf-head"><PixIcon id={'emb_' + dealer} size={26} /> Автосалон {CARS[dealer].brand}</div>
+          {/* витрина автосалона: светлый стенд на ширину полки, сверху вывеска марки, машина стоит на его полу */}
+          <div class="showroom" />
+          <div class="car-shelf-head"><PixIcon id={'emb_' + dealer} size={26} /><span>{CARS[dealer].brand}</span></div>
           <button class={'shelf-item car-item' + (me.yen >= carYen && me.car !== dealer ? '' : ' poor')} onClick={() => { setCarOpen(true); setMsg(''); }}>
             <span class="shelf-icon car-icon"><PixIcon id={'car_' + dealer} size={72} /></span>
             <span class="price-tag"><b>{CARS[dealer].model}</b><span>·</span><span>{me.car === dealer ? 'твоя' : `¥${carYen}`}</span></span>

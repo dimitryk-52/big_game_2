@@ -125,6 +125,11 @@ function Prefs({ settings, questions, onSave }: { settings: Settings; questions:
 
 const NUM_FIELDS: [string, string][] = [
   ['calibRounds', 'Кругов калибровки'],
+  ['sumo.misses', 'Сумо: сколько пропущенных ударов средней силы до края'],
+  ['sumo.grace', 'Сумо: кругов без вылетов'],
+  ['sumo.rampFrom', 'Сумо: с какого круга толчки усиливаются'],
+  ['sumo.ramp', 'Сумо: усиление за круг (0.25 = +25%)'],
+  ['sumo.mult', 'Сумо: множитель наград групповой лестницы'],
   ['questionTime', 'Время на вопрос, сек'],
   ['duelTime', 'Время на вопрос в дуэли, сек'],
   ['bonusTime', 'Время на выбор бонуса, сек'],

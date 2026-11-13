@@ -101,7 +101,7 @@ export function PixIcon({ id, size = 18 }: { id: string; size?: number }) {
   return <img class="pix-icon" src={pixelIconUrl(id)} height={size} alt="" draggable={false} />;
 }
 
-export const BONUS_IDS: BonusId[] = ['fifty1', 'fifty2', 'move2', 'turn2', 'coin', 'ticket', 'food', 'scroll', 'cheat', 'neko', 'coupon'];
+export const BONUS_IDS: BonusId[] = ['fifty1', 'fifty2', 'move2', 'turn2', 'coin', 'ticket', 'food', 'sashimi', 'scroll', 'cheat', 'neko', 'coupon'];
 
 /** иконка бонуса (src/img/icons/bonus_<id>.png) */
 export function BonusIcon({ b, size = 18 }: { b: BonusId; size?: number }) {

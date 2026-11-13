@@ -62,6 +62,8 @@ export function DebugMenu({ s, send, onClose, fx, onGame }: {
           <button class="btn small" title="Запустить сейчас (ход начнётся заново). Рыба — по выбранной префектуре" onClick={() => send('groupTest', { pref, game: 'sashimi' })}>🔪 Сашими</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref: 42, game: 'dragon' })}>🐉 Джа-одори</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново). Лапша — по выбранной префектуре (Иватэ — соба, Аомори — рамен, Кагава — удон)" onClick={() => send('groupTest', { pref, game: 'noodles' })}>🍜 Лапша</button>
+          <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref: 13, game: 'godzilla' })}>🦖 Годзилла</button>
+          <button class="btn small" title="Финальная схватка (ход начнётся заново)" onClick={() => send('groupTest', { game: 'sumo' })}>🤼 Сумо</button>
           <button class="btn small" title="Запустить сейчас (ход начнётся заново)" onClick={() => send('groupTest', { pref: 6, game: 'cherry' })}>🍒 Косточки</button>
           <button class="btn small" title="Открыть магазин игроку сейчас (ход начнётся заново)" onClick={() => send('shopTest', { pid })}>🛒 Магазин</button>
           <button class="btn small" title="Выдать находку по-настоящему (ход начнётся заново)" onClick={() => send('findTest', { pid })}>✨ Находка</button>

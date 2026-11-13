@@ -120,6 +120,7 @@ export const BONUS_DESC: Partial<Record<BonusId, string>> = {
   coin: 'В дуэли брось на вопрос: если твой удар пройдёт, он сильнее на 1.',
   ticket: 'Со станции синкансэна — в свой ход на любую другую станцию.',
   food: 'Пахнет вкусно. Кому-нибудь обязательно понравится — главное, оказаться рядом.',
+  sashimi: 'Лучший кусок с победной доски. Свежайший — пальчики оближешь.',
   cheat: FIND_INFO.cheat.desc,
   neko: FIND_INFO.neko.desc,
   coupon: FIND_INFO.coupon.desc,

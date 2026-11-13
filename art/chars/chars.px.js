@@ -289,6 +289,16 @@ sprite("akita_w", { w: 18, h: 13 }, G(0, ...AKITA,
   "..ee....ee.ee..ee.",
 ));
 
+// ── ириомотейская кошка: мордочка выглядывает из-за заднего плеча (фиксированные цвета) ──
+pal({ q: "#b4a48a", Q: "#4a4038", v: "#fff6e4", j: "#f0b030" });
+sprite("cat", W16, G(11,
+  "Q...Q...........",
+  "qqQqq...........",
+  "qjqjq...........",
+  "vvmvv...........",
+  ".vvv............",
+));
+
 // ── превью ──
 const HAIRS = ["short", "spiky", "bob", "long", "pony", "topknot", "buns", "afro", "none"];
 const HATS = ["none", "cap", "band", "kasa", "cat", "fox", "beanie", "oni", "crown", "ninja"];
@@ -306,4 +316,6 @@ HAIRS.forEach((h, i) => { combo("pv_hair_" + h, h, "none", TOPN[i % 7], BOTN[i %
 HATS.forEach((h, i) => { combo("pv_hat_" + h, HAIRS[i % 9], h, TOPN[(i + 3) % 7], BOTN[(i + 1) % 4]); P.push("pv_hat_" + h); });
 TOPN.forEach((t, i) => combo("pv_top_" + t, HAIRS[i], "none", t, BOTN[i % 4]));
 sprite("pv_dog", { w: 40, h: 26, outline: "N" }, stamp("hairb_long", 0, 1), stamp("bot_pants", 0, 1), stamp("top_tee", 0, 1), stamp("head", 0, 1), stamp("hair_short", 0, 1), stamp("akita", 19, 12));
+sprite("pv_cat", { w: 16, h: 24, outline: "N" }, stamp("bot_pants", 0, 0), stamp("top_tee", 0, 0), stamp("head", 0, 0), stamp("hair_short", 0, 0), stamp("cat", 0, 0));
+sprite("pv_cat2", { w: 16, h: 24, outline: "N" }, stamp("hairb_long", 0, 0), stamp("bot_skirt", 0, 0), stamp("top_kimono", 0, 0), stamp("head", 0, 0), stamp("hair_long", 0, 0), stamp("hat_kasa", 0, 0), stamp("cat", 0, 0));
 sheet("pv", ["pv_*", "akita", "akita_w"], { cols: 10, pad: 2 });

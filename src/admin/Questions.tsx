@@ -1,7 +1,7 @@
 // Вкладка «Вопросы»: два вида — «По префектурам» (вопросы префектуры по порядку, флаги, призы)
 // и «Списком» (вся база с фильтрами). Редактор вопроса — общий.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { QMode, Question, Settings } from '../shared/types';
+import type { Difficulty, QMode, Question, Settings } from '../shared/types';
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
@@ -15,6 +15,8 @@ type View = 'prefs' | 'list';
 const RANKS = [1, 2, 3, 4];
 const rankName = (r: number) => (r === 1 ? 'главный' : `${r}-й`);
 const isFlag = (q: Question) => q.kind === 'flag';
+const DIFF: Record<Difficulty, string> = { easy: 'лёгкий', medium: 'средний', hard: 'сложный' };
+const short = (t: string, n = 60) => (t.length > n ? t.slice(0, n) + '…' : t);
 
 function emptyQuestion(topic: string): Question {
   return { id: uid(12), text: '', answers: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }], correct: 0, topic };
@@ -34,6 +36,11 @@ export function QBadges({ q }: { q: Question }) {
       {q.mode === 'cycle'
         ? <span class="qb cycle" title="Повторяется, пока не ответят верно; правильный ответ при ошибке не показывается">🔁 до верного</span>
         : q.pref ? <span class="qb once" title="Задаётся один раз, даже при неверном ответе">1× разовый</span> : null}
+      {q.difficulty && <span class={'qb diff-' + q.difficulty} title="Сложность">{DIFF[q.difficulty]}</span>}
+      {q.calib && <span class="qb calib" title="Обязательно попадёт в калибровку">🎯 калибровка</span>}
+      {q.after && <span class="qb" title="Не появится раньше связанного вопроса">⛓ после вопроса</span>}
+      {q.afterPref && <span class="qb" title="Не появится, пока префектуру не открыли">⛓ после: {PREF[q.afterPref]?.ru}</span>}
+      {q.note && <span class="qb note" title={q.note}>📝 заметка</span>}
     </span>
   );
 }
@@ -41,7 +48,7 @@ export function QBadges({ q }: { q: Question }) {
 export function Questions({ questions, settings, onChange, newIn }: { questions: Question[]; settings: Settings; onChange: () => void; newIn?: { topic: string; n: number } | null }) {
   const store = getStore();
   const [view, setView] = useState<View>(() => (localStorage.getItem('bg_admin_qview') as View) || 'prefs');
-  const [filter, setFilter] = useState({ topic: '', q: '', pref: '', kind: '' });
+  const [filter, setFilter] = useState({ topic: '', q: '', pref: '', kind: '', diff: '' });
   const [sel, setSel] = useState<number>(() => Number(localStorage.getItem('bg_admin_qpref')) || 1);
   const [edit, setEdit] = useState<Question | null>(null);
   const [busy, setBusy] = useState(false);
@@ -147,7 +154,7 @@ export function Questions({ questions, settings, onChange, newIn }: { questions:
         : <ListView questions={questions} settings={settings} filter={filter} setFilter={setFilter}
             onEdit={(q) => setEdit(structuredClone(q))} onCopy={(q) => setEdit({ ...structuredClone(q), id: uid(12), order: undefined })} onDel={del} />}
 
-      {edit && <QuestionEditor q={edit} settings={settings} busy={busy} onSave={save} onClose={() => setEdit(null)} />}
+      {edit && <QuestionEditor q={edit} questions={questions} settings={settings} busy={busy} onSave={save} onClose={() => setEdit(null)} />}
     </div>
   );
 }
@@ -246,8 +253,8 @@ function PrefView({ settings, byPref, sel, setSel, busy, onEdit, onDel, onMove, 
 function ListView({ questions, settings, filter, setFilter, onEdit, onCopy, onDel }: {
   questions: Question[];
   settings: Settings;
-  filter: { topic: string; q: string; pref: string; kind: string };
-  setFilter: (f: { topic: string; q: string; pref: string; kind: string }) => void;
+  filter: { topic: string; q: string; pref: string; kind: string; diff: string };
+  setFilter: (f: { topic: string; q: string; pref: string; kind: string; diff: string }) => void;
   onEdit: (q: Question) => void;
   onCopy: (q: Question) => void;
   onDel: (q: Question) => void;
@@ -260,7 +267,8 @@ function ListView({ questions, settings, filter, setFilter, onEdit, onCopy, onDe
   const list = useMemo(() => questions.filter((q) =>
     (!filter.topic || q.topic === filter.topic) &&
     (!filter.pref || String(q.pref ?? '') === filter.pref || (filter.pref === 'special' && isSpecialQ(settings, q)) || (filter.pref === 'none' && !q.pref)) &&
-    (!filter.kind || (filter.kind === 'prize' && q.prize) || (filter.kind === 'cycle' && q.mode === 'cycle') || (filter.kind === 'flag' && isFlag(q))) &&
+    (!filter.kind || (filter.kind === 'prize' && q.prize) || (filter.kind === 'cycle' && q.mode === 'cycle') || (filter.kind === 'flag' && isFlag(q)) || (filter.kind === 'calib' && q.calib) || (filter.kind === 'link' && (q.after || q.afterPref)) || (filter.kind === 'note' && q.note) || (filter.kind === 'photo' && q.note && !q.media?.url)) &&
+    (!filter.diff || (filter.diff === 'none' ? !q.difficulty : q.difficulty === filter.diff)) &&
     (!filter.q || q.text.toLowerCase().includes(filter.q.toLowerCase()))), [questions, filter]);
   return (
     <>
@@ -283,6 +291,15 @@ function ListView({ questions, settings, filter, setFilter, onEdit, onCopy, onDe
           <option value="prize">🏆 Призовые</option>
           <option value="cycle">🔁 До верного ответа</option>
           <option value="flag">🚩 Флаговые</option>
+          <option value="calib">🎯 Калибровка</option>
+          <option value="link">⛓ Связанные</option>
+          <option value="note">📝 С заметкой</option>
+          <option value="photo">📷 Ждут фото</option>
+        </select>
+        <select value={filter.diff} onChange={(e) => setFilter({ ...filter, diff: (e.target as HTMLSelectElement).value })}>
+          <option value="">Любая сложность</option>
+          {(Object.keys(DIFF) as Difficulty[]).map((d) => <option value={d}>{DIFF[d]}</option>)}
+          <option value="none">без сложности</option>
         </select>
         <input class="inp-s" placeholder="Поиск" value={filter.q} onInput={(e) => setFilter({ ...filter, q: (e.target as HTMLInputElement).value })} />
         <span class="muted small">показано {list.length}</span>
@@ -316,7 +333,7 @@ function ListView({ questions, settings, filter, setFilter, onEdit, onCopy, onDe
 
 // ───────── редактор ─────────
 
-function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Question; settings: Settings; busy: boolean; onSave: (q: Question) => void; onClose: () => void }) {
+function QuestionEditor({ q: q0, questions, settings, busy, onSave, onClose }: { q: Question; questions: Question[]; settings: Settings; busy: boolean; onSave: (q: Question) => void; onClose: () => void }) {
   const [q, setQ] = useState<Question>(q0);
   const [uploading, setUploading] = useState(false);
   // файлы из папки media/ (раздаёт локальный сервер) — для подсказок в поле имени
@@ -342,6 +359,11 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
     if (!out.pref) { delete out.prize; delete out.order; if (out.kind === 'flag') delete out.kind; }
     if (!out.prize) delete out.prize;
     if (out.mode !== 'cycle') delete out.mode;
+    if (!out.difficulty) delete out.difficulty;
+    if (!out.calib) delete out.calib;
+    if (!out.after) delete out.after;
+    if (!out.afterPref) delete out.afterPref;
+    if (!out.note?.trim()) delete out.note;
     return out;
   };
   return (
@@ -383,6 +405,32 @@ function QuestionEditor({ q: q0, settings, busy, onSave, onClose }: { q: Questio
               </select></label>}
               {!!q.prize && <span class="muted small">Сами призы по рангам — на вкладке «Настройки».</span>}
             </div>
+          </div>
+        )}
+
+        {!flag && (
+          <div class="col" style={{ gap: 6 }}>
+            <div class="row wrap">
+              <label>Сложность <select value={q.difficulty ?? ''} onChange={(e) => set({ difficulty: ((e.target as HTMLSelectElement).value || undefined) as Difficulty | undefined })}>
+                <option value="">—</option>
+                {(Object.keys(DIFF) as Difficulty[]).map((d) => <option value={d}>{DIFF[d]}</option>)}
+              </select></label>
+              <label title="Вопрос обязательно попадёт в калибровку своей темы: лёгкий — в первый круг, средний — во второй"><input type="checkbox" checked={!!q.calib} onChange={(e) => set({ calib: (e.target as HTMLInputElement).checked || undefined })} /> 🎯 В калибровку</label>
+              <label title="Вопрос не появится, пока эту префектуру не открыли на карте">Не раньше открытия <select value={String(q.afterPref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ afterPref: v ? Number(v) : undefined }); }}>
+                <option value="">—</option>
+                {PREFS.map((p) => <option value={String(p.code)}>{p.ru}</option>)}
+              </select></label>
+            </div>
+            <label class="row" style={{ gap: 6 }} title="Вопросы связаны: этот не появится, пока не прозвучал выбранный">Не раньше вопроса
+              <select class="grow" style={{ minWidth: 0, maxWidth: 520 }} value={q.after ?? ''} onChange={(e) => set({ after: (e.target as HTMLSelectElement).value || undefined })}>
+                <option value="">—</option>
+                {questions.filter((x) => x.id !== q.id && !isFlag(x) && x.topic === q.topic).map((x) => <option value={x.id}>{short(x.text)}</option>)}
+                <optgroup label="Другие темы">
+                  {questions.filter((x) => x.id !== q.id && !isFlag(x) && x.topic !== q.topic).map((x) => <option value={x.id}>{short(x.text)}</option>)}
+                </optgroup>
+              </select>
+            </label>
+            <input class="inp-s" placeholder="Заметка для себя (в игре не видна), например какое фото найти" value={q.note ?? ''} onInput={(e) => set({ note: (e.target as HTMLInputElement).value })} />
           </div>
         )}
 

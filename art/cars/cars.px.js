@@ -164,3 +164,47 @@ sprite("emb_honda", `
   SM.S...S.MS
   .SM.....MS.
   ..SSSSSSS..`)
+
+// мини-эмблемы 7×6 — в уголке значка магазина на карте (магазин с автосалоном этой марки)
+sprite("embs_subaru", `
+  .NNNNN.
+  NNNNSNN
+  NSNNNNN
+  NNNSNSN
+  NSSNNNN
+  .NNNNN.`)
+sprite("embs_nissan", `
+  .SSSSS.
+  SM...MS
+  SSSSSSS
+  SKKKKKS
+  SSSSSSS
+  .SSSSS.`)
+sprite("embs_toyota", `
+  .SSSSS.
+  SMSSSMS
+  SM.S.MS
+  SM.S.MS
+  .SMSMS.
+  ..SSS..`)
+sprite("embs_mitsubishi", `
+  ...R...
+  ..RRR..
+  ...R...
+  .R...R.
+  RRR.RRR
+  .R...R.`)
+sprite("embs_mazda", `
+  .SSSSS.
+  SM...MS
+  SSS.SSS
+  SM.S.MS
+  SM...MS
+  .SSSSS.`)
+sprite("embs_honda", `
+  SS...SS
+  SS...SS
+  SSSSSSS
+  SS...SS
+  SS...SS
+  .S...S.`)

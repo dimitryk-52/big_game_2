@@ -4,9 +4,11 @@
 // после перезагрузки ТВ игра продолжается с начала текущего хода.
 import type {
   BonusId, DragonPublic, GameMsg, GameState, GroupGameId, GroupPublic, IaiRound, InputMsg, Player, PublicQuestion, Question, QContext, RewardType, Settings, SoloGameId, Stage, TopicId,
+  Difficulty, KaijuPublic,
 } from '../shared/types';
-import { BONUS_INFO, COIN_DMG, FARM_NO, OKINAWA_NOTE, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
+import { BONUS_INFO, COIN_DMG, catTopicOf, kaijuSettings, sumoSettings, FARM_NO, OKINAWA_NOTE, GROUP_GAMES, REWARD_INFO, SOLO_GAMES, dragonSettings, groupTime, iaidoRounds, isSpecialQ, soloAt, tasksForPref } from '../shared/settings';
 import { FISH, cutForGrams, pieceGrams, randomTarget } from '../games/sashimi';
+import { botHunter, botZilla, kaijuAwards, startCell, stepCell } from '../games/kaiju';
 import { NOODLES, noodleOf, noodleScore, parseNoodle } from '../games/noodles';
 import { ANGLE_MAX, ANGLE_MIN, PIT_TRIES, parsePits, pitDistance, randomWind } from '../games/cherry';
 import { buildDebugScene } from './debugScenes';
@@ -64,6 +66,10 @@ interface Secrets {
   soloPlayed?: Record<string, Record<number, number>>;
   /** вопросы префектур, которые больше не задаются (одноразовые заданы, цикличные решены) */
   qDone?: string[];
+  /** все заданные за игру вопросы — для связки «не раньше вопроса…» */
+  asked?: string[];
+  /** финальное сумо: скрытый урон каждого и запас хода до края */
+  sumo?: { dmg: Record<string, number>; cap: number; fixed: boolean };
   /** вопросы-флаги: текущие неверные варианты и уже выбранные (их больше не показываем) */
   flags?: Record<string, { decoys: number[]; banned: number[] }>;
   /** префектуры, чей флаг уже угадали, — по порядку (первые угаданные игроки скорее забыли) */
@@ -146,6 +152,7 @@ export class GameEngine {
       this.s.race = null;
       this.s.g = null;
       this.s.dr = null;
+      this.s.kj = null;
       this.s.paused = false;
       this.s.pausedAt = null;
       // вращение призового кольца перезагрузку не переживает: попытку возвращаем
@@ -157,7 +164,7 @@ export class GameEngine {
     } else {
       this.s = {
         v: 0, room, stage: { t: 'lobby' }, players: {}, joinOrder: [], turnOrder: [], turnIdx: 0, round: 1,
-        prefs: {}, q: null, duel: null, rhythm: null, g: null, dr: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
+        prefs: {}, q: null, duel: null, rhythm: null, g: null, dr: null, kj: null, log: [], settings, paused: false, phase: 'lobby', debug: null,
       };
       this.sec = { pins: {}, used: [], qn: 0, logN: 0, calibIdx: 0, landingIdx: 0, rhythmN: 0, ring: {} };
     }
@@ -200,6 +207,7 @@ export class GameEngine {
     if (m.t === 'pick' && m.kind === 'noodle') return this.onNoodle(m.pid, m.value);
     if (m.t === 'pick' && m.kind === 'cherry') return this.onPit(m.pid, m.value);
     if (m.t === 'pick' && m.kind === 'race') return this.onRace(m.pid, m.value);
+    if (m.t === 'pick' && m.kind === 'kaiju') return this.onKaiju(m.pid, m.value);
     this.feed(m);
   }
 
@@ -290,9 +298,11 @@ export class GameEngine {
         this.s.duel = null;
         this.s.g = null;
         this.s.dr = null;
+      this.s.kj = null;
         void (async () => {
           try {
-            if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26, args?.game ?? 'calligraphy');
+            if (cmd === 'groupTest' && args?.game === 'sumo') { this.s.sumo = null; delete this.sec.sumo; await this.sumoFinal(ep); }
+            else if (cmd === 'groupTest') await this.groupGame(ep, PREF[args?.pref] ? +args.pref : 26, args?.game ?? 'calligraphy');
             else if (p) await this.shopVisit(ep, p, true);
           } catch (e) { if (!(e instanceof Aborted)) console.error(e); }
           if (ep === this.epoch) void this.run(ep);
@@ -551,8 +561,13 @@ export class GameEngine {
     for (let i = this.sec.calibIdx; i < total; i++) {
       await this.gate(epoch);
       const topic = topics[i % topics.length];
+      // первый круг — лёгкие, дальше — средние; помеченные «калибровка» идут первыми
+      const diff: Difficulty = i < topics.length ? 'easy' : 'medium';
+      const own = (x: Question) => x.topic === topic.id && !x.special && !x.pref;
       const q =
-        this.pickQuestion((x) => x.topic === topic.id && !x.special && !x.pref) ??
+        this.pickQuestion((x) => own(x) && !!x.calib && x.difficulty === diff, true) ??
+        this.pickQuestion((x) => own(x) && !!x.calib, true) ??
+        this.pickQuestion(own, false, diff) ??
         this.pickQuestion((x) => x.topic === topic.id && !x.special) ??
         this.pickQuestion((x) => !x.special && x.topic !== 'okinawa' && !x.pref) ??
         this.pickQuestion((x) => !x.special && x.topic !== 'okinawa');
@@ -619,6 +634,8 @@ export class GameEngine {
 
   private async turns(epoch: number) {
     for (;;) {
+      // игру восстановили посреди финальной схватки — продолжаем её
+      if (this.s.endgame?.step === 'sumo') { await this.sumoFinal(epoch); this.finish(); return; }
       // всех игроков удалили — ждём, а не крутим пустые круги
       if (!this.s.turnOrder.length) { await this.sleep(epoch, 2000); continue; }
       while (this.s.turnIdx < this.s.turnOrder.length) {
@@ -657,6 +674,7 @@ export class GameEngine {
       this.s.race = null;
       this.s.g = null;
       this.s.dr = null;
+      this.s.kj = null;
       this.setStage({ t: 'banner', text: 'Игрок удалён', sub: 'Ход переходит дальше' });
       await this.sleep(ep, 1500);
       return undefined;
@@ -710,7 +728,13 @@ export class GameEngine {
     else if (eg.step === 'final') eg.played = (eg.played ?? 0) + 1;
     else return false;
     const left = this.finalRounds() - (eg.played ?? 0);
-    if (left <= 0) { this.finish(); return true; }
+    if (left <= 0) {
+      eg.step = 'sumo';
+      this.snapshot();
+      await this.sumoFinal(epoch);
+      this.finish();
+      return true;
+    }
     if (left === 1) this.pickOutsiders();
     this.io.fx?.('finalRound', { left });
     this.setStage({
@@ -803,7 +827,9 @@ export class GameEngine {
     }
     // корм: до хода можно переманить акиту, если её хозяин стоит в соседней префектуре
     const dogNear = () => (p.bonuses.food ?? 0) > 0 && Object.values(this.s.players).some((x) => x.akita && x.id !== pid && x.pref != null && neighbors(from).includes(x.pref));
-    const moveStage = () => this.setStage({ t: 'move', pid, options, options2, ...(options3.length ? { options3 } : {}), ...(dogNear() ? { lure: true } : {}), ...(foes().length ? { challenge: foes() } : {}) });
+    // кусок сашими: так же переманивается кошка
+    const catNear = () => (p.bonuses.sashimi ?? 0) > 0 && Object.values(this.s.players).some((x) => x.cat && x.id !== pid && x.pref != null && neighbors(from).includes(x.pref));
+    const moveStage = () => this.setStage({ t: 'move', pid, options, options2, ...(options3.length ? { options3 } : {}), ...(dogNear() ? { lure: true } : {}), ...(catNear() ? { lureCat: true } : {}), ...(foes().length ? { challenge: foes() } : {}) });
     moveStage();
     // выбор: код префектуры; 'rail:<код>' — поездка по билету (на соседнюю станцию можно и пешком, и поездом); 'lure' — корм
     let choice: number | string | null | undefined;
@@ -811,6 +837,7 @@ export class GameEngine {
       choice = await this.waitInput(epoch, (m) => {
         if (m.t !== 'pick' || m.kind !== 'move' || m.pid !== pid) return undefined;
         if (m.value === 'lure') return dogNear() ? 'lure' : undefined;
+        if (m.value === 'lureCat') return catNear() ? 'lureCat' : undefined;
         if (typeof m.value === 'string' && m.value.startsWith('duel:')) return foes().includes(m.value.slice(5)) ? m.value : undefined;
         if (typeof m.value === 'string' && m.value.startsWith('rail:')) {
           const c = Number(m.value.slice(5));
@@ -819,6 +846,18 @@ export class GameEngine {
         const c = Number(m.value);
         return options.includes(c) || options2.includes(c) ? c : undefined;
       }, p.bot ? 20000 : p.online ? null : 15000); // без связи — случайный ход через 15 c
+      if (choice === 'lureCat') {
+        const owner = Object.values(this.s.players).find((x) => x.cat)!;
+        owner.cat = false;
+        p.cat = true;
+        p.bonuses.sashimi--;
+        this.log(`${p.name} переманил ириомотейскую кошку кусочком сашими у ${owner.name}`);
+        this.io.fx?.('lureCat', { pid, from: owner.id });
+        this.setStage({ t: 'banner', text: 'Кошка убежала!', sub: `${owner.name} → ${p.name}: на запах свежей рыбы`, big: true });
+        await this.sleep(epoch, 3000);
+        moveStage();
+        continue;
+      }
       if (choice !== 'lure') break;
       const owner = Object.values(this.s.players).find((x) => x.akita)!;
       owner.akita = false;
@@ -1186,6 +1225,14 @@ export class GameEngine {
       await this.sleep(epoch, this.introWait);
       await this.gate(epoch);
     }
+    // первый, кто попал на Окинаву, уходит с неё с ириомотейской кошкой
+    if (!Object.values(this.s.players).some((x) => x.cat)) {
+      p.cat = true;
+      this.log(`${p.name} подружился с ириомотейской кошкой`);
+      this.io.fx?.('cat', { pid: p.id });
+      this.setStage({ t: 'banner', text: 'Ириомотейская кошка!', sub: `Дикая кошка с острова Ириомотэ забралась на плечо к ${p.name}. Отлично знает биологию`, big: true });
+      await this.sleep(epoch, 4500);
+    }
     this.setStage({ t: 'banner', text: `${p.name} восстанавливается`, sub: 'Отдых на Окинаве: ответь, чтобы получить бонус', big: true });
     await this.sleep(epoch, 2500);
     const q = this.pickQuestion((x) => x.topic === 'okinawa') ?? this.pickQuestion((x) => !x.special);
@@ -1273,7 +1320,9 @@ export class GameEngine {
           const sTopic = pickV.startsWith('special:') ? pickV.slice(8) : null;
           if (sTopic) asker.specialTopics!.splice(asker.specialTopics!.indexOf(sTopic), 1);
           // вопрос купленной спецтемы (или любой спецтемы); если их нет — обычный боевой
-          q = (sTopic ? this.pickQuestion((x) => x.topic === sTopic) : null) ?? this.pickQuestion((x) => !!x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
+          // по отстающему спецвопрос бьёт вопросом средней сложности (если такие есть) — шанс пережить сильную атаку
+          const soft: Difficulty | undefined = this.lagging(target.id) ? 'medium' : undefined;
+          q = (sTopic ? this.pickQuestion((x) => x.topic === sTopic, false, soft) : null) ?? this.pickQuestion((x) => !!x.special, false, soft) ?? this.pickQuestion((x) => topics.includes(x.topic));
         } else {
           q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         }
@@ -1761,6 +1810,7 @@ export class GameEngine {
 
   private async groupGame(epoch: number, code: number, game: GroupGameId) {
     if (game === 'dragon') return this.dragonGame(epoch, code);
+    if (game === 'godzilla') return this.kaijuGame(epoch, code);
     const st = this.s.settings;
     let tasks = tasksForPref(st, game, code);
     // сашими: в родной префектуре рыбы — её задания (если задание не привязано к префектуре напрямую)
@@ -1909,6 +1959,8 @@ export class GameEngine {
       p.yen += pr.yen;
       p.stars += pr.stars;
       awards[id] = [pr.yen ? `+¥${pr.yen}` : '', pr.stars ? `+${pr.stars}★` : ''].filter(Boolean).join(' ');
+      // сашими: победителю достаётся лучший кусок
+      if (g.game === 'sashimi' && lv === 0) { p.bonuses.sashimi = (p.bonuses.sashimi ?? 0) + 1; awards[id] += ' + кусочек'; }
     }
     g.points = points;
     g.places = places;
@@ -2267,6 +2319,297 @@ export class GameEngine {
     this.skipCbs.delete(stop);
   }
 
+  // ───────── финальная схватка: сумо ─────────
+
+  /** Все — на дохё. По кругу каждый выбирает тему (как в дуэли); отвечают все. Ведущий круга ответил верно — все ошибшиеся
+   *  отъезжают к краю на его силу в теме (спецвопрос — specialPower, монетка +1). Ошибся сам — отъезжает сам.
+   *  Запас хода до края скрыт: он считается от силы игроков и числа спецвопросов; в первых кругах (grace) никто не вылетает,
+   *  а после них запас поправляется так, чтобы даже молчавший всё время устоял. С круга rampFrom толчки растут. */
+  private async sumoFinal(epoch: number) {
+    const st = this.s.settings;
+    const cfg = sumoSettings(st);
+    const ids = (this.s.turnOrder.length ? this.s.turnOrder : this.s.joinOrder).filter((id) => this.s.players[id]);
+    if (!cfg.enabled || ids.length < 2) return;
+    const topics = this.combatTopics().map((t) => t.id);
+    const sec = (this.sec.sumo ??= { dmg: {}, cap: 0, fixed: false });
+    let su = this.s.sumo;
+    if (!su) {
+      su = this.s.sumo = { id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), phase: 'intro', ring: ids, alive: [...ids], out: [], pos: Object.fromEntries(ids.map((id) => [id, 0])), asker: null, circle: 1 };
+      // типичный удар: медиана средней силы игроков; спецвопросы бьют сильнее — добавляем запас
+      const mean = (p: Player) => (topics.length ? topics.reduce((a, t) => a + (p.stats[t] ?? st.baseStrength), 0) / topics.length : st.baseStrength);
+      const hit = Math.max(1, median(ids.map((id) => mean(this.s.players[id]))));
+      const specials = ids.reduce((a, id) => a + (this.s.players[id].specials ?? 0), 0);
+      sec.cap = cfg.misses * hit + (specials * st.specialPower * 0.5 * (ids.length - 1)) / ids.length;
+      sec.dmg = Object.fromEntries(ids.map((id) => [id, 0]));
+      this.log('Финальная схватка: сумо');
+      this.io.fx?.('sumo', { kind: 'start' });
+      this.setStage({ t: 'sumo' });
+      await this.sleep(epoch, this.hostPaced ? 36e5 : 10000);
+    }
+    const S = su;
+    const live = () => S.alive.filter((id) => this.s.players[id]);
+    const place = (id: string) => Math.min(1, sec.dmg[id] / sec.cap);
+    const ms = st.pickTime * 1000;
+    while (live().length > 1) {
+      const mult = 1 + cfg.ramp * Math.max(0, S.circle - cfg.rampFrom + 1);
+      const grace = S.circle <= cfg.grace;
+      for (const pid of [...S.ring]) {
+        S.alive = live();
+        if (S.alive.length <= 1) break;
+        if (!S.alive.includes(pid)) continue;
+        await this.gate(epoch);
+        const asker = this.s.players[pid];
+        S.asker = pid;
+        S.phase = 'pick';
+        S.fell = [];
+        this.setStage({ t: 'duelPick', pid, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: false, sumo: true });
+        const choice = await this.waitInput(epoch, (m) => {
+          if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== pid) return undefined;
+          if (m.value === 'special' && asker.specials > (asker.specialTopics?.length ?? 0)) return 'special';
+          if (typeof m.value === 'string' && m.value.startsWith('special:') && asker.specialTopics?.includes(m.value.slice(8))) return m.value;
+          return topics.includes(m.value) ? (m.value as string) : undefined;
+        }, ms + 400);
+        const pickV = choice ?? (await this.topicReel(epoch, asker, 'duel')) ?? pick(topics);
+        let special = false;
+        let q: Question | null;
+        if (pickV === 'special' || pickV.startsWith('special:')) {
+          asker.specials--;
+          this.bump('specials', asker.id);
+          special = true;
+          const sTopic = pickV.startsWith('special:') ? pickV.slice(8) : null;
+          if (sTopic) asker.specialTopics!.splice(asker.specialTopics!.indexOf(sTopic), 1);
+          // кто-то уже у самого края — спецвопрос средней сложности (если есть): шанс пережить сильный толчок
+          const soft: Difficulty | undefined = S.alive.some((id) => id !== pid && place(id) >= 0.6) ? 'medium' : undefined;
+          q = (sTopic ? this.pickQuestion((x) => x.topic === sTopic, false, soft) : null) ?? this.pickQuestion((x) => !!x.special, false, soft) ?? this.pickQuestion((x) => topics.includes(x.topic));
+        } else {
+          q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
+        }
+        if (!q) continue;
+        const tName = st.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
+        const everyone = [...S.alive, ...S.out.filter((id) => this.s.players[id])];
+        const res = await this.ask(epoch, q, 'sumo', `Сумо · круг ${S.circle} · ${special ? 'Спецвопрос · ' : ''}${tName} · спрашивает ${asker.name}`, everyone, q.time ?? st.duelTime);
+        const okA = res[pid] === q.correct;
+        const coin = this.s.q?.coins?.[pid];
+        const power = ((special ? st.specialPower : asker.stats[q.topic] ?? st.baseStrength) + (coin ? COIN_DMG[coin] : 0)) * mult;
+        const pushed: string[] = [];
+        const results: Record<string, string> = {};
+        if (okA) {
+          results[pid] = 'Толкает!';
+          for (const id of S.alive) if (id !== pid) { if (res[id] === q.correct) results[id] = 'Устоял'; else { pushed.push(id); results[id] = 'Толчок!'; } }
+        } else {
+          pushed.push(pid);
+          results[pid] = 'Оступился!';
+          for (const id of S.alive) if (id !== pid && res[id] === q.correct) results[id] = 'Устоял';
+        }
+        // выбывшие играют за гостевые деньги
+        for (const id of S.out) {
+          const p = this.s.players[id];
+          if (!p || res[id] !== q.correct) continue;
+          const y = rewardYen(st.reward.otherCorrectYen, ratesOf(this.s));
+          p.yen += y;
+          results[id] = `+¥${y}`;
+        }
+        await this.reveal(epoch, results);
+        // толчок
+        S.prev = { ...S.pos };
+        for (const id of pushed) sec.dmg[id] = (sec.dmg[id] ?? 0) + power;
+        // в «безопасных» кругах никто не вылетает: стоят у края
+        for (const id of S.alive) S.pos[id] = grace ? Math.min(0.9, place(id)) : place(id);
+        const fell = grace ? [] : pushed.filter((id) => sec.dmg[id] >= sec.cap).sort((a, b) => sec.dmg[b] - sec.dmg[a]);
+        S.phase = 'push';
+        this.setStage({ t: 'sumo' });
+        if (pushed.length) this.io.fx?.('sumo', { kind: 'push', pids: pushed });
+        await this.sleep(epoch, pushed.length ? 2600 : 1200);
+        if (fell.length) {
+          S.fell = fell;
+          S.out.push(...fell);
+          S.alive = S.alive.filter((id) => !fell.includes(id));
+          for (const id of fell) this.log(`Сумо: ${this.s.players[id]?.name} вытолкнут с дохё`);
+          this.io.fx?.('sumo', { kind: 'out', pids: fell });
+          this.emit();
+          await this.sleep(epoch, 3200);
+        }
+        S.prev = undefined;
+        this.snapshot();
+      }
+      // круг пройден: после «безопасных» кругов поправляем запас — даже молчавший всё время должен устоять
+      if (S.circle === cfg.grace && !sec.fixed) {
+        sec.fixed = true;
+        const worst = Math.max(0, ...live().map((id) => sec.dmg[id] ?? 0));
+        sec.cap = Math.max(sec.cap, worst / 0.85);
+        for (const id of live()) S.pos[id] = place(id);
+      }
+      S.circle++;
+    }
+    // ── итоги: победитель — первый, выбывшие — с конца ──
+    S.alive = live();
+    const order = [...S.alive, ...[...S.out].reverse()].filter((id) => this.s.players[id]);
+    const places: Record<string, number> = {};
+    const awards: Record<string, string> = {};
+    order.forEach((id, i) => {
+      const p = this.s.players[id];
+      places[id] = i + 1;
+      const pr0 = st.group.prizes[i] ?? { yen: 0, stars: 0 };
+      const yen = rewardYen(Math.round(pr0.yen * cfg.mult), ratesOf(this.s)), stars = Math.round(pr0.stars * cfg.mult);
+      p.yen += yen;
+      p.stars += stars;
+      awards[id] = [yen ? `+¥${yen}` : '', stars ? `+${stars}★` : ''].filter(Boolean).join(' ');
+    });
+    if (order[0]) { this.bump('sumoWin', order[0]); this.log(`Ёкодзуна — ${this.s.players[order[0]].name}!`); }
+    S.places = places;
+    S.awards = awards;
+    S.asker = null;
+    S.phase = 'results';
+    this.setStage({ t: 'sumo' });
+    this.io.fx?.('sumo', { kind: 'win' });
+    this.io.fx?.('prize', { game: 'sumo' });
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 15000);
+    this.s.sumo = null;
+    delete this.sec.sumo;
+  }
+
+  // ───────── «Годзилла» ─────────
+
+  /** желание Годзиллы шагнуть: исполняется, как только выйдет время шага */
+  private kaijuWant: number | null = null;
+  private kaijuLastStep = 0;
+  private kaijuN = 0;
+  private kaijuEmitAt = 0;
+
+  /** лидер по состоянию — Годзилла, остальные — охотники; идёт cfg.time секунд или пока у Годзиллы не кончатся жизни */
+  private async kaijuGame(epoch: number, code: number) {
+    const st = this.s.settings;
+    const cfg = kaijuSettings(st);
+    const ids = this.s.joinOrder.filter((id) => this.s.players[id]);
+    if (ids.length < 2) return;
+    const top = Math.max(...ids.map((id) => netWorth(this.s.players[id], st)));
+    const zilla = pick(ids.filter((id) => netWorth(this.s.players[id], st) === top));
+    const hunters = ids.filter((id) => id !== zilla);
+    const cols = Math.max(3, Math.min(9, cfg.cols | 0)), rows = Math.max(3, Math.min(7, cfg.rows | 0));
+    const start = startCell({ cols, rows });
+    const k: KaijuPublic = {
+      id: (this.sec.groupN = (this.sec.groupN ?? 0) + 1), pref: code, phase: 'intro', zilla, hunters, cols, rows,
+      startAt: 0, endAt: 0, pos: start, face: 1, hp: cfg.hp, maxHp: cfg.hp, stunUntil: 0, down: [start], stomped: 0,
+      shells: [], ready: {}, hits: Object.fromEntries(hunters.map((id) => [id, 0])), shots: {},
+      // перезарядка рассчитана на 6 охотников: если их меньше, каждый стреляет чаще
+      cfg: { stepMs: cfg.stepMs, smashMs: cfg.smashMs, fuseMs: cfg.fuseMs, reloadMs: Math.round(cfg.reloadMs * Math.max(0.4, Math.min(1.5, hunters.length / 6))) }, busyUntil: 0,
+    };
+    this.s.kj = k;
+    this.kaijuWant = null;
+    this.kaijuLastStep = 0;
+    this.setStage({ t: 'kaiju' });
+    this.log(`Годзилла выходит из залива: ${this.s.players[zilla].name} против всех`);
+    // ведущий объясняет правила
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 9000);
+
+    k.phase = 'play';
+    k.startAt = this.now + 3500;
+    k.endAt = k.startAt + cfg.time * 1000;
+    this.emit();
+    this.io.fx?.('kaiju', { kind: 'start' });
+    let stopped = false;
+    const stop = () => { stopped = true; };
+    this.skipCbs.add(stop);
+    const botAt: Record<string, number> = {};
+    while (!stopped && k.hp > 0 && this.now < k.endAt) {
+      await new Promise<void>((r) => setT(r, 50));
+      this.check(epoch);
+      const t = this.now;
+      if (t < k.startAt) continue;
+      let dirty = false;
+      // боты: Годзилла думает раз в шаг, охотники стреляют с задержкой после перезарядки
+      if (this.s.players[k.zilla]?.bot && this.kaijuWant == null && t >= k.busyUntil + 120) { const d = botZilla(k, t); if (d >= 0) this.kaijuWant = d; }
+      for (const id of k.hunters) {
+        if (!this.s.players[id]?.bot || (k.ready[id] ?? 0) > t) continue;
+        botAt[id] ??= t + 300 + randInt(1500);
+        if (t >= botAt[id]) { delete botAt[id]; this.kaijuFire(k, id, botHunter(k), t); dirty = true; }
+      }
+      // шаг Годзиллы
+      if (this.kaijuWant != null && t >= k.busyUntil) {
+        const to = stepCell(k, k.pos, this.kaijuWant);
+        if (this.kaijuWant === 1) k.face = 1; else if (this.kaijuWant === 3) k.face = -1;
+        this.kaijuWant = null;
+        if (to >= 0) {
+          k.pos = to;
+          this.kaijuLastStep = t;
+          k.busyUntil = t + (k.down.includes(to) ? k.cfg.stepMs : k.cfg.smashMs);
+          if (!k.down.includes(to)) { k.down.push(to); k.stomped++; this.io.fx?.('kaiju', { kind: 'stomp', cell: to }); }
+          else this.io.fx?.('kaiju', { kind: 'step', cell: to });
+          dirty = true;
+        }
+      }
+      // снаряды падают
+      const landed = k.shells.filter((s) => s.at <= t);
+      if (landed.length) {
+        k.shells = k.shells.filter((s) => s.at > t);
+        for (const s of landed) {
+          const hit = s.cell === k.pos && t >= k.stunUntil && k.hp > 0;
+          if (hit) {
+            k.hp--;
+            k.stunUntil = t + cfg.stunMs;
+            k.hits[s.pid] = (k.hits[s.pid] ?? 0) + 1;
+          }
+          this.io.fx?.('kaiju', { kind: hit ? 'hit' : 'boom', cell: s.cell, pid: s.pid });
+        }
+        dirty = true;
+      }
+      // рассылаем не чаще раза в 120 мс
+      if (dirty && t - this.kaijuEmitAt >= 120) { this.kaijuEmitAt = t; this.emit(); }
+      else if (dirty) this.pT(() => { if (this.s.kj === k) this.emit(); }, 130);
+    }
+    this.skipCbs.delete(stop);
+    k.shells = [];
+    k.endAt = Math.min(k.endAt, this.now);
+
+    // ── итоги: деньги получают все ──
+    const downed = k.hp <= 0;
+    const aw = kaijuAwards(k, cfg);
+    const awards: Record<string, string> = {};
+    const stars: string[] = [];
+    for (const [id, a] of Object.entries(aw)) {
+      const p = this.s.players[id];
+      if (!p) continue;
+      const yen = rewardYen(a.yen, ratesOf(this.s));
+      p.yen += yen;
+      if (a.star) { p.stars += 1; stars.push(id); }
+      awards[id] = `+¥${yen}` + (a.star ? ' +1★' : '');
+    }
+    this.bump('group:godzilla', k.zilla, downed ? 0 : 3);
+    for (const id of stars) if (id !== k.zilla) this.bump('group:godzilla', id, 3);
+    k.awards = awards;
+    k.stars = stars;
+    k.phase = 'results';
+    this.emit();
+    this.io.fx?.('kaiju', { kind: downed ? 'down' : 'win' });
+    this.io.fx?.('prize', { game: 'godzilla' });
+    this.log(downed ? `Годзилла повержен! Растоптано домов: ${k.stomped}` : `Годзилла (${this.s.players[k.zilla]?.name}) растоптал ${k.stomped} домов и ушёл в залив`);
+    await this.sleep(epoch, this.hostPaced ? 36e5 : 12000);
+    this.s.kj = null;
+    this.emit();
+  }
+
+  private kaijuFire(k: KaijuPublic, pid: string, cell: number, t: number) {
+    if (!(cell >= 0 && cell < k.cols * k.rows) || (k.ready[pid] ?? 0) > t + 150) return false;
+    k.ready[pid] = t + k.cfg.reloadMs;
+    k.shots[pid] = (k.shots[pid] ?? 0) + 1;
+    k.shells.push({ n: ++this.kaijuN, pid, cell, at: t + k.cfg.fuseMs });
+    this.io.fx?.('kaiju', { kind: 'fire', cell, pid });
+    return true;
+  }
+
+  /** телефон: Годзилла — { id, dir }, охотник — { id, cell } */
+  private onKaiju(pid: string, v: any) {
+    const k = this.s.kj;
+    const t = this.now;
+    if (!k || k.id !== v?.id || k.phase !== 'play' || t < k.startAt || t >= k.endAt || k.hp <= 0) return;
+    if (pid === k.zilla) {
+      const d = Number(v.dir);
+      if (Number.isInteger(d) && d >= 0 && d < 4 && stepCell(k, k.pos, d) >= 0) this.kaijuWant = d;
+    } else if (k.hunters.includes(pid)) {
+      if (this.kaijuFire(k, pid, Number(v.cell), t)) this.emit();
+    }
+  }
+
   private onDragon(m: Extract<InputMsg, { t: 'dragon' }>) {
     const d = this.s.dr;
     if (!d || d.id !== m.id || d.phase !== 'play' || !d.alive.includes(m.pid) || !Array.isArray(m.miss)) return;
@@ -2278,14 +2621,34 @@ export class GameEngine {
   // ───────── вопросы ─────────
 
   /** freshOnly — только ещё не заданные (иначе, когда свежие кончились, вопросы идут по второму кругу) */
-  private pickQuestion(f: (q: Question) => boolean, freshOnly = false): Question | null {
+  /** вопрос ещё рано задавать: связанный с ним не прозвучал или его префектура не открыта */
+  private tooEarly(q: Question): boolean {
+    if (q.after && this.questions.some((x) => x.id === q.after) && !(this.sec.asked ?? []).includes(q.after)) return true;
+    if (q.afterPref && !this.s.prefs[q.afterPref]?.rev) return true;
+    return false;
+  }
+
+  /** игрок отстаёт: его состояние ниже медианы — по нему спецвопросы бьют вопросами средней сложности */
+  private lagging(pid: string): boolean {
+    const st = this.s.settings;
+    const nw = this.alivePids().map((id) => netWorth(this.s.players[id], st));
+    const p = this.s.players[pid];
+    return !!p && nw.length > 1 && netWorth(p, st) < median(nw);
+  }
+
+  /** prefer — желаемая сложность: если такие вопросы среди подходящих есть, выбор только из них */
+  private pickQuestion(f: (q: Question) => boolean, freshOnly = false, prefer?: Difficulty): Question | null {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
     const st = this.s.settings;
     const done = this.sec.qDone ?? [];
-    const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
+    const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && !this.tooEarly(q) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
     if (!all.length) return null;
-    const fresh = all.filter((q) => !this.sec.used.includes(q.id));
+    let fresh = all.filter((q) => !this.sec.used.includes(q.id));
     if (freshOnly && !fresh.length) return null;
+    if (prefer) {
+      const want = (fresh.length ? fresh : all).filter((q) => q.difficulty === prefer);
+      if (want.length) { const q = pick(want); if (!this.sec.used.includes(q.id)) this.sec.used.push(q.id); return q; }
+    }
     const q = pick(fresh.length ? fresh : all);
     if (!fresh.length) this.sec.used = this.sec.used.filter((id) => !all.some((x) => x.id === id));
     this.sec.used.push(q.id);
@@ -2294,6 +2657,7 @@ export class GameEngine {
 
   private async ask(epoch: number, q: Question, context: QContext, title: string, participants: string[], timeSec: number, removed: Record<string, number[]> = {}, pref: number | null = null, extra: { prize?: number; cycle?: boolean } = {}): Promise<Record<string, number | null>> {
     const n = ++this.sec.qn;
+    (this.sec.asked ??= []).push(q.id);
     this.curCorrect = q.correct;
     const reading = this.hostPaced;
     const pq: PublicQuestion = {
@@ -2306,6 +2670,9 @@ export class GameEngine {
       ...(extra.prize ? { prize: extra.prize } : {}),
       ...(extra.cycle ? { cycle: true } : {}),
     };
+    // кошка «отлично знает биологию»: хозяину лапа показывает ответ
+    const catOwner = Object.values(this.s.players).find((x) => x.cat);
+    if (catOwner && participants.includes(catOwner.id) && q.topic === catTopicOf(this.s.settings) && q.kind !== 'flag') pq.paw = { [catOwner.id]: q.correct };
     this.s.q = pq;
     this.choices = {};
     this.setStage({ t: 'question' });
@@ -2387,7 +2754,7 @@ export class GameEngine {
     for (const t of st.topics.filter((x) => x.combat)) { stats[t.id] = st.baseStrength; calib[t.id] = 0; }
     return {
       id: uid(10), name, color, hat: Number.isInteger(hat) && hat >= 0 && hat < HATS.length ? hat : 0, look, pref: null, hp: st.startHp, maxHp: st.startHp, yen: 0, stars: 0, stats, calib,
-      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0, cheat: 0, neko: 0, coupon: 0, scroll: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
+      bonuses: { fifty1: 0, fifty2: 0, move2: 0, turn2: 0, coin: 0, ticket: 0, food: 0, cheat: 0, neko: 0, coupon: 0, scroll: 0, sashimi: 0 }, specials: 0, prizes: [], online: true, busy: null, bot,
     };
   }
 
@@ -2513,7 +2880,7 @@ export class GameEngine {
         // монетка в дуэли: бросить на текущий вопрос, пока не показан ответ; одна на вопрос
         const q = this.s.q;
         const b = a.b as 'coin';
-        if (!q || q.n !== a.n || q.context !== 'duel' || q.revealed || q.reading || !q.participants.includes(p.id)) return reply(false, null, 'Сейчас нельзя');
+        if (!q || q.n !== a.n || !(q.context === 'duel' || (q.context === 'sumo' && this.s.sumo?.asker === p.id)) || q.revealed || q.reading || !q.participants.includes(p.id)) return reply(false, null, 'Сейчас нельзя');
         if (b !== 'coin') return reply(false, null, 'Нет такой монеты');
         if (q.coins?.[p.id]) return reply(false, null, 'Монетка уже брошена');
         if (!((p.bonuses[b] ?? 0) > 0)) return reply(false, null, 'Нет монеты');

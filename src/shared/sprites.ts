@@ -45,7 +45,7 @@ function shade(hex: string, k: number) {
 }
 
 /** что нужно для рисования персонажа */
-export type LookSrc = { color: string; hat: number; look?: Look };
+export type LookSrc = { color: string; hat: number; look?: Look; /** ириомотейская кошка на плече */ cat?: boolean };
 /** размер кадра с контуром, пиксели */
 export const CHAR_W = 18;
 export const CHAR_H = 26;
@@ -57,7 +57,7 @@ function lookOf(p: LookSrc): Look { return p.look ?? DEFAULT_LOOK; }
 
 function charKey(p: LookSrc) {
   const l = lookOf(p);
-  return [p.color, p.hat, l.skin, l.hair, l.hairC, l.hatC, l.top, l.bot, l.botC].join('|');
+  return [p.color, p.hat, l.skin, l.hair, l.hairC, l.hatC, l.top, l.bot, l.botC, p.cat ? 'cat' : ''].join('|');
 }
 
 /** собрать кадр в сетку 16×24 из цветов */
@@ -94,6 +94,7 @@ function composeChar(p: LookSrc, frame: CharFrame): HexGrid {
   put('head', dy);
   put('hair_' + hair, dy, true);
   put('hat_' + hat.id, dy);
+  if (p.cat) put('cat', dy);
   return out;
 }
 
@@ -120,7 +121,50 @@ function gridCanvas(g: HexGrid, scale: number, flip: boolean) {
   return c;
 }
 
+/** сумоист 24×30: тело (маваси — цвет игрока, кожа — как у персонажа) и голова игрока; front — анфас, иначе смотрит вправо */
+function composeSumo(p: LookSrc, front: boolean): HexGrid {
+  const l = lookOf(p);
+  const hair = HAIRS[l.hair % HAIRS.length].id;
+  const hat = HATS[((p.hat % HATS.length) + HATS.length) % HATS.length];
+  const skin = SKINS[l.skin % SKINS.length], hc = HAIR_COLORS[l.hairC % HAIR_COLORS.length];
+  const cc = CLOTH_COLORS[l.hatC % CLOTH_COLORS.length];
+  const pal: Record<string, string> = { s: skin[0], S: skin[1], h: hc[0], H: hc[1], t: p.color, T: shade(p.color, 0.68), c: cc[0], C: cc[1] };
+  const out: HexGrid = Array.from({ length: 30 }, () => Array<string | null>(24).fill(null));
+  const f = front ? 'f' : '';
+  const hatGrid = parts.get('hat' + f + '_' + hat.id);
+  let hairCut = -1;
+  if (hat.cover === 'all') hairCut = 99;
+  else if (hat.cover === 'top' && hatGrid) hatGrid.forEach((r, y) => { if (r.some(Boolean)) hairCut = y; });
+  const put = (name: string, ox: number, isHair = false) => {
+    const g = parts.get(name);
+    if (!g) return;
+    g.forEach((r, y) => r.forEach((c, x) => {
+      if (!c || x + ox < 0 || x + ox >= 24 || y >= 30) return;
+      if (isHair && y < hairCut) return;
+      out[y][x + ox] = pal[MARK[c]] ?? c;
+    }));
+  };
+  // голова сбоку сидит чуть впереди (персонаж наклонён к сопернику)
+  const hx = front ? 4 : 5;
+  if (HAIR_BACK.has(hair)) put('hairb' + f + '_' + hair, hx, true);
+  put(front ? 'sumo_front' : 'sumo_side', 0);
+  put('head' + f, hx);
+  put('hair' + f + '_' + hair, hx, true);
+  put('hat' + f + '_' + hat.id, hx);
+  return out;
+}
+
 const cache = new Map<string, HTMLCanvasElement>();
+const urlCache = new Map<string, string>();
+
+export const SUMO_W = 26;
+export const SUMO_H = 32;
+export function sumoUrl(p: LookSrc, front: boolean, flip = false, scale = 4) {
+  const key = `sumo|${charKey(p)}|${front ? 1 : 0}|${flip ? 1 : 0}|${scale}`;
+  let u = urlCache.get(key);
+  if (!u) urlCache.set(key, (u = gridCanvas(composeSumo(p, front), scale, flip).toDataURL()));
+  return u;
+}
 
 /** персонаж CHAR_W×CHAR_H (×scale); flip — смотрит влево */
 export function characterCanvas(p: LookSrc, scale = 1, frame: CharFrame = 0, flip = false): HTMLCanvasElement {
@@ -130,7 +174,15 @@ export function characterCanvas(p: LookSrc, scale = 1, frame: CharFrame = 0, fli
   return c;
 }
 
-const urlCache = new Map<string, string>();
+/** только голова персонажа (с убором и причёской, без туловища) — выглядывает из окна машины.
+ *  Холст 18×17: нижняя строка — контур под подбородком; середина лица — между 9-м и 10-м пикселем */
+export function characterHeadCanvas(p: LookSrc, scale = 1, frame: CharFrame = 0): HTMLCanvasElement {
+  const key = `head|${charKey(p)}|${scale}|${frame}`;
+  let c = cache.get(key);
+  if (!c) cache.set(key, (c = gridCanvas(composeChar(p, frame === 2 ? 0 : frame).slice(0, 15), scale, false)));
+  return c;
+}
+
 export function characterUrl(p: LookSrc, scale = 4, frame: CharFrame = 0, flip = false) {
   const key = `${charKey(p)}|${scale}|${frame}|${flip ? 1 : 0}`;
   let u = urlCache.get(key);
@@ -147,6 +199,41 @@ export function akitaCanvas(scale = 1, frame: 0 | 1 = 0, flip = false): HTMLCanv
   if (!c) cache.set(key, (c = gridCanvas(parts.get(frame ? 'akita_w' : 'akita') ?? [[null]], scale, flip)));
   return c;
 }
+/** голова акиты (уши, морда, шея) — из заднего окна машины. Холст 11×8, морда вправо */
+export function akitaHeadCanvas(scale = 1): HTMLCanvasElement {
+  const key = `akitaHead|${scale}`;
+  let c = cache.get(key);
+  if (!c) cache.set(key, (c = gridCanvas((parts.get('akita') ?? [[null]]).slice(0, 6).map((r) => r.slice(9, 18)), scale, false)));
+  return c;
+}
+
+const glowCache = new WeakMap<HTMLCanvasElement, Map<string, HTMLCanvasElement>>();
+/**
+ * Обводка спрайта: кольцо в 1 пиксель снаружи его непрозрачной части (полупрозрачную тень иконок не обводим).
+ * Холст на пиксель шире с каждой стороны; px — размер пикселя исходника (scale, с которым его рисовали).
+ */
+export function glowCanvas(src: HTMLCanvasElement, color: string, px = 1): HTMLCanvasElement {
+  let m = glowCache.get(src);
+  if (!m) glowCache.set(src, (m = new Map()));
+  const key = color + '|' + px;
+  const hit = m.get(key);
+  if (hit) return hit;
+  const w = Math.round(src.width / px), h = Math.round(src.height / px);
+  const d = src.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, src.width, src.height).data;
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && d[((y * px) * src.width + x * px) * 4 + 3] > 180;
+  const c = document.createElement('canvas');
+  c.width = (w + 2) * px;
+  c.height = (h + 2) * px;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = color;
+  for (let y = -1; y <= h; y++) for (let x = -1; x <= w; x++) {
+    if (solid(x, y)) continue;
+    if (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1)) ctx.fillRect((x + 1) * px, (y + 1) * px, px, px);
+  }
+  m.set(key, c);
+  return c;
+}
+
 export function akitaUrl(scale = 4, frame: 0 | 1 = 0, flip = false) {
   const key = `akita|${scale}|${frame}|${flip ? 1 : 0}`;
   let u = urlCache.get(key);
@@ -219,6 +306,7 @@ const GROUP_ART: Record<string, string[]> = {
   group_sashimi: ['..........', '.ggggggggk', '.gggggggkk', '..gggggk..', '..........', '..pppppp..', '.pwpwpwpp.', '.pppppppp.', '..pppppp..'],
   group_cherry: ['.....GGGGL..', '.....G..GLL.', '....G...G...', '...G.....G..', '..G......G..', '.rrr....rrr.', 'rrwrr..rrwrr', 'rrrrr..rrrrr', 'rrrRr..rrrRr', '.rrr....rrr.'],
   group_noodles: ['........bb', '......bb..', '.yyyybyyy.', 'rrrrrrrrrr', 'kkkkkkkkkk', '.kkkkkkkk.', '..kkkkkk..', '...rrrr...'],
+  group_godzilla: ['......gggg', '.....ggwkg', '.t...ggggw', 'ttt.gggrr.', '.tggggg...', '.tgggggg..', '..ggggg...', 'g.gggggg..', 'gggg..gg..', '.gg...ggg.'],
   group_dragon: ['......rr..', '.....rggr.', '....rgwkg.', '...ggggggy', '..gg..yyy.', '.gg.......', 'gg....gg..', 'g....gggg.', '....gg..gg', '...gg.....'],
 };
 for (const [id, rows] of Object.entries(GROUP_ART)) grids.set(id, rows.map((r) => r.split('').map((ch) => GROUP_PAL[ch] ?? null)));
@@ -295,7 +383,29 @@ export function rainbowGrid(n = 11): Grid {
 export const SPECIAL_TOPIC = { id: 'special', name: 'Спецтема', color: '#ffffff' };
 
 /** пиксели иконки по id; спецвопрос везде — радужный шар, как на колесе */
-const iconGrid = (id: string): Grid => (id === 'special' ? grids.get('topic_special') ?? rainbowGrid() : grids.get(id) ?? grids.get('bonus_' + id) ?? MISSING);
+const iconGrid = (id: string): Grid => (id.includes('+') ? comboGrid(id) : id === 'special' ? grids.get('topic_special') ?? rainbowGrid() : grids.get(id) ?? grids.get('bonus_' + id) ?? MISSING);
+
+const comboCache = new Map<string, Grid>();
+/** «база+значок»: значок в правом нижнем углу базы, выступает за край на 3 пикселя, со своим тёмным контуром
+ *  (например shop+embs_toyota — магазин с автосалоном марки) */
+function comboGrid(id: string): Grid {
+  const hit = comboCache.get(id);
+  if (hit) return hit;
+  const [baseId, cornerId] = id.split('+');
+  const a = grids.get(baseId) ?? MISSING, b = grids.get(cornerId) ?? MISSING;
+  const aw = a[0]?.length ?? 0, ah = a.length, bw = b[0]?.length ?? 0, bh = b.length;
+  const ox = aw - bw + 3, oy = ah - bh + 3;
+  const W = Math.max(aw, ox + bw), H = Math.max(ah, oy + bh);
+  const g: Grid = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => a[y]?.[x] ?? null));
+  const inB = (x: number, y: number) => !!b[y - oy]?.[x - ox];
+  for (let y = oy - 1; y <= oy + bh; y++) for (let x = ox - 1; x <= ox + bw; x++) {
+    if (y < 0 || x < 0 || y >= H || x >= W || inB(x, y)) continue;
+    if (inB(x + 1, y) || inB(x - 1, y) || inB(x, y + 1) || inB(x, y - 1)) g[y][x] = '#0d0b1e';
+  }
+  b.forEach((r, y) => r.forEach((col, x) => { if (col) g[y + oy][x + ox] = col; }));
+  comboCache.set(id, g);
+  return g;
+}
 
 /** холст иконки с контуром (и тенью); scale — размер пикселя иконки */
 function drawIcon(g: Grid, scale: number, shadow: boolean): HTMLCanvasElement {

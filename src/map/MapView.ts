@@ -7,7 +7,8 @@ import {
   CANVAS_H, CANVAS_W, FOCUS_WORLD, SCALE, codeAt, loadMapAssets, prefAnchorWorld, prefBoundsWorld, renderMoveArrow, renderPrefFog, renderPrefMask, renderPrefOutline,
   worldToImage, type PrefLayer,
 } from './render';
-import { AKITA_H, CHAR_H, akitaCanvas, characterCanvas, pixelBadge, pixelIcon, type BadgePart } from '../shared/sprites';
+import { AKITA_H, CHAR_H, akitaCanvas, akitaHeadCanvas, characterCanvas, characterHeadCanvas, glowCanvas, pixelBadge, pixelIcon, type BadgePart } from '../shared/sprites';
+import { CARS, type CarId } from '../shared/cars';
 import { TOKYO_PREF } from '../shared/look';
 import { SHINKANSEN_LINES } from '../shared/settings';
 
@@ -65,15 +66,48 @@ interface Token {
   face: 1 | -1;
   /** сдвиг фазы покачивания */
   phase: number;
-  /** машина: спрайт поверх персонажа (он выглядывает из-за крыши) */
-  car: null | { s: Sprite; id: string };
+  /** машина: вместо персонажа — машина, а над ней голова в переднем боковом окне (и голова акиты в заднем) */
+  car: null | { s: Sprite; id: CarId };
+  /** голова для машины: кадры «стоит» и «вдох» */
+  head: Sprite;
+  headFrames: Texture[];
+  dogHead: Sprite;
+  /** пиксельная обводка: по спрайту на каждую часть, все под частями — получается общий контур */
+  glow: { layer: Container; body: Sprite; car: Sprite; head: Sprite; dogHead: Sprite };
+  /** его ли сейчас ход (обводка мигает) */
+  active: boolean;
   /** акита-ину бежит следом */
-  dog: null | { s: Sprite; frames: Texture[]; x: number; y: number; face: 1 | -1 };
+  dog: null | { s: Sprite; glow: Sprite; frames: Texture[]; x: number; y: number; face: 1 | -1 };
 }
 
 const BODY_SCALE = 1.2;
 const DOG_SCALE = 1.1;
 const nearestTex = (c: HTMLCanvasElement) => { const tx = Texture.from(c); tx.source.scaleMode = 'nearest'; return tx; };
+
+/** обводка фишек — белая «наклейка» в пиксель, видна на любом фоне карты; у того, кто ходит, мигает жёлтым
+ *  (цвет игрока уже есть на плашке с именем, а цветная обводка теряется на зелёном и жёлтом) */
+const GLOW = '#ffffff';
+const GLOW_ACTIVE = '#fff27a';
+const glowTexCache = new WeakMap<Texture, Map<string, Texture>>();
+function glowTex(tex: Texture, color: string) {
+  let m = glowTexCache.get(tex);
+  if (!m) glowTexCache.set(tex, (m = new Map()));
+  let g = m.get(color);
+  if (!g) m.set(color, (g = nearestTex(glowCanvas(tex.source.resource as HTMLCanvasElement, color))));
+  return g;
+}
+/** спрайт обводки повторяет свою часть: та же точка привязки, масштаб, видимость */
+function syncGlow(g: Sprite, part: Sprite, color: string | null) {
+  g.visible = part.visible && !!color;
+  if (!g.visible) return;
+  const tex = glowTex(part.texture, color!);
+  if (g.texture !== tex) g.texture = tex;
+  const w = part.texture.width, h = part.texture.height;
+  g.anchor.set((part.anchor.x * w + 1) / (w + 2), (part.anchor.y * h + 1) / (h + 2));
+  g.position.copyFrom(part.position);
+  g.scale.copyFrom(part.scale);
+  g.alpha = part.alpha;
+}
 
 /** шрифт берётся из CSS-переменной --font (меняется в одном месте — base.css) */
 const font = () => getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'DotGothic16, monospace';
@@ -345,8 +379,9 @@ export class MapView {
     const shown = (c: number) => !!u.prefs[c]?.rev || !!u.scouted?.includes(c);
     for (const [icon, codes] of Object.entries(u.machines ?? {})) for (const c of codes) if (shown(c)) add(c, { id: icon, kind: 'machine' });
     // магазин под туманом не виден
-    for (const c of u.shops ?? []) if (shown(c)) add(c, { id: 'shop', kind: 'machine' });
-    for (const [c, car] of Object.entries(u.dealers ?? {})) if (shown(+c)) add(+c, { id: 'emb_' + car, kind: 'machine' });
+    // магазин с автосалоном — эмблема марки в уголке значка; автосалон без магазина (свои настройки) — отдельной эмблемой
+    for (const c of u.shops ?? []) if (shown(c)) add(c, { id: u.dealers?.[c] ? 'shop+embs_' + u.dealers[c] : 'shop', kind: 'machine' });
+    for (const [c, car] of Object.entries(u.dealers ?? {})) if (shown(+c) && !u.shops?.includes(+c)) add(+c, { id: 'emb_' + car, kind: 'machine' });
     for (const c of PREF_CODES) {
       if (u.showRewards !== false && shown(c) && !u.prefs[c].taken && (u.huntRewards || u.scouted?.includes(c))) add(c, { id: u.prefs[c].reward, kind: 'reward' });
     }
@@ -393,7 +428,7 @@ export class MapView {
         if (p.pref === going.code || performance.now() > going.until) this.tokens.get(p.id)!.goingTo = null;
         else target = prefAnchorWorld(going.code);
       }
-      const key = JSON.stringify([p.color, p.hat, p.look]);
+      const key = JSON.stringify([p.color, p.hat, p.look, !!p.cat]);
       if (!t || t.key !== key) {
         const old = t;
         old?.root.destroy({ children: true });
@@ -405,7 +440,17 @@ export class MapView {
         body.anchor.set(0.5, (CHAR_H - 1) / CHAR_H);
         const label = nameLabel(p.name);
         const plate = new Graphics();
-        root.addChild(ring, body, plate, label);
+        const headFrames = ([0, 1] as const).map((f) => nearestTex(characterHeadCanvas(p, 1, f)));
+        const head = new Sprite(headFrames[0]);
+        // якорь — под подбородком, по середине лица
+        head.anchor.set(9 / 18, 16 / 17);
+        const dogHead = new Sprite(nearestTex(akitaHeadCanvas(1)));
+        dogHead.anchor.set(5 / 11, 7 / 8);
+        head.visible = dogHead.visible = false;
+        const gl = new Container();
+        const glow = { layer: gl, body: new Sprite(), car: new Sprite(), head: new Sprite(), dogHead: new Sprite() };
+        gl.addChild(glow.body, glow.car, glow.dogHead, glow.head);
+        root.addChild(ring, gl, body, dogHead, head, plate, label);
         this.tokenLayer.addChild(root);
         // при высадке смотрим в сторону Токио
         const tokyo = prefAnchorWorld(TOKYO_PREF);
@@ -413,8 +458,9 @@ export class MapView {
         t = {
           pid: p.id, root, body, frames, label, plate, plateFor: '', ring, x: old?.x ?? target.x, y: old?.y ?? target.y, tx: target.x, ty: target.y,
           hop: old?.hop ?? null, goingTo: old?.goingTo ?? null, flash: 0, key, face, phase: Math.random() * 1000, dog: null, car: null,
+          head, headFrames, dogHead, glow, active: false,
         };
-        if (old?.dog) { old.dog.s.destroy(); }
+        if (old?.dog) { old.dog.s.destroy(); old.dog.glow.destroy(); }
         this.tokens.set(p.id, t);
       }
       // машина: купил — появилась, проиграл дуэль — пропала
@@ -425,7 +471,7 @@ export class MapView {
           const cs = new Sprite(nearestTex(pixelIcon('car_' + p.car, 1)));
           // якорь — под колёсами (ниже — тень иконки)
           cs.anchor.set(0.5, (cs.texture.height - 2) / cs.texture.height);
-          t.root.addChildAt(cs, t.root.getChildIndex(t.body) + 1);
+          t.root.addChildAt(cs, t.root.getChildIndex(t.dogHead));
           t.car = { s: cs, id: p.car };
         }
       }
@@ -433,9 +479,11 @@ export class MapView {
         const frames = ([0, 1] as const).map((f) => nearestTex(akitaCanvas(1, f)));
         const s = new Sprite(frames[0]);
         s.anchor.set(0.5, (AKITA_H - 1) / AKITA_H);
+        const glow = new Sprite();
         this.tokenLayer.addChildAt(s, 0);
-        t.dog = { s, frames, x: t.x - t.face * 12, y: t.y, face: t.face };
-      } else if (!p.akita && t.dog) { t.dog.s.destroy(); t.dog = null; }
+        this.tokenLayer.addChildAt(glow, 0);
+        t.dog = { s, glow, frames, x: t.x - t.face * 12, y: t.y, face: t.face };
+      } else if (!p.akita && t.dog) { t.dog.s.destroy(); t.dog.glow.destroy(); t.dog = null; }
       t.label.text = p.name;
       // двое в одной префектуре: имя второго выше, чтобы плашки не наезжали друг на друга
       const same = u.players.filter((x) => x.pref === p.pref);
@@ -448,10 +496,11 @@ export class MapView {
       t.body.alpha = p.hp <= 0 ? 0.45 : 1;
       t.ring.clear();
       // тень/подсветка под ногами — пиксельный овал в размер пикселя персонажа
+      t.active = u.activePid === p.id;
       if (u.activePid === p.id) pixelOval(t.ring, 11, 5, 0xfff27a, 0.9);
       else pixelOval(t.ring, 8, 3.5, 0x000000, 0.35);
     }
-    for (const [id, t] of this.tokens) if (!live.has(id)) { t.root.destroy({ children: true }); t.dog?.s.destroy(); this.tokens.delete(id); }
+    for (const [id, t] of this.tokens) if (!live.has(id)) { t.root.destroy({ children: true }); t.dog?.s.destroy(); t.dog?.glow.destroy(); this.tokens.delete(id); }
   }
 
   /** анимация прыжков по пути префектур */
@@ -743,12 +792,34 @@ export class MapView {
         t.body.texture = t.frames[Math.floor((this.time + t.phase) / 550) % 2];
       }
       t.body.scale.set(BODY_SCALE * t.face, BODY_SCALE);
+      // в машине персонажа целиком не видно: только голова в переднем боковом окне, акита — в заднем
+      t.body.visible = !t.car;
+      t.head.visible = !!t.car;
+      t.dogHead.visible = !!t.car && !!t.dog;
       if (t.car) {
-        t.car.s.scale.set(BODY_SCALE * t.face, BODY_SCALE);
+        const S = BODY_SCALE, seat = CARS[t.car.id].seat;
+        t.car.s.scale.set(S * t.face, S);
         t.car.s.y = t.hop ? t.body.y - 2 : 1;
         t.car.s.alpha = t.body.alpha;
         t.car.s.tint = t.body.tint;
+        // пиксель машины (x, y) от её якоря (низ колёс, середина холста 34×16 с контуром): ((x − 16)·S, (y − 13)·S)
+        const chin = t.car.s.y + (seat.belt - 12) * S;
+        t.head.texture = t.headFrames[t.hop ? 0 : Math.floor((this.time + t.phase) / 550) % 2];
+        t.head.position.set((seat.front - 16) * S * t.face, chin);
+        t.head.scale.set(S * t.face, S);
+        t.head.alpha = t.body.alpha;
+        t.head.tint = t.body.tint;
+        t.dogHead.position.set((seat.rear - 16) * S * t.face, chin);
+        t.dogHead.scale.set(S * t.face, S);
+        t.dogHead.alpha = t.body.alpha;
       }
+      // обводка: белая; у того, кто ходит, — мигает жёлтым
+      const gc = t.active && Math.floor(this.time / 400) % 2 ? GLOW_ACTIVE : GLOW;
+      syncGlow(t.glow.body, t.body, gc);
+      syncGlow(t.glow.head, t.head, gc);
+      syncGlow(t.glow.dogHead, t.dogHead, gc);
+      if (t.car) syncGlow(t.glow.car, t.car.s, gc);
+      else t.glow.car.visible = false;
       if (t.dog) {
         const d = t.dog;
         // хозяин на машине — акита едет сзади, высунув голову; пешком — бежит следом
@@ -762,8 +833,10 @@ export class MapView {
         else if (!moving) d.face = t.face;
         d.s.texture = d.frames[moving && Math.floor(this.time / 110) % 2 ? 1 : 0];
         d.s.position.set(d.x, d.y);
+        d.s.visible = !t.car;
         d.s.scale.set(DOG_SCALE * d.face * t.root.scale.y, DOG_SCALE * t.root.scale.y);
         d.s.alpha = t.body.alpha;
+        syncGlow(d.glow, d.s, gc);
       }
       if (t.flash > 0) {
         t.flash -= dt;

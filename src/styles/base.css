@@ -160,3 +160,8 @@ img.avatar, .avatar img { image-rendering: pixelated; display: inline-block; ver
   20% { opacity: 1; }
   100% { transform: translate(8%, -120%) scale(1.4); opacity: 0; }
 }
+
+/* «Годзилла»: жизни */
+.kj-hp { display: inline-flex; gap: 4px; align-items: center; }
+.kj-hp i { width: 0.9em; height: 0.9em; background: #3a2030; border: 2px solid #0d0b1e; display: inline-block; }
+.kj-hp i.on { background: #ff4d5e; box-shadow: inset 2px 2px 0 #ff9aa8; }

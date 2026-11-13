@@ -19,6 +19,7 @@ import { Sudoku } from './Sudoku';
 import { Shop } from './Shop';
 import { GroupGame } from './GroupGame';
 import { DragonPad } from './DragonPad';
+import { KaijuPad } from './KaijuPad';
 import { unlockAudio } from '../shared/sound';
 import { LOGO_URL } from '../shared/logo';
 import { SPECIAL_TOPIC } from '../shared/sprites';
@@ -194,7 +195,7 @@ function useResend(sent: boolean, send: () => void, giveUp: () => void) {
 
 const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
 
-type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | 'race' | null;
+type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'kaiju' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | 'race' | null;
 
 function attention(s: GameState, me: Player): Attention {
   const st = s.stage;
@@ -214,6 +215,7 @@ function attention(s: GameState, me: Player): Attention {
   if (st.t === 'extraTurn' && st.pid === me.id) return 'extraTurn';
   if (st.t === 'group' && s.g?.players.includes(me.id)) return 'group';
   if (st.t === 'dragon' && s.dr?.players.includes(me.id)) return 'dragon';
+  if (st.t === 'kaiju' && s.kj && (s.kj.zilla === me.id || s.kj.hunters.includes(me.id))) return 'kaiju';
   return null;
 }
 
@@ -316,6 +318,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
         {att === 'reward' && <RewardCard client={client} s={s} me={me} />}
         {att === 'group' && <GroupGame client={client} s={s} me={me} />}
         {att === 'dragon' && <DragonPad key={s.dr!.id} client={client} s={s} me={me} />}
+        {att === 'kaiju' && <KaijuPad key={s.kj!.id} client={client} s={s} me={me} />}
         {att === 'rhythm' && s.rhythm && (
           <div class="rhythm-wrap">
             <RhythmBoard key={s.rhythm.id} r={s.rhythm} now={() => client.hostNow()} onDone={(score, hits, total) => client.send({ t: 'rhythm', pid: me.id, id: s.rhythm!.id, score, hits, total })} />
@@ -413,6 +416,8 @@ function stageText(s: GameState, me: Player): string {
     case 'shop': return st.noShop ? (st.pid === me.id ? 'Ты у автосалона' : `${n(st.pid)} в автосалоне`) : st.pid === me.id ? 'Ты у магазина' : `${n(st.pid)} в магазине {ico:shop}`;
     case 'group': return 'Групповая игра — смотри на ТВ!';
     case 'dragon': return '{ico:group_dragon} Джа-одори — смотри на ТВ!';
+    case 'kaiju': return 'Годзилла в Токио — смотри на ТВ!';
+    case 'sumo': return !s.sumo ? 'Сумо' : s.sumo.phase === 'results' ? `Сумо окончено: твоё место — ${s.sumo.places?.[me.id] ?? '—'}` : s.sumo.alive.includes(me.id) ? ((s.sumo.pos[me.id] ?? 0) >= 0.85 ? 'Сумо: ты на самом краю!' : 'Сумо — смотри на ТВ!') : 'Ты за кругом. Отвечай дальше — за верные ответы идут деньги';
     case 'extraTurn': return `${n(st.pid)} заканчивает ход…`;
     case 'duelPick': return `Дуэль: ${n(st.pid)} выбирает тему`;
     case 'rhythm': return 'Ритм-дуэль на ТВ!';
@@ -551,6 +556,7 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
             <button class={cls} disabled={gone || (locked && shown !== i && !q.revealed)} onClick={() => pickAns(i)}>
               <span class="qletter">{LETTERS[pos]}</span>
               {a.image ? <img src={a.image} alt="" /> : <span>{a.text}</span>}
+              {!q.revealed && q.paw?.[me.id] === i && <span class="q-paw pop"><PixIcon id="ui_paw" size={28} /></span>}
             </button>
           );
         })}
@@ -562,14 +568,14 @@ function QuestionView({ client, s, q, me }: { client: GameClient; s: GameState; 
           ))}
         </div>
       )}
-      {q.context === 'duel' && !q.reading && !q.revealed && !expired && !myCoin && coinsHave.length > 0 && q.participants.includes(me.id) && (
+      {(q.context === 'duel' || (q.context === 'sumo' && s.sumo?.asker === me.id)) && !q.reading && !q.revealed && !expired && !myCoin && coinsHave.length > 0 && q.participants.includes(me.id) && (
         <div class="q-bonuses">
           {coinsHave.map((b) => (
             <button class="btn small yellow" disabled={usingBonus} onClick={() => throwCoin(b)}><BonusIcon b={b} size={22} /> +{COIN_DMG[b]} к удару ×{me.bonuses[b]}</button>
           ))}
         </div>
       )}
-      {q.context === 'duel' && myCoin && !q.revealed && <div class="q-coin muted"><BonusIcon b={myCoin} size={20} /> Монетка брошена: удар +{COIN_DMG[myCoin]}, если пройдёт</div>}
+      {(q.context === 'duel' || q.context === 'sumo') && myCoin && !q.revealed && <div class="q-coin muted"><BonusIcon b={myCoin} size={20} /> Монетка брошена: удар +{COIN_DMG[myCoin]}, если пройдёт</div>}
       {!q.revealed && choice !== null && <div class="center muted">{confirmed ? 'Ответ принят. Ждём остальных…' : 'Отправляем ответ…'}</div>}
       {!q.revealed && s.paused && <div class="center muted">Пауза — время стоит</div>}
       {!q.revealed && choice === null && expired && <div class="center muted">Время вышло</div>}
@@ -658,22 +664,24 @@ function ExtraTurn({ client, s, me }: { client: GameClient; s: GameState; me: Pl
 function DuelPick({ client, s, me }: { client: GameClient; s: GameState; me: Player }) {
   const [sent, setSent] = useState(false);
   const st = s.stage;
-  if (st.t !== 'duelPick' || !s.duel) return null;
+  if (st.t !== 'duelPick' || (!s.duel && !st.sumo)) return null;
   const d = s.duel;
-  const foe = s.players[d.attacker === me.id ? d.defender : d.attacker];
+  const sumo = !!st.sumo;
+  const foe = d ? s.players[d.attacker === me.id ? d.defender : d.attacker] : undefined;
   const val = useRef('');
   useResend(sent, () => client.pick('duel', val.current), () => setSent(false));
   const send = (v: string) => { if (sent) return; val.current = v; setSent(true); client.pick('duel', v); vibrate(30); };
   return (
     <div class="pad col center-screen">
-      <h2>Дуэль! Твой вопрос</h2>
-      <div class="muted">Противник: {foe?.name} (<PixIcon id="ui_heart" size={16} /> {foe?.hp}). Выбери тему — урон зависит от силы того, кто ответит правильно.</div>
+      <h2>{sumo ? 'Сумо! Твой вопрос' : 'Дуэль! Твой вопрос'}</h2>
+      {sumo && <div class="muted">Выбери тему. Ответишь верно — все, кто ошибся, отъедут к краю: тем дальше, чем ты сильнее в теме. Ошибёшься — отъедешь сам.</div>}
+      {!sumo && <div class="muted">Противник: {foe?.name} (<PixIcon id="ui_heart" size={16} /> {foe?.hp}). Выбери тему — урон зависит от силы того, кто ответит правильно.</div>}
       <TimerBar start={st.deadline - s.settings.pickTime * 1000} end={st.deadline} now={() => client.hostNow()} />
       {st.topics.map((id) => {
         const t = s.settings.topics.find((x) => x.id === id)!;
         return (
           <button class="btn big-btn" style={{ '--c': t.color } as any} disabled={sent} onClick={() => send(id)}>
-            <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> <span class="vs-stat"><b>{me.stats[id]}</b> <VsBadge size={20} /> <b>{foe?.stats[id]}</b></span>
+            <SkillIcon t={t} size={24} /> <span class="grow" style={{ textAlign: 'left' }}>{t.name}</span> {sumo ? <span class="vs-stat">сила <b>{me.stats[id]}</b></span> : <span class="vs-stat"><b>{me.stats[id]}</b> <VsBadge size={20} /> <b>{foe?.stats[id]}</b></span>}
           </button>
         );
       })}
@@ -778,6 +786,11 @@ function MapPick({ client, s, me, mode }: { client: GameClient; s: GameState; me
         {st.t === 'move' && st.lure && !sent && !lureSent && (
           <button class="btn yellow lure-btn pop" onClick={() => { setLureSent(true); client.pick('move', 'lure'); vibrate([30, 60, 30]); }}>
             <BonusIcon b="food" size={26} /> Кто-то рядом принюхивается… Достать корм?
+          </button>
+        )}
+        {st.t === 'move' && st.lureCat && !sent && !lureSent && (
+          <button class="btn yellow lure-btn pop" onClick={() => { setLureSent(true); client.pick('move', 'lureCat'); vibrate([30, 60, 30]); }}>
+            <BonusIcon b="sashimi" size={26} /> Кто-то рядом облизывается… Достать сашими?
           </button>
         )}
         {/* свиток-вызов: вместо хода — дуэль с любым игроком на карте */}
