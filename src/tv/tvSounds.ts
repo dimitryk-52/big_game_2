@@ -3,7 +3,7 @@
 // Сравниваем с прошлым состоянием и играем звук один раз на переход.
 import { useEffect, useRef } from 'preact/hooks';
 import type { GameState, GroupGameId } from '../shared/types';
-import { GROUP_TIMED, groupEndId, hasCustom, introId, loadSounds, onSoundsChange, playSound } from '../shared/sounds';
+import { GROUP_TIMED, groupEndId, hasCustom, introId, loadSounds, onSoundsChange, playRaceSound, playSound } from '../shared/sounds';
 import { now } from '../shared/util';
 
 /** у каких сцен свой звук (id события на вкладке «Звуки») */
@@ -57,7 +57,7 @@ export function useTvSounds(s: GameState) {
       // «Калибровка» сразу после вспышки отсчёта — у вспышки свой звук
       else if (st.t === 'banner' && st.wait) { /* тишина */ }
       // плашка «ГОНКА!»: свой звук гонки, если назначен, иначе — как обычное объявление
-      else if (st.t === 'banner' && s.duel?.mode === 'race' && hasCustom('raceIntro')) playSound('raceIntro');
+      else if (st.t === 'banner' && s.duel?.mode === 'race' && hasCustom('raceIntro')) playRaceSound('raceIntro');
       else if (STAGE_SOUND[st.t]) playSound(STAGE_SOUND[st.t]);
     }
     if (groupKey && groupKey !== p.group && g) {

@@ -318,6 +318,22 @@ export function soundMs(id: string) {
 }
 
 /** звук события: свой файл → встроенный 8-битный → тишина */
+/** звуки гонки до старта («Гонка: объявление», «Гонка: трасса») — часто это целая песня: на «СТАРТ!» обрываем,
+ *  дальше играет музыка гонки (иначе две песни звучат поверх друг друга) */
+const raceCuts = new Set<Promise<AudioBufferSourceNode | undefined>>();
+export function playRaceSound(id: string) {
+  const c = map[id];
+  if (c?.mute) return;
+  if (!c?.file) return void SOUND_EVENTS[id]?.synth?.();
+  raceCuts.add(playFile(c.file, c.vol ?? 1));
+}
+export function stopRaceSounds() {
+  for (const n of raceCuts) void n.then((x) => { try { x?.stop(); } catch { /* уже доиграл */ } });
+  raceCuts.clear();
+}
+/** назначен ли свой звук до старта гонки — тогда музыка гонки ждёт «СТАРТ!» */
+export const hasRacePreSound = () => hasCustom('raceIntro') || hasCustom('raceTrack');
+
 export function playSound(id: string, at?: number) {
   const c = map[id];
   if (c?.mute) return;

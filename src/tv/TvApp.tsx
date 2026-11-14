@@ -23,7 +23,7 @@ import { SumoTv } from './SumoTv';
 import { FinaleTv } from './FinaleTv';
 import { hasMusic, refreshMusic, setMusic } from './bgMusic';
 import { soundMs } from '../shared/sounds';
-import { groupTableId, hasCustom, playSound } from '../shared/sounds';
+import { groupTableId, hasCustom, hasRacePreSound, playRaceSound, playSound, stopRaceSounds } from '../shared/sounds';
 import { useTvSounds } from './tvSounds';
 import { LobbyTv, MapFlash } from './LobbyTv';
 import { BetBoard, DuelSpoils, EpochBanner, EpochChip, FindPopup } from './EconTv';
@@ -115,8 +115,10 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
         case 'race': {
           // схема трассы, потом светофор 3–2–1 и «СТАРТ!» — точно по времени старта хоста
           // своего звука трассы нет — ничего не запускаем: звук «Гонка: объявление» просто доигрывает
-          if (hasCustom('raceTrack')) playSound('raceTrack');
           const r = host.state.race;
+          // звуки до старта («объявление», «трасса») обрываются на «СТАРТ!» — дальше играет музыка гонки
+          if (hasCustom('raceTrack')) playRaceSound('raceTrack');
+          raceTimers.push(setTimeout(stopRaceSounds, r ? Math.max(0, r.startAt - now()) : 6500));
           if (r) for (const [ms, id] of [[3000, 'raceLight'], [2000, 'raceLight'], [1000, 'raceLight'], [0, 'raceGo']] as const) {
             const left = r.startAt - ms - now();
             if (left > -200) raceTimers.push(setTimeout(() => { if (host.state.race?.id === r.id) playSound(id); }, Math.max(0, left)));
@@ -278,7 +280,17 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
     : null;
   // гонка: музыка трассы → общая музыка гонки → музыка дуэли
   const raceKind = s.duel?.mode === 'race' ? s.race?.kind ?? trackFor(PREF[s.players[s.duel.defender]?.pref ?? 0]?.region) : null;
-  const raceTrack = raceKind ? (hasMusic('race:' + raceKind) ? 'race:' + raceKind : hasMusic('race') ? 'race' : 'duel') : null;
+  // есть свой звук до старта (объявление/трасса) — он и играет, музыка гонки вступает на «СТАРТ!»
+  const raceStartAt = s.duel?.mode === 'race' && s.race && hasRacePreSound() ? s.race.startAt : 0;
+  const [raceGo, setRaceGo] = useState(0);
+  useEffect(() => {
+    if (!raceStartAt) return;
+    const t = setTimeout(() => setRaceGo(raceStartAt), Math.max(0, raceStartAt - now()));
+    return () => clearTimeout(t);
+  }, [raceStartAt]);
+  // от плашки «ГОНКА!» до старта музыка молчит — звучат «Гонка: объявление» и «Гонка: трасса»
+  const raceHold = s.duel?.mode === 'race' && hasRacePreSound() && (!s.race || (raceGo !== raceStartAt && now() < raceStartAt));
+  const raceTrack = raceKind ? (raceHold ? null : hasMusic('race:' + raceKind) ? 'race:' + raceKind : hasMusic('race') ? 'race' : 'duel') : null;
   // начало игры: интро — песня после вылета логотипа; тропа — своя музыка или та же песня; отсчёт — тишина
   const introAt = st.t === 'lobby' && st.show === 'intro' ? st.at ?? 0 : 0;
   const [introSong, setIntroSong] = useState(false);
@@ -292,7 +304,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   const calibTrack = s.phase === 'calib' && hasMusic('calib') && !qMedia ? 'calib' : null;
   const track = st.t === 'lobby' ? lobbyTrack : st.t === 'countdown' ? null : calibTrack ? calibTrack
     : st.t === 'rhythm' || (st.t === 'dragon' && s.dr?.phase === 'play') || qMedia || iaiQuiet ? null
-    : raceTrack ? raceTrack : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
+    : raceHold ? null : raceTrack ? raceTrack : s.duel ? 'duel' : ownTrack && hasMusic(ownTrack) ? ownTrack : mapHidden ? null : 'map';
   useEffect(() => { setMusic(track, st.t === 'question' && (track === 'map' || track === 'duel')); }, [track, st.t]);
 
   return (
