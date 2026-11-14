@@ -383,7 +383,7 @@ export class MapView {
     for (const c of u.shops ?? []) if (shown(c)) add(c, { id: u.dealers?.[c] ? 'shop+embs_' + u.dealers[c] : 'shop', kind: 'machine' });
     for (const [c, car] of Object.entries(u.dealers ?? {})) if (shown(+c) && !u.shops?.includes(+c)) add(+c, { id: 'emb_' + car, kind: 'machine' });
     for (const c of PREF_CODES) {
-      if (u.showRewards !== false && shown(c) && !u.prefs[c].taken && (u.huntRewards || u.scouted?.includes(c))) add(c, { id: u.prefs[c].reward, kind: 'reward' });
+      if (u.showRewards !== false && shown(c) && !u.prefs[c].taken && (u.huntRewards || u.scouted?.includes(c))) add(c, { id: u.prefs[c].reward === 'prize' ? 'chest' : u.prefs[c].reward, kind: 'reward' }); // неразыгранный приз — сундук, не путать со звёздами
     }
     for (const [c, g] of Object.entries(u.groupGames ?? {})) add(Number(c), { id: 'group_' + g, kind: 'group' });
     const sig = (parts: BadgePart[]) => parts.map((p) => p.id + ':' + p.kind).join(',');

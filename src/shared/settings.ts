@@ -349,7 +349,7 @@ export function soloAt(st: Settings, code: number | null | undefined): SoloGameI
 /** что есть в префектуре — иконки для плашки интро: награда (пока не забрали), соло-игры, магазин, групповая игра (пока не сыграна) */
 export function prefIcons(st: Settings, code: number, ps?: { reward: RewardType; taken?: boolean; groupDone?: boolean } | null): string[] {
   const out: string[] = [];
-  if (ps && !ps.taken) out.push(ps.reward);
+  if (ps && !ps.taken) out.push(ps.reward === 'prize' ? 'chest' : ps.reward); // как на карте
   out.push(...soloAt(st, code));
   if ((st.shopPrefs ?? []).includes(code)) out.push('shop');
   const dealer = (st.dealers ?? DEFAULT_DEALERS)[code];

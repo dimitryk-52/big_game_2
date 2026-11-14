@@ -9,7 +9,7 @@ import { PixIcon } from './common';
 
 type Send = (cmd: string, args?: any) => void;
 
-const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'pachinko', 'ring', 'onsen', 'chohan', 'sudoku', 'shop', 'bonus_fifty1', 'bonus_fifty2', 'bonus_move2', 'bonus_turn2', 'bonus_coin', 'bonus_ticket', 'bonus_food', 'bonus_scroll', 'bonus_cheat', 'bonus_neko', 'bonus_coupon', 'find', 'find_wallet', 'find_map', 'find_rickshaw', 'find_kitsune'];
+const ICONS = ['money', 'stars', 'bonus', 'special', 'prize', 'chest', 'pachinko', 'ring', 'onsen', 'chohan', 'sudoku', 'shop', 'bonus_fifty1', 'bonus_fifty2', 'bonus_move2', 'bonus_turn2', 'bonus_coin', 'bonus_ticket', 'bonus_food', 'bonus_scroll', 'bonus_cheat', 'bonus_neko', 'bonus_coupon', 'find', 'find_wallet', 'find_map', 'find_rickshaw', 'find_kitsune'];
 
 export function DebugMenu({ s, send, onClose, fx, onGame }: {
   s: GameState; send: Send; onClose: () => void; fx?: boolean;
