@@ -118,7 +118,7 @@ export function LobbyTv({ s, url, warn }: { s: GameState; url: string; warn: str
         </>
       )}
       {/* до тропы код комнаты нужен ведущему, чтобы подключить пульт */}
-      {st.t === 'lobby' && show !== 'walk' && <div class="lobby-room">Комната <b>{s.room}</b></div>}
+      {st.t === 'lobby' && show !== 'walk' && <div class="lobby-room">{s.room}</div>}
     </div>
   );
 }

@@ -497,9 +497,11 @@
 
 /* ───── начало игры: пустой фон → интро → тропа с QR → отсчёт ───── */
 .lobby-tv { position: absolute; inset: 0; z-index: 30; overflow: hidden; background: #14122e; }
-.lobby-blank { position: absolute; inset: 0; background: #14122e; }
-.lobby-room { position: absolute; right: 1.5vw; bottom: 1.5vh; z-index: 5; font-size: 1.1em; color: #8d93b8; letter-spacing: 0.05em; }
-.lobby-room b { color: #fff; font-size: 1.3em; margin-left: 0.3em; }
+.lobby-tv.show-blank { background: #000; }
+.lobby-blank { position: absolute; inset: 0; background: #000; }
+/* код комнаты: внутри сейфзоны ТВ (5%), неяркий, гаснет через 5 с */
+.lobby-room { position: absolute; right: 5vw; bottom: 5vh; z-index: 5; font-size: 1.4em; color: #5a5f7a; letter-spacing: 0.15em; animation: roomFade 0.8s 5s forwards; pointer-events: none; }
+@keyframes roomFade { to { opacity: 0; } }
 .trail { position: absolute; inset: 0; animation: fadeIn 0.8s both; }
 .trail-cv { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
 .trail-tags { position: absolute; inset: 0; pointer-events: none; }
