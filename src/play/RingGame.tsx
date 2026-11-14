@@ -30,7 +30,7 @@ export function RingGame({ client, s, me, paused, onExit }: { client: GameClient
       if (!c) return;
       const r = run.current;
       const t = client.hostNow();
-      // после СТОП огонёк тормозит ещё 3–5 клеток
+      // после СТОП огонёк тормозит ещё 2–12 клеток
       const slow = r?.stop ? ringSlowCell(r.stop.from, r.stop.cell, performance.now() - r.stop.at) : null;
       const cell = r ? (slow ? slow.cell : t < r.t0 ? 0 : ringCellAt(r.t0, t, r.cellMs).cell) : Math.floor(performance.now() / 400) % 24;
       drawRing(c.getContext('2d')!, c.width, r?.layout ?? idle, cell, slow?.done ? r!.stop!.res : null, performance.now());
@@ -69,6 +69,7 @@ export function RingGame({ client, s, me, paused, onExit }: { client: GameClient
       stop.from = res.from ?? stop.from;
       stop.cell = res.cell;
       stop.res = res.res;
+      stop.at = performance.now(); // торможение — с прихода ответа, чтобы огонёк не прыгал через клетки
       // ждём, пока огонёк докатится
       const left = ringSlowCell(stop.from, stop.cell, performance.now() - stop.at).doneIn;
       await new Promise((ok) => setTimeout(ok, Math.max(0, left)));

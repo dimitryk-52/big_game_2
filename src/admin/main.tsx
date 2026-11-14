@@ -349,6 +349,14 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
                     ctl('give', { pid: p.id, yen: Number(give[p.id + 'y'] || 0), stars: Number(give[p.id + 's'] || 0), hp: Number(give[p.id + 'h'] || 0), prize: give[p.id + 'p'] || undefined });
                     setGive({});
                   }}>OK</button>
+                  <button class="btn small" title="Отнять введённые ¥ и ★ (и HP); ниже нуля не уйдёт" onClick={() => {
+                    const n = (k: string) => -Math.abs(Number(give[p.id + k] || 0)) || 0;
+                    const yen = n('y'), stars = n('s'), hp = n('h');
+                    if (!yen && !stars && !hp) return;
+                    if (!confirm(`Отнять у ${p.name}:${yen ? ` ¥${-yen}` : ''}${stars ? ` ${-stars}★` : ''}${hp ? ` ${-hp} HP` : ''}?`)) return;
+                    ctl('give', { pid: p.id, yen, stars, hp });
+                    setGive({});
+                  }}>− Отнять</button>
                 </td>
                 <td><button class="btn small" onClick={() => { if (confirm(`Удалить ${p.name} из игры?`)) ctl('kick', { pid: p.id }); }}>✕</button></td>
               </tr>

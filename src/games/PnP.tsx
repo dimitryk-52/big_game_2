@@ -6,7 +6,7 @@ import type { GameState, SoloGameId } from '../shared/types';
 import { PixIcon } from '../ui/common';
 import { OnsenView, type OnsenLook } from './OnsenView';
 import { PachinkoSim, drawPachinko } from './pachinko';
-import { PACHI, RING_SLOW_MS, ringCellAt, ringLayout, ringSlowCell, type RingLayout } from './logic';
+import { PACHI, ringCellAt, ringLayout, ringSlowCell, type RingLayout } from './logic';
 import { drawRing } from './ring';
 import { CH_FOCUS, drawChohan, preloadChohan } from './chohan';
 import { now } from '../shared/util';
@@ -183,7 +183,7 @@ function RingPnP({ pid }: { pid: string }) {
       }
       if (ev.k === 'ringStop' && st.current) {
         st.current.stop = { cell: ev.cell, res: ev.res, from: ev.from ?? ev.cell, at: replay ? 0 : performance.now() };
-        if (ev.res !== 'miss' && !replay) setTimeout(() => playSound('soloWin'), RING_SLOW_MS);
+        if (ev.res !== 'miss' && !replay) setTimeout(() => playSound('soloWin'), ringSlowCell(ev.from ?? ev.cell, ev.cell, 0).doneIn);
       }
     };
     // окно открылось после старта — подхватываем текущую попытку

@@ -47,19 +47,22 @@ export function ringCellAt(t0: number, t: number, cellMs: number) {
   const dist = dt < ramp ? (dt * dt) / (2 * ramp * cellMs) : ramp / (2 * cellMs) + (dt - ramp) / cellMs;
   return { cell: Math.floor(dist) % RING_CELLS, frac: dist % 1, dist };
 }
-/** после СТОП огонёк не замирает сразу, а замедляясь проходит ещё 3–5 клеток */
-export const RING_SLOW_MIN = 3, RING_SLOW_MAX = 5;
-/** паузы между шагами замедления, мс (растут — огонёк тормозит) */
-const SLOW_GAPS = [140, 220, 320, 440, 600];
+/** после СТОП огонёк не замирает сразу, а замедляясь проходит ещё 2–12 клеток (сколько — решает хост случайно) */
+export const RING_SLOW_MIN = 2, RING_SLOW_MAX = 12;
+/** паузы между шагами замедления, мс (растут — огонёк тормозит); короткий проезд берёт хвост — всегда кончается плавно */
+const SLOW_GAPS = [80, 90, 100, 115, 130, 150, 175, 210, 260, 330, 430, 580];
 /** самое долгое замедление, мс */
 export const RING_SLOW_MS = SLOW_GAPS.reduce((a, b) => a + b, 0);
-/** где огонёк через ms после нажатия: from — клетка нажатия, to — итоговая (дальше from на 3–5 по кругу);
- *  to ещё неизвестна (null) — идём, но не дальше минимума */
+const slowGaps = (total: number) => SLOW_GAPS.slice(SLOW_GAPS.length - Math.min(total, SLOW_GAPS.length));
+/** где огонёк через ms после нажатия: from — клетка нажатия, to — итоговая (дальше from на 2–12 по кругу);
+ *  to ещё неизвестна (null) — стоим на from */
 export function ringSlowCell(from: number, to: number | null, ms: number, _cellMs?: number) {
   const total = to == null ? RING_SLOW_MIN : (to - from + RING_CELLS) % RING_CELLS;
+  // итог ещё неизвестен (ждём ответ хоста) — огонёк стоит на клетке нажатия
+  const gaps = to == null ? [] : slowGaps(total);
   let t = 0, n = 0;
-  for (const g of SLOW_GAPS.slice(0, total)) { t += g; if (ms >= t) n++; else break; }
-  return { cell: (from + n) % RING_CELLS, done: to != null && n >= total, doneIn: to == null ? Infinity : SLOW_GAPS.slice(0, total).reduce((a, b) => a + b, 0) - ms };
+  for (const g of gaps) { t += g; if (ms >= t) n++; else break; }
+  return { cell: (from + n) % RING_CELLS, done: to != null && n >= gaps.length, doneIn: to == null ? Infinity : gaps.reduce((a, b) => a + b, 0) - ms };
 }
 export function ringResult(layout: RingLayout, cell: number): RingPrize {
   return layout.cells[cell] ?? 'miss';

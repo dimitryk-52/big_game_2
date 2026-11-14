@@ -3168,12 +3168,12 @@ export class GameEngine {
         if (!isFinite(at) || at > t + 50 || at < t - 3000) at = t;
         at = Math.max(at, r.t0);
         const { cell: from } = ringCellAt(r.t0, at, st.ring.cellMs);
-        // огонёк ещё проходит 3–5 клеток, замедляясь: результат труднее угадать
+        // огонёк ещё проходит 2–12 клеток, замедляясь: результат труднее угадать
         const cell = (from + RING_SLOW_MIN + randInt(RING_SLOW_MAX - RING_SLOW_MIN + 1)) % RING_CELLS;
         const res = ringResult(ringLayout(r.seed), cell);
         const info = RING_PRIZE_INFO[res];
         // приз зачисляется, когда огонёк остановится (иначе деньги в шапке выдадут результат раньше)
-        this.ringSettle[p.id] = Date.now() + RING_SLOW_MS;
+        this.ringSettle[p.id] = Date.now() + RING_SLOW_MS + 400;
         setT(() => {
           p.yen += info.yen ?? 0;
           p.stars += info.stars ?? 0;
@@ -3183,7 +3183,7 @@ export class GameEngine {
           if (res !== 'miss') this.log(`${p.name} выиграл в призовом кольце: ${info.name}`);
           if (res === 'special' || res === 'turn2' || res === 'yen1500' || res === 'star3') this.io.fx?.('prize', { pid: p.id });
           this.emit();
-        }, RING_SLOW_MS);
+        }, RING_SLOW_MS + 400); // +запас на задержку связи: телефон тормозит с прихода ответа
         this.io.fx?.('ringStop', { pid: p.id, cell, from, res, at, t0: r.t0 });
         return reply(true, { cell, from, res, at });
       }
