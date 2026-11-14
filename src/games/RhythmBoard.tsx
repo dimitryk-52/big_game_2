@@ -77,8 +77,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
         if (dt > look || dt < -RHYTHM_WINDOW.good - 200) return;
         if (!spectator && dt < -RHYTHM_WINDOW.good && !s.judged.has(idx)) {
           s.judged.add(idx);
-          s.combo = 0;
-          s.fx.push({ lane: n.lane, text: 'мимо', t });
+          s.combo = 0; // пропуск: без надписи, только сброс комбо
           return;
         }
         const y = hitY - (dt / look) * hitY;
