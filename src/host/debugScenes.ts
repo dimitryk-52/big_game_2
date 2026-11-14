@@ -58,6 +58,7 @@ export const DEBUG_SCENES: { id: string; name: string; group: string }[] = [
   { id: 'hunt', name: 'Охота за призами', group: 'Барабаны и финал' },
   { id: 'final', name: 'Осталось 3 круга', group: 'Барабаны и финал' },
   { id: 'wheel', name: 'Колесо призов', group: 'Барабаны и финал' },
+  { id: 'wheelPrize', name: 'Колесо: окно приза', group: 'Барабаны и финал' },
 ];
 
 export interface DebugArgs {
@@ -201,6 +202,17 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
           left, segs, spinner: pid, spin: makeWheelSpin(segs.map((x) => x.w), now + 600), last: null,
           tokens: Object.fromEntries(pids.map((id, i) => [id, (i * 2) % 5])),
           history: [{ pid: other, tier: 'common' }, { pid: other, tier: 'uncommon' }, { pid, tier: 'rare' }],
+        },
+      });
+    }
+    case 'wheelPrize': {
+      const left = { common: 5, uncommon: 4, rare: 1 };
+      const segs = [{ id: 'common' as const, w: 25 }, { id: 'uncommon' as const, w: 20 }, { id: 'rare' as const, w: 1 }];
+      return view({ t: 'wheel' }, {
+        wheel: {
+          left, segs, spinner: null, spin: null, last: { pid, tier: 'rare' }, order: pids, turn: pid,
+          tokens: Object.fromEntries(pids.map((id, i) => [id, (i * 2) % 5])),
+          history: [{ pid: other, tier: 'common' }, { pid, tier: 'rare' }],
         },
       });
     }

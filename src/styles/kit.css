@@ -308,6 +308,19 @@ body, .tv, .phone { transition: background-color 1.2s; }
 .wheel-tv-side { display: flex; flex-direction: column; gap: 6px; min-width: 340px; font-size: 22px; padding: 16px 18px; }
 .wheel-tier, .wheel-player { gap: 8px; }
 .wheel-player.on { color: var(--yellow); }
+/* окно с выигранным призом поверх колеса — висит до «Приз получен» на пульте */
+.wheel-tv-main { position: relative; }
+.wheel-prize-pop {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5;
+  min-width: 420px; padding: 26px 40px 30px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: var(--panel, #1d2333); border: 6px solid var(--tier); border-radius: 18px;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.55), 0 0 60px var(--tier), 0 18px 40px rgba(0, 0, 0, 0.6);
+  text-align: center; animation: prize-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+.wheel-prize-name { font-size: 34px; text-shadow: var(--tx-outline); }
+.wheel-prize-kicker { font-size: 24px; opacity: 0.8; }
+.wheel-prize-tier { font-size: 64px; line-height: 1.1; color: var(--tier); text-shadow: var(--tx-outline); }
+@keyframes prize-pop { from { transform: translate(-50%, -50%) scale(0.3); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
 .tier-dot { display: inline-block; width: 14px; height: 14px; border: 2px solid #1b1630; flex: none; }
 .wheel-tokens { display: inline-flex; align-items: center; gap: 4px; min-width: 56px; justify-content: flex-end; }
 .hunt-chip { background: #a63a4c; color: #fff; }

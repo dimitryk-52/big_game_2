@@ -73,8 +73,15 @@ export function WheelPad({ client, s, me }: { client: GameClient; s: GameState; 
   const mine = w.tokens[me.id] ?? 0;
   const busy = !!w.spinner;
   const prizes = w.left.common + w.left.uncommon + w.left.rare;
-  const can = mine > 0 && !busy && prizes > 0 && !dropping;
+  const myTurn = !w.order || w.turn === me.id;
+  const can = mine > 0 && !busy && !w.last && myTurn && prizes > 0 && !dropping;
   const spinner = w.spinner ? s.players[w.spinner] : null;
+  const turn = w.turn ? s.players[w.turn] : null;
+  const status = spinner ? `Крутит ${spinner.name}…`
+    : w.last ? 'Ведущий вручает приз…'
+    : !prizes ? 'Все призы разыграны!'
+    : myTurn && mine > 0 ? 'Твоя очередь! Опусти жетон в слот — колесо на ТВ закрутится'
+    : turn ? `Очередь ${turn.name}` : 'Жетоны закончились';
   const myLast = w.last?.pid === me.id ? w.last.tier : null;
   const won = w.history.filter((h) => h.pid === me.id);
 
@@ -101,7 +108,7 @@ export function WheelPad({ client, s, me }: { client: GameClient; s: GameState; 
   return (
     <div class="pad col center-screen wheel-pad">
       <h2>Колесо призов</h2>
-      <div class="muted">{spinner ? `Крутит ${spinner.name}…` : prizes ? 'Опусти жетон в слот — колесо на ТВ закрутится' : 'Все призы разыграны!'}</div>
+      <div class="muted">{status}</div>
       <div ref={slot} class={'token-slot' + (drag ? ' hot' : '') + (dropping ? ' eat' : '')}><div class="token-slit" /></div>
       <div class="token-row">
         {mine > 0 ? (
@@ -115,7 +122,7 @@ export function WheelPad({ client, s, me }: { client: GameClient; s: GameState; 
         ) : <div class="muted">Жетонов нет</div>}
       </div>
       <div class="token-count"><PixIcon id="token" size={26} /> × <b>{mine}</b></div>
-      {myLast && !busy && <div class="reel-label done" style={{ color: TIER_INFO[myLast].color }}>Твой приз: {TIER_INFO[myLast].name}!</div>}
+      {myLast && !busy && w.last && <div class="reel-label done" style={{ color: TIER_INFO[myLast].color }}>Твой приз: {TIER_INFO[myLast].name}!</div>}
       {won.length > 0 && <div class="muted small-text">Выиграно: {won.map((h) => TIER_INFO[h.tier].name).join(', ')}</div>}
       {err && <div class="muted small-text">{err}</div>}
     </div>

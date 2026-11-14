@@ -624,6 +624,10 @@ export interface WheelState {
   /** что выпало в последнем вращении (когда колесо остановилось) */
   last?: { pid: string; tier: PrizeTier } | null;
   history: { pid: string; tier: PrizeTier }[];
+  /** очередь: от самого сильного (больше всего жетонов на старте) к слабому */
+  order?: string[];
+  /** чья очередь крутить; после выигрыша ход держится, пока ведущий не нажмёт «Приз получен» */
+  turn?: string | null;
 }
 
 export interface DragonSettings {

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import '../styles/base.css';
 import '../styles/admin.css';
 import '../styles/kit.css';
-import type { GameMsg, GameState, Question, RewardType, Settings } from '../shared/types';
+import type { GameMsg, GameState, Player, Question, RewardType, Settings } from '../shared/types';
 import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
@@ -273,6 +273,12 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
       </div>
       <div class="row wrap remote-btns">
         {s?.phase === 'lobby' && <button class="btn primary" onClick={() => ctl('start')}>▶ Начать игру</button>}
+        {s?.stage.t === 'wheel' && s.wheel?.last && !s.wheel.spinner && (
+          <button class="btn primary" onClick={() => ctl('wheelNext')}>🎁 Приз получен: {s.players[s.wheel.last.pid]?.name ?? '?'} — {TIER_INFO[s.wheel.last.tier].name}</button>
+        )}
+        {s?.stage.t === 'wheel' && s.wheel && !s.wheel.last && (
+          <span class="chip">{s.wheel.spinner ? `крутит ${s.players[s.wheel.spinner]?.name ?? '?'}` : s.wheel.turn ? `очередь: ${s.players[s.wheel.turn]?.name ?? '?'}` : 'колесо: жетоны или призы кончились'}</span>
+        )}
         <button class="btn primary" onClick={() => ctl('next')}>⏭ {nextLabel(s)}</button>
         <button class="btn" onClick={() => ctl('pause')}>{s?.paused ? '▶ Продолжить' : '⏸ Пауза'}</button>
         {s?.phase === 'lobby' && <button class="btn" onClick={() => ctl('addBot')}>+ бот</button>}
@@ -304,7 +310,7 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
       {s && s.phase !== 'lobby' && <IndividualPrizes room={room.toUpperCase()} s={s} />}
       {s && (
         <table class="qtable">
-          <thead><tr><th>Игрок</th><th>Где</th><th>HP</th><th>¥</th><th>★</th><th>Связь</th><th>Выдать (¥ / ★ / HP / приз)</th><th></th></tr></thead>
+          <thead><tr><th>Игрок</th><th>Где</th><th>HP</th><th>¥</th><th>★</th><th title="Сколько жетонов колеса призов игрок получит за свои звёзды и деньги по применённому курсу (плюс найденные жетоны)"><PixIcon id="token" size={16} /> Жетоны</th><th>Связь</th><th>Выдать (¥ / ★ / HP / приз)</th><th></th></tr></thead>
           <tbody>
             {s.joinOrder.map((id) => s.players[id]).filter(Boolean).map((p) => (
               <tr>
@@ -318,6 +324,7 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
                 <td>{p.hp}/{p.maxHp}</td>
                 <td>{fmtYen(p.yen)}</td>
                 <td>{p.stars}</td>
+                <td>{playerTokens(p, s.settings)}</td>
                 <td><span class={'dot ' + (p.online ? 'on' : 'off')} /></td>
                 <td class="row">
                   <input class="inp-s num" placeholder="¥" value={give[p.id + 'y'] ?? ''} onInput={(e) => setGive({ ...give, [p.id + 'y']: (e.target as HTMLInputElement).value })} />
@@ -333,11 +340,15 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
               </tr>
             ))}
           </tbody>
+          <tfoot><tr><td colSpan={5} class="muted">Всего жетонов по текущему курсу</td><td><b>{s.joinOrder.map((id) => s.players[id]).filter(Boolean).reduce((a, p) => a + playerTokens(p, s.settings), 0)}</b></td><td colSpan={3} /></tr></tfoot>
         </table>
       )}
     </div>
   );
 }
+
+/** жетоны колеса призов, которые игрок получит сейчас: звёзды и деньги по курсу + найденные */
+const playerTokens = (p: Player, st: Settings) => tokensFor(p, st) + (p.tokens ?? 0);
 
 /** пульт: три индивидуальных приза — по счётчикам из сохранённой партии (одно чтение базы по кнопке) */
 function IndividualPrizes({ room, s }: { room: string; s: GameState }) {

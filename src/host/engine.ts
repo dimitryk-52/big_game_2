@@ -282,9 +282,21 @@ export class GameEngine {
         // колесо призов — после конца игры; reset — заново: жетоны и призы по текущим настройкам
         if (this.s.phase !== 'end') break;
         if (!this.s.wheel || args?.reset) this.wheelInit();
+        // колесо из старого сохранения — без очереди
+        else if (!this.s.wheel.order) this.wheelOrder(this.s.wheel);
         this.setStage({ t: 'wheel' });
         this.snapshot();
         break;
+      case 'wheelNext': {
+        // пульт: «Приз получен» — окно с призом закрывается, крутит следующий по очереди
+        const w = this.s.wheel;
+        if (this.s.phase !== 'end' || !w || w.spinner) break;
+        w.last = null;
+        this.wheelAdvance(w);
+        this.emit();
+        this.snapshot();
+        break;
+      }
       case 'wheelEnd':
         if (this.s.phase === 'end') this.setStage({ t: 'end', titles: this.sec.titles });
         break;
@@ -1693,7 +1705,28 @@ export class GameEngine {
     const left = Object.fromEntries(PRIZE_TIERS.map((k) => [k, Math.max(0, Math.floor(Number(pr?.[k] ?? 0)) || 0)])) as Record<PrizeTier, number>;
     const tokens = Object.fromEntries(this.alivePids().map((id) => [id, tokensFor(this.s.players[id], st) + (this.s.players[id].tokens ?? 0)]));
     this.s.wheel = { left, tokens, segs: this.wheelSegs(left), spin: null, spinner: null, last: null, history: [] };
+    this.wheelOrder(this.s.wheel);
     this.log(`Колесо призов: жетонов ${Object.values(tokens).reduce((a, b) => a + b, 0)}, призов ${Object.values(left).reduce((a, b) => a + b, 0)}`);
+  }
+
+  /** очередь колеса: от самого сильного (больше жетонов; равенство — жребий); первый ход — первому с жетонами */
+  private wheelOrder(w: NonNullable<GameState['wheel']>) {
+    w.order = shuffle(Object.keys(w.tokens)).sort((a, b) => (w.tokens[b] ?? 0) - (w.tokens[a] ?? 0));
+    w.turn = null;
+    this.wheelAdvance(w, true);
+  }
+
+  /** ход колеса — следующему по очереди, у кого есть жетоны (fromStart — с начала очереди) */
+  private wheelAdvance(w: NonNullable<GameState['wheel']>, fromStart = false) {
+    const order = (w.order ?? []).filter((id) => this.s.players[id]);
+    const prizes = PRIZE_TIERS.some((k) => w.left[k] > 0);
+    const at = fromStart || !w.turn ? -1 : order.indexOf(w.turn);
+    w.turn = null;
+    if (!prizes) return;
+    for (let k = 1; k <= order.length; k++) {
+      const id = order[(at + k + order.length) % order.length];
+      if ((w.tokens[id] ?? 0) > 0) { w.turn = id; return; }
+    }
   }
 
   private wheelDone(w: NonNullable<GameState['wheel']>, pid: string, tier: PrizeTier | undefined) {
@@ -2972,6 +3005,8 @@ export class GameEngine {
         if (!w || this.s.stage.t !== 'wheel') return reply(false, null, 'Колесо ещё не запущено');
         if (w.spinner) return reply(false, null, 'Колесо крутится — подожди');
         if (!((w.tokens[p.id] ?? 0) > 0)) return reply(false, null, 'Жетонов больше нет');
+        if (w.last) return reply(false, null, 'Ведущий вручает приз — подожди');
+        if (w.order && w.turn !== p.id) return reply(false, null, 'Сейчас не твоя очередь');
         const segs = this.wheelSegs(w.left);
         if (!segs.length) return reply(false, null, 'Призы закончились');
         // колесо продолжает с того места, где остановилось
@@ -3178,8 +3213,8 @@ export class GameEngine {
     for (const b of bots) if (b.reel && !b.reel.spin) this.botLater('breel' + b.id, 1500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'reelSpin' }));
     for (const b of bots) if (b.reel?.done) this.botLater('breelc' + b.id, 2500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'reelClose' }));
     const w = this.s.wheel;
-    if (st.t === 'wheel' && w && !w.spinner) {
-      const b = bots.find((x) => (w.tokens[x.id] ?? 0) > 0);
+    if (st.t === 'wheel' && w && !w.spinner && !w.last) {
+      const b = bots.find((x) => x.id === w.turn && (w.tokens[x.id] ?? 0) > 0);
       if (b) this.botLater('wheel' + w.history.length, 2500, () => this.handle({ t: 'req', pid: b.id, rid: 0, op: 'wheelSpin' }));
     }
     if (st.t === 'extraTurn' && isBot(st.pid)) {
