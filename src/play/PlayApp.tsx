@@ -193,6 +193,8 @@ function useResend(sent: boolean, send: () => void, giveUp: () => void) {
   }, [sent]);
 }
 
+// отладка на телефоне выключена на игру (5 тапов по аватару и ?debug=1 не работают); true — вернуть
+const PHONE_DEBUG = false;
 const SOLO_IDS: SoloGameId[] = ['pachinko', 'ring', 'onsen', 'chohan', 'sudoku'];
 
 type Attention = 'question' | 'reward' | 'bonus' | 'landing' | 'move' | 'duelPick' | 'rhythm' | 'shop' | 'group' | 'dragon' | 'kaiju' | 'extraTurn' | 'duelBet' | 'find' | 'reel' | 'wheel' | 'race' | null;
@@ -267,7 +269,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
   const cur = s.turnOrder[s.turnIdx];
   const nextMine = order.length > 1 && order[(order.indexOf(cur) + 1) % order.length] === me.id && cur !== me.id;
 
-  const [debug, setDebug] = useState(phoneDebugEnabled);
+  const [debug, setDebug] = useState(() => PHONE_DEBUG && phoneDebugEnabled());
   const [debugOpen, setDebugOpen] = useState(false);
   // отладка: перенос к автомату — вкладку открываем, когда хост подтвердит новую префектуру
   const [pendingTab, setPendingTab] = useState<SoloGameId | null>(null);
@@ -281,7 +283,7 @@ function Game({ client, s, me }: { client: GameClient; s: GameState; me: Player 
     else { client.send({ t: 'ctl', cmd: 'teleport', args: { pid: me.id, pref: prefs[0] } }); setPendingTab(game); }
     setDebugOpen(false);
   };
-  const toggleDebug = () => { setPhoneDebug(!debug); setDebug(!debug); setDebugOpen(!debug); };
+  const toggleDebug = () => { if (!PHONE_DEBUG) return; setPhoneDebug(!debug); setDebug(!debug); setDebugOpen(!debug); };
   // эпоха перекрашивает интерфейс
   const ep = epochOf(s);
   useEffect(() => { document.documentElement.dataset.epoch = String(ep); }, [ep]);
