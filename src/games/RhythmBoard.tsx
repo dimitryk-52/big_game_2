@@ -115,8 +115,15 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       const d = Math.abs(noteTime(n.at) - t);
       if (d < bd) { bd = d; best = idx; }
     });
-    // нажатие мимо нот сбрасывает комбо — иначе выгодно молотить по всем кнопкам
-    if (best < 0 || bd > RHYTHM_WINDOW.good) { s.combo = 0; return; }
+    // нажатие мимо нот: −20 и сброс комбо — иначе выгодно молотить по всем кнопкам
+    // (пропуск ноты не штрафуется, только нажатие наугад)
+    if (best < 0 || bd > RHYTHM_WINDOW.good) {
+      s.combo = 0;
+      s.score = Math.max(0, s.score - 20);
+      s.fx.push({ lane, text: 'мимо −20', t });
+      setScore(s.score);
+      return;
+    }
     s.judged.add(best);
     s.hits++;
     s.combo++;
