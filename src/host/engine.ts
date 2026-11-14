@@ -69,6 +69,8 @@ interface Secrets {
   qDone?: string[];
   /** все заданные за игру вопросы — для связки «не раньше вопроса…» */
   asked?: string[];
+  /** порядок тем калибровки (темы с вопросами «в числе первых» — вперёд) */
+  calibOrder?: string[];
   /** финальное сумо: скрытый урон каждого и запас хода до края */
   sumo?: { dmg: Record<string, number>; cap: number; fixed: boolean };
   /** вопросы-флаги: текущие неверные варианты и уже выбранные (их больше не показываем) */
@@ -611,7 +613,13 @@ export class GameEngine {
   }
 
   private async calibration(epoch: number) {
-    const topics = this.combatTopics();
+    // темы с вопросами «в числе первых N» идут в начале круга (меньшее N — раньше); порядок запоминаем на всю калибровку
+    if (this.sec.calibIdx === 0 || !this.sec.calibOrder) {
+      const minEarly = (id: string) => Math.min(1e9, ...this.questions.filter((q) => q.topic === id && !q.special && this.earlyDue(q)).map((q) => q.early!));
+      this.sec.calibOrder = this.combatTopics().map((t, i) => ({ id: t.id, i, e: minEarly(t.id) })).sort((a, b) => a.e - b.e || a.i - b.i).map((x) => x.id);
+    }
+    const all = this.combatTopics();
+    const topics = [...all].sort((a, b) => (this.sec.calibOrder!.indexOf(a.id) + 1 || 1e9) - (this.sec.calibOrder!.indexOf(b.id) + 1 || 1e9));
     const total = this.s.settings.calibRounds * topics.length;
     if (this.sec.calibIdx === 0) {
       const st = this.s.stage;
@@ -627,6 +635,7 @@ export class GameEngine {
       const diff: Difficulty = i < topics.length ? 'easy' : 'medium';
       const own = (x: Question) => x.topic === topic.id && !x.special && !x.pref;
       const q =
+        this.pickQuestion((x) => own(x) && this.earlyDue(x), true) ??
         this.pickQuestion((x) => own(x) && !!x.calib && x.difficulty === diff, true) ??
         this.pickQuestion((x) => own(x) && !!x.calib, true) ??
         this.pickQuestion(own, false, diff) ??
@@ -2732,6 +2741,12 @@ export class GameEngine {
     return !!p && nw.length > 1 && netWorth(p, st) < median(nw);
   }
 
+  /** вопрос с пометкой «в числе первых N» ещё не задан, и задано меньше N вопросов */
+  private earlyDue(q: Question): boolean {
+    const asked = this.sec.asked ?? [];
+    return !!q.early && !q.pref && asked.length < q.early && !asked.includes(q.id);
+  }
+
   /** prefer — желаемая сложность: если такие вопросы среди подходящих есть, выбор только из них */
   private pickQuestion(f: (q: Question) => boolean, freshOnly = false, prefer?: Difficulty): Question | null {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
@@ -2739,6 +2754,14 @@ export class GameEngine {
     const done = this.sec.qDone ?? [];
     const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && !this.tooEarly(q) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
     if (!all.length) return null;
+    // «в числе первых N»: пока окно не прошло, такой вопрос идёт раньше всех (меньшее N — первее)
+    const due = all.filter((q) => this.earlyDue(q));
+    if (due.length) {
+      const min = Math.min(...due.map((q) => q.early!));
+      const q = pick(due.filter((x) => x.early === min));
+      if (!this.sec.used.includes(q.id)) this.sec.used.push(q.id);
+      return q;
+    }
     let fresh = all.filter((q) => !this.sec.used.includes(q.id));
     if (freshOnly && !fresh.length) return null;
     if (prefer) {
@@ -2771,6 +2794,7 @@ export class GameEngine {
     if (catOwner && participants.includes(catOwner.id) && q.topic === catTopicOf(this.s.settings) && q.kind !== 'flag') pq.paw = { [catOwner.id]: q.correct };
     this.s.q = pq;
     this.choices = {};
+    this.answerAt = {};
     this.setStage({ t: 'question' });
     this.io.fx?.('question', pq);
     // ведущий читает вопрос вслух; ответы и таймер — по «Далее»
@@ -2794,6 +2818,7 @@ export class GameEngine {
   }
 
   private choices: Record<string, number> = {};
+  private answerAt: Record<string, number> = {};
 
   /** вопрос ведёт ведущий кнопкой «Далее» (по умолчанию да) */
   private get hostPaced() {
@@ -2809,7 +2834,10 @@ export class GameEngine {
     const at = Math.min(m.at ?? t, t);
     if (at > q.deadline + 150 || t > q.deadline + ANSWER_GRACE) return;
     this.choices[m.pid] = m.choice;
+    // ответившие — по времени нажатия: самый быстрый первым (на ТВ — слева)
+    this.answerAt[m.pid] = at;
     q.answered.push(m.pid);
+    q.answered.sort((a, b) => (this.answerAt[a] ?? 0) - (this.answerAt[b] ?? 0));
     this.io.fx?.('answered', { pid: m.pid });
     this.emit();
     this.closeIfAllAnswered();

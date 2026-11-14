@@ -38,6 +38,7 @@ export function QBadges({ q }: { q: Question }) {
         : q.pref ? <span class="qb once" title="Задаётся один раз, даже при неверном ответе">1× разовый</span> : null}
       {q.difficulty && <span class={'qb diff-' + q.difficulty} title="Сложность">{DIFF[q.difficulty]}</span>}
       {q.calib && <span class="qb calib" title="Обязательно попадёт в калибровку">🎯 калибровка</span>}
+      {q.early && !q.pref ? <span class="qb calib" title="Прозвучит в числе первых вопросов игры">⏱ {q.early === 1 ? 'первым' : `среди ${q.early} первых`}</span> : null}
       {q.after && <span class="qb" title="Не появится раньше связанного вопроса">⛓ после вопроса</span>}
       {q.afterPref && <span class="qb" title="Не появится, пока префектуру не открыли">⛓ после: {PREF[q.afterPref]?.ru}</span>}
       {q.note && <span class="qb note" title={q.note}>📝 заметка</span>}
@@ -361,6 +362,7 @@ function QuestionEditor({ q: q0, questions, settings, busy, onSave, onClose }: {
     if (out.mode !== 'cycle') delete out.mode;
     if (!out.difficulty) delete out.difficulty;
     if (!out.calib) delete out.calib;
+    if (!out.early || out.pref) delete out.early;
     if (!out.after) delete out.after;
     if (!out.afterPref) delete out.afterPref;
     if (!out.note?.trim()) delete out.note;
@@ -416,6 +418,11 @@ function QuestionEditor({ q: q0, questions, settings, busy, onSave, onClose }: {
                 {(Object.keys(DIFF) as Difficulty[]).map((d) => <option value={d}>{DIFF[d]}</option>)}
               </select></label>
               <label title="Вопрос обязательно попадёт в калибровку своей темы: лёгкий — в первый круг, средний — во второй"><input type="checkbox" checked={!!q.calib} onChange={(e) => set({ calib: (e.target as HTMLInputElement).checked || undefined })} /> 🎯 В калибровку</label>
+              {!q.pref && <label title="Вопрос прозвучит в числе первых N вопросов игры (считая калибровку). Вопросам префектур не ставится — они задаются при приходе в префектуру">В числе первых <select value={String(q.early ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ early: v ? Number(v) : undefined }); }}>
+                <option value="">—</option>
+                <option value="1">первым</option>
+                {[2, 3, 4, 5, 6, 7, 8, 10, 15, 20].map((n) => <option value={String(n)}>среди {n} первых</option>)}
+              </select></label>}
               <label title="Вопрос не появится, пока эту префектуру не открыли на карте">Не раньше открытия <select value={String(q.afterPref ?? '')} onChange={(e) => { const v = (e.target as HTMLSelectElement).value; set({ afterPref: v ? Number(v) : undefined }); }}>
                 <option value="">—</option>
                 {PREFS.map((p) => <option value={String(p.code)}>{p.ru}</option>)}

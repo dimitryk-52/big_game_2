@@ -573,13 +573,16 @@ function QuestionPanel({ s, q }: { s: GameState; q: PublicQuestion }) {
         {!q.revealed && !q.reading && <TimerBar start={q.startAt} end={q.deadline} now={now} big />}
         {q.revealed && q.correct === undefined && <div class="qnote">Верного ответа нет — правильный не показываем, вопрос вернётся</div>}
         {!duel && <div class="qparts">
-          {q.participants.map((id) => {
+          {/* ответившие — слева по порядку ответа (самый быстрый первым), ещё думающие — справа */}
+          {[...q.answered.filter((id) => q.participants.includes(id)), ...q.participants.filter((id) => !q.answered.includes(id))].map((id) => {
             const p = s.players[id];
             if (!p) return null;
-            const done = q.answered.includes(id);
+            const place = q.answered.indexOf(id) + 1;
+            const done = place > 0;
             const ok = q.revealed && q.choices?.[id] === q.correct;
             return (
-              <div class={'qpart' + (done || q.revealed ? ' done' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
+              <div key={id} class={'qpart' + (done || q.revealed ? ' done' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '')}>
+                {done && <span class={'qplace' + (place === 1 ? ' first' : '')}>{place}</span>}
                 <Avatar p={p} size={36} />
                 <span>{p.name}</span>
                 {q.revealed && q.results?.[id] && <span class="qres"><ResText text={q.results[id]} topics={s.settings.topics} /></span>}
@@ -602,8 +605,12 @@ function Fighter({ s, q, id, role, side }: { s: GameState; q: PublicQuestion; id
   const done = q.answered.includes(id) || q.revealed;
   const ok = q.revealed && q.choices?.[id] === q.correct;
   const hurt = d?.lastHit?.to === id;
+  // кто ответил быстрее: «1-й» / «2-й» над бойцом
+  const place = q.answered.indexOf(id) + 1;
   return (
     <div class={'fighter ' + side + (done ? '' : ' waiting') + (q.revealed ? (ok ? ' ok' : ' bad') : '') + (d?.asker === id ? ' asking' : '')}>
+      {/* строка есть всегда (пустая — невидима), чтобы рамки бойцов не прыгали по высоте */}
+      <div class={'fighter-place' + (place === 1 ? ' first' : '')} style={place ? undefined : { visibility: 'hidden' }}>{place === 1 ? '⚡ ответил первым' : place ? `ответил ${place}-м` : '·'}</div>
       <div class="fighter-role">{d?.asker === id ? 'спрашивает' : role}</div>
       <div class={'fighter-av' + (hurt ? ' hurt' : '')} key={hurt ? d!.lastHit!.n : 0}><Avatar p={p} size={128} idle flip={side === 'right'} /></div>
       <div class="fighter-name">{p.name}</div>

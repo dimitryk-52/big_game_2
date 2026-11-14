@@ -17,7 +17,13 @@ settings.hostPaced = false;
 settings.calibRounds = 1;
 settings.groupPrefs = {}; // без групповых игр — быстрее дойти до ходов
 settings.shopPrefs = [];
-const eng = new GameEngine({ now, broadcast: () => {}, save: () => {}, fx: () => {} }, 'TEST', settings, SEED_QUESTIONS);
+// «в числе первых N»: вопрос последней боевой темы помечаем «первым», ещё один из другой темы — «среди 3 первых»
+const QS = structuredClone(SEED_QUESTIONS);
+const combat = settings.topics.filter((t) => t.combat);
+const plain = (topic: string) => QS.find((q) => q.topic === topic && !q.pref && !q.special && q.answers?.length === 4)!;
+const early1 = plain(combat[combat.length - 1].id); early1.early = 1;
+const early3 = plain(combat[combat.length - 2].id); early3.early = 3;
+const eng = new GameEngine({ now, broadcast: () => {}, save: () => {}, fx: () => {} }, 'TEST', settings, QS);
 eng.start();
 for (let i = 0; i < 4; i++) eng.addBot();
 
@@ -41,12 +47,24 @@ const until = async (cond: () => boolean, maxMs: number) => { const end = now() 
   // пауза на вопросе калибровки
   await until(() => !!eng.s.q && !eng.s.q.revealed && eng.s.q.deadline > 0, 60000);
   const q = eng.s.q!;
+  ok('вопрос «первым» прозвучал первым', q.qid === early1.id);
   const d0 = q.deadline;
   eng.onCtl('pause');
   await wait(40000); // дольше, чем время на ответ
   ok('на паузе вопрос не закрывается', eng.s.q === q && !q.revealed);
   eng.onCtl('pause');
   ok('после паузы дедлайн сдвинут', q.deadline - d0 > 35000, `(+${Math.round((q.deadline - d0) / 1000)} c)`);
+  await until(() => (eng.sec.asked ?? []).length >= 3, 120000);
+  ok('вопрос «среди 3 первых» — в первых трёх', (eng.sec.asked ?? []).slice(0, 3).includes(early3.id));
+  // порядок ответивших: по времени нажатия, а не по приходу
+  {
+    await until(() => !!eng.s.q && !eng.s.q.revealed && eng.s.q.deadline > 0 && eng.s.q.startAt < now() && eng.s.q.answered.length === 0, 120000);
+    const qq = eng.s.q!;
+    const [p1, p2] = qq.participants;
+    eng.handle({ t: 'answer', pid: p1, n: qq.n, choice: 0, at: now() } as any);
+    eng.handle({ t: 'answer', pid: p2, n: qq.n, choice: 1, at: now() - 2000 } as any);
+    ok('ответившие — по времени ответа', qq.answered[0] === p2 && qq.answered[1] === p1, `(${qq.answered.join(',')})`);
+  }
 
   // удаление ходящего
   ok('дошли до ходов', await until(() => eng.s.phase === 'turns' && eng.s.stage.t === 'move', 30 * 60000));

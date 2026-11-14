@@ -178,6 +178,11 @@
 .qparts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .qpart { display: flex; align-items: center; gap: 4px; background: #11142b; border: 2px solid #555; padding: 2px 8px 2px 2px; font-size: 1em; }
 .qpart.waiting { opacity: 0.45; }
+/* место по скорости ответа */
+.qplace { min-width: 1.4em; text-align: center; color: var(--muted); font-size: 0.85em; }
+.qplace.first { color: var(--yellow); }
+.fighter-place { height: 1.4em; line-height: 1.4em; color: var(--muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
+.fighter-place.first { color: var(--yellow); }
 .qpart.ok { border-color: var(--green); background: #143a1d; }
 .qpart.bad { border-color: var(--red); background: #3a1418; }
 .qres { color: var(--yellow); }

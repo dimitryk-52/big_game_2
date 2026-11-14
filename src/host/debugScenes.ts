@@ -93,7 +93,8 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       const r = results(id, choices[id] === correct);
       if (r) res[id] = r;
     });
-    return { ...q, revealed: true, correct, choices, results: res, answered: pids };
+    // ответившие — в «порядке скорости» (для наглядности задом наперёд), не ответившие — в конце
+    return { ...q, revealed: true, correct, choices, results: res, answered: [...pids].reverse().filter((id) => choices[id] != null) };
   };
   const duel = (extra: Partial<NonNullable<GameState['duel']>> = {}) => ({
     attacker: pid, defender: other, round: 1, asker: pid, topic: 'music', special: false, mode: 'quiz' as const,
@@ -105,7 +106,8 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
   switch (kind) {
     case 'prefIntro': return view({ t: 'prefIntro', code: pref, pid });
     case 'okinawaIntro': return view({ t: 'prefIntro', code: OKINAWA, pid, note: OKINAWA_NOTE });
-    case 'question': return view({ t: 'question' }, { q: mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), {}) });
+    // половина уже ответила — самые быстрые слева
+    case 'question': return view({ t: 'question' }, { q: mkQ(findQ((q) => !q.answerImages && !q.special && !q.media), { answered: [...pids].reverse().slice(0, Math.ceil(pids.length / 2)) }) });
     case 'questionImages': return view({ t: 'question' }, { q: mkQ(findQ((q) => !!q.answerImages), {}) });
     case 'flagQuestion':
     case 'flagWrong': {
@@ -158,7 +160,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       return view({ t: 'duelPick', pid, deadline: now + s.settings.pickTime * 1000, topics, canSpecial: true, canRhythm: true }, { duel: duel({ asker: pid, mode: null, topic: null }) });
     }
     case 'duelQuestion': {
-      const q = mkQ(findQ((q) => q.topic === 'music' && !q.answerImages), { context: 'duel', title: 'Дуэль · раунд 1 · спрашивает ' + s.players[pid].name, participants: [pid, other] });
+      const q = mkQ(findQ((q) => q.topic === 'music' && !q.answerImages), { context: 'duel', title: 'Дуэль · раунд 1 · спрашивает ' + s.players[pid].name, participants: [pid, other], answered: [other] });
       return view({ t: 'question' }, { q, duel: duel() });
     }
     case 'duelResult': return view({ t: 'duelResult' }, { duel: duel({ over: true, winner: pid, lastHit: { to: other, dmg: 3, n: 1 } }) });
