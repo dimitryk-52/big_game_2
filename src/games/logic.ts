@@ -6,11 +6,10 @@ import type { DragonPublic } from '../shared/types';
 // Кольцо из 24 секторов, в каждом свой приз. Порядок секторов перемешивается от seed попытки.
 export const RING_CELLS = 24;
 export type RingPrize = 'miss' | 'yen200' | 'yen500' | 'yen1500' | 'star1' | 'star3' | 'fifty1' | 'fifty2' | 'move2' | 'special' | 'turn2' | 'coin' | 'ticket' | 'scroll';
-/** набор секторов: шесть пустых, монетка, билет и свиток-вызов, мелочь почаще, крупное — по одному */
+/** набор секторов: половина пустых (12 «мимо»), призы — по одному каждого вида (урезано 2026-11-14: слишком щедро) */
 export const RING_SET: RingPrize[] = [
-  'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'scroll', 'coin', 'ticket',
-  'yen200', 'yen200', 'yen200', 'yen500', 'yen500', 'yen500', 'yen1500',
-  'star1', 'star1', 'star3', 'fifty1', 'fifty2', 'coin', 'special', 'turn2', // сапога больше нет (машины) — вместо него вторая монета
+  'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss', 'miss',
+  'scroll', 'coin', 'ticket', 'yen200', 'yen500', 'yen1500', 'star1', 'star3', 'fifty1', 'fifty2', 'special', 'turn2',
 ];
 export const RING_PRIZE_INFO: Record<RingPrize, { name: string; icon: string; color: string; yen?: number; stars?: number }> = {
   miss: { name: 'мимо', icon: '', color: '#2a2f5c' },
