@@ -6,7 +6,7 @@ import type { BonusId, DragonSettings, KaijuSettings, SumoSettings, GroupGameId,
 /** версия экономики (награды за ответы и цены магазина). Подняли — сохранённые в админке старые значения заменяются новыми */
 export const ECON_VERSION = 4;
 /** версия раскладки игр по префектурам (см. mergeSettings) */
-export const LAYOUT_V = 4;
+export const LAYOUT_V = 5;
 /** магазины и призовые машины до LAYOUT_V 3 (автосалоны тогда стояли отдельно от магазинов) */
 const OLD_SHOPS = [2, 6, 9, 12, 19, 21, 28, 29, 35, 38, 41, 43];
 const OLD_RING = [14, 40, 4];
@@ -89,7 +89,8 @@ export const DEFAULT_SETTINGS: Settings = {
   // сеть магазинов: от магазина до ближайшего — два шага, рядом с любой префектурой есть магазин;
   // 3 внутри страны, остальные на побережье там, где без этого не обойтись; на соло-играх магазинов нет.
   // Все шесть автосалонов (dealers) — в этих же магазинах: Гумма, Канагава, Гифу, Хёго, Ямагути, Кумамото
-  shopPrefs: [2, 6, 10, 12, 14, 21, 28, 29, 35, 38, 41, 43],
+  // v5: соседи по рисунку карты — Сага стала соседкой Кумамото, магазин переехал в Исикаву (её отрезало от Гифу)
+  shopPrefs: [2, 6, 10, 12, 14, 17, 21, 28, 29, 35, 38, 43],
   shopTime: 45,
   soloCooldown: 3,
   groupPrefs: {
@@ -253,6 +254,10 @@ export function mergeSettings(saved: Partial<Settings> | null | undefined): Sett
     }
     gp[13] = 'godzilla';
     out.groupPrefs = gp;
+  }
+  // v5: соседи стали по рисунку карты — магазин из Саги (теперь соседка магазина в Кумамото) переезжает в Исикаву
+  if ((saved.group?.layoutV ?? 0) < 5 && out.shopPrefs.includes(41) && !out.shopPrefs.includes(17)) {
+    out.shopPrefs = out.shopPrefs.map((c: number) => (c === 41 ? 17 : c)).sort((a: number, b: number) => a - b);
   }
   out.group.layoutV = LAYOUT_V;
   // сцены иайдо появились позже: стандартным заданиям без сцены даём их фон
