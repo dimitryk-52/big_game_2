@@ -119,7 +119,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
     if (best < 0 || bd > RHYTHM_WINDOW.good) {
       s.combo = 0;
       s.score = Math.max(0, s.score - 20);
-      s.fx.push({ lane, text: 'мимо −20', t });
+      s.fx.push({ lane, text: 'мимо', t });
       setScore(s.score);
       return;
     }
