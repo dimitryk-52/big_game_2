@@ -1,6 +1,7 @@
 // 8-битные звуки на WebAudio (без файлов) + музыка для ритм-игры.
 import { DRAGON_BAR, DRAGON_COUNT, RHYTHM_LEAD_BEATS, rhythmChart, type DragonTiming } from '../games/logic';
 import { now, rng } from './util';
+import { RHYTHM_TRACKS } from '../games/rhythmTracks';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -146,7 +147,44 @@ export function startDragonDrums(d: DragonTiming, times: number[], latencyMs = 0
  * Музыка ритм-игры на ТВ. startAt — время хоста нулевой доли.
  * Ноты чарта дополнительно озвучиваются «колокольчиком», чтобы ритм был слышен.
  */
-export function playRhythmMusic(seed: number, bpm: number, beats: number, startAt: number, latencyMs = 0) {
+const trackBufs = new Map<string, Promise<AudioBuffer | null>>();
+/** загрузить и раскодировать трек ритм-игры заранее (на старте ТВ), чтобы старт был ровно в срок */
+export function loadRhythmTrack(url: string) {
+  let p = trackBufs.get(url);
+  if (!p) {
+    p = fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject())).then((b) => audio().decodeAudioData(b)).catch(() => null);
+    trackBufs.set(url, p);
+  }
+  return p;
+}
+
+/**
+ * Музыка ритм-игры. С треком — отрывок песни из music/rhythm/, первый его сэмпл ровно в startAt
+ * (время хоста); файла нет — тишина. Без трека (старые сохранения) — 8-битная музыка по долям.
+ */
+export async function playRhythmMusic(r: { seed: number; bpm: number; beats: number; startAt: number; track?: number }, latencyMs = 0) {
+  const tr = r.track != null ? RHYTHM_TRACKS[r.track] : null;
+  if (tr) {
+    const buf = await loadRhythmTrack(tr.file);
+    if (buf && soundOn) {
+      const a = audio();
+      const outLat = ((a as any).outputLatency ?? 0) + (a.baseLatency ?? 0);
+      const lead = (r.startAt - now()) / 1000 - outLat - latencyMs / 1000;
+      const src = a.createBufferSource();
+      src.buffer = buf;
+      const g = a.createGain();
+      g.gain.value = 0.9;
+      src.connect(g).connect(a.destination);
+      // опоздали (долго грузили) — начинаем с середины, чтобы ноты всё равно совпадали
+      if (lead >= 0) src.start(a.currentTime + lead);
+      else src.start(a.currentTime, -lead);
+    }
+    return; // нет файла отрывка — тишина (8-битная музыка не совпала бы с нотами песни)
+  }
+  playSynthRhythm(r.seed, r.bpm, r.beats, r.startAt, latencyMs);
+}
+
+function playSynthRhythm(seed: number, bpm: number, beats: number, startAt: number, latencyMs = 0) {
   const a = audio();
   const spb = 60 / bpm;
   // переводим время хоста во время AudioContext; компенсируем задержку вывода звука

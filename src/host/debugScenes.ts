@@ -6,6 +6,7 @@ import { OKINAWA, PREF, PREF_CODES, neighbors, atDistance, path } from '../map/m
 import { OKINAWA_NOTE } from '../shared/settings';
 import { FLAG_CODES, flagUrl } from '../shared/flags';
 import { TITLES } from '../shared/titles';
+import { RHYTHM_TRACKS } from '../games/rhythmTracks';
 import { makeReelSpin, makeWheelSpin } from '../shared/spin';
 import type { CarId } from '../shared/cars';
 
@@ -174,7 +175,7 @@ export function buildDebugScene(s: GameState, questions: Question[], a: DebugArg
       return view({ t: 'duelResult' }, { duel: duel({ over: true, winner: pid, stolen: 240, carLost: { pid: other, car: s.players[other].car ?? 'honda', how: (['crash', 'stall', 'tow', 'fine', 'tanuki'] as const)[Math.abs(base.n) % 5] } }) });
     case 'rhythm': {
       const players = [pid, other];
-      return view({ t: 'rhythm' }, { duel: duel({ mode: 'rhythm' }), rhythm: { id: base.n, seed: 12345, bpm: 110, startAt: now + 2500, beats: 32, players, scores: Object.fromEntries(players.map((p) => [p, null])) } });
+      return view({ t: 'rhythm' }, { duel: duel({ mode: 'rhythm' }), rhythm: { id: base.n, seed: 12345, bpm: RHYTHM_TRACKS[(Math.abs(base.n) % 3)].bpm, startAt: now + 2500, beats: Math.ceil(RHYTHM_TRACKS[(Math.abs(base.n) % 3)].dur * RHYTHM_TRACKS[(Math.abs(base.n) % 3)].bpm / 60000), track: (Math.abs(base.n) % 3), players, scores: Object.fromEntries(players.map((p) => [p, null])) } });
     }
     case 'duelBet': {
       const spect = pids.filter((id) => id !== pid && id !== other);

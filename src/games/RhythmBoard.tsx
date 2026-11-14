@@ -2,7 +2,8 @@
 // поэтому телефон и музыка на ТВ идут синхронно (окно попадания ±150 мс).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { Player, RhythmPublic } from '../shared/types';
-import { RHYTHM_LEAD_BEATS, RHYTHM_WINDOW, rhythmChart } from './logic';
+import { RHYTHM_LEAD_BEATS, RHYTHM_WINDOW } from './logic';
+import { rhythmNotes } from './rhythmTracks';
 import { uiFont, vibrate } from '../shared/util';
 
 const LANE_COLORS = ['#ff4d6d', '#ffd23f', '#5ce16b', '#4dabff'];
@@ -17,10 +18,13 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
   const cv = useRef<HTMLCanvasElement>(null);
   const st = useRef({ score: 0, hits: 0, combo: 0, judged: new Set<number>(), fx: [] as { lane: number; text: string; t: number }[], done: false, pressed: [0, 0, 0, 0] });
   const [score, setScore] = useState(0);
-  const notes = useRef(rhythmChart(r.seed, r.beats));
+  const chart = useRef(rhythmNotes(r));
+  const notes = { current: chart.current.notes };
   const msPerBeat = 60000 / r.bpm;
-  const noteTime = (b: number) => r.startAt + b * msPerBeat;
-  const endTime = noteTime(r.beats + 1);
+  const noteTime = (at: number) => r.startAt + at;
+  const endTime = r.startAt + chart.current.dur + 600;
+  // отсчёт 4-3-2-1 — за четыре доли до первой ноты
+  const countAt = chart.current.countAt;
 
   useEffect(() => {
     let raf = 0;
@@ -59,7 +63,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
         ctx.strokeRect(i * lw + 8, hitY - 14, lw - 16, 28);
       }
       // отсчёт
-      const beatNow = (t - r.startAt) / msPerBeat;
+      const beatNow = (t - r.startAt - countAt) / msPerBeat;
       if (beatNow < RHYTHM_LEAD_BEATS) {
         ctx.fillStyle = '#fff';
         ctx.font = `${Math.floor(H / 8)}px ${uiFont()}`;
@@ -69,7 +73,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       }
       notes.current.forEach((n, idx) => {
         if (s.judged.has(idx)) return;
-        const dt = noteTime(n.beat) - t;
+        const dt = noteTime(n.at) - t;
         if (dt > look || dt < -RHYTHM_WINDOW.good - 200) return;
         if (!spectator && dt < -RHYTHM_WINDOW.good && !s.judged.has(idx)) {
           s.judged.add(idx);
@@ -108,7 +112,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
     let best = -1, bd = 1e9;
     notes.current.forEach((n, idx) => {
       if (n.lane !== lane || s.judged.has(idx)) return;
-      const d = Math.abs(noteTime(n.beat) - t);
+      const d = Math.abs(noteTime(n.at) - t);
       if (d < bd) { bd = d; best = idx; }
     });
     if (best < 0 || bd > RHYTHM_WINDOW.good) return;

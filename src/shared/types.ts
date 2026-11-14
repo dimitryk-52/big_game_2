@@ -425,8 +425,10 @@ export interface RhythmPublic {
   id: number;
   seed: number;
   bpm: number;
-  startAt: number; // время хоста, когда должна прозвучать нулевая доля
+  startAt: number; // время хоста, когда должна прозвучать нулевая доля (с треком — начало отрывка)
   beats: number; // длина в долях
+  /** номер трека из RHYTHM_TRACKS (ноты под голос); нет — старая сгенерированная музыка */
+  track?: number;
   players: string[];
   scores: Record<string, number | null>;
 }

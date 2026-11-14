@@ -32,6 +32,16 @@ const ok = (name: string, cond: boolean, extra = '') => { console.log(`${cond ? 
 const until = async (cond: () => boolean, maxMs: number) => { const end = now() + maxMs; while (!cond() && now() < end) await wait(200); return cond(); };
 
 (async () => {
+  // ритм-баттл: три песни по разу за игру, потом кнопки нет
+  {
+    const left = () => (eng as any).rhythmLeft() as boolean;
+    ok('ритм: в начале игры доступен', left());
+    eng.sec.rhythmBag = [2];
+    ok('ритм: осталась одна песня — ещё доступен', left());
+    eng.sec.rhythmBag = [];
+    ok('ритм: все три сыграны — кнопки нет', !left());
+    delete eng.sec.rhythmBag;
+  }
   eng.onCtl('next');
   await wait(2000);
   ok('«Далее» в лобби не запускает игру', eng.s.phase === 'lobby');

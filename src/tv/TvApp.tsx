@@ -10,7 +10,8 @@ import { prefBgUrl, prewarmBg, prewarmBgs, useSmoothBg } from '../shared/prefBg'
 import { viewState } from '../host/debugScenes';
 import { DebugMenu } from '../ui/DebugMenu';
 import { fmtYen, glue, now } from '../shared/util';
-import { playRhythmMusic, setSound, soundOn } from '../shared/sound';
+import { loadRhythmTrack, playRhythmMusic, setSound, soundOn } from '../shared/sound';
+import { RHYTHM_TRACKS } from '../games/rhythmTracks';
 import { RhythmBoard } from '../games/RhythmBoard';
 import { PnPLayer, pnpBus } from '../games/PnP';
 import { resolveMedia } from './localMedia';
@@ -46,6 +47,8 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   // пауза: полоски таймеров замирают
   setTimerFreeze(s.paused ? s.pausedAt ?? null : null);
   useTvSounds(s);
+  // треки ритм-игры раскодируем заранее — к старту батла они уже в памяти
+  useEffect(() => { for (const t of RHYTHM_TRACKS) void loadRhythmTrack(t.file); }, []);
 
   // подписка на события движка
   useEffect(() => {
@@ -97,7 +100,7 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
           if (p?.pref) m?.confetti(p.pref);
           break;
         }
-        case 'rhythm': playRhythmMusic(d.seed, d.bpm, d.beats, d.startAt, host.state.settings.audioLatencyMs); break;
+        case 'rhythm': void playRhythmMusic(d, host.state.settings.audioLatencyMs); break;
         case 'pnp': pnpBus.emit(d.pid, d.ev); break;
         case 'ring': pnpBus.emit(d.pid, { k: 'ring', ...d }); break;
         case 'ringStop': pnpBus.emit(d.pid, { k: 'ringStop', ...d }); break;

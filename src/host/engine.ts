@@ -16,6 +16,7 @@ import { OKINAWA, PREF, PREF_CODES, atDistance, isCoastal, neighbors, path, pref
 import { COUNTDOWN_MS } from '../shared/types';
 import { pick, randInt, shuffle, uid } from '../shared/util';
 import { AKITA_PREF, HATS, cleanLook, randomLook, type Look } from '../shared/look';
+import { RHYTHM_TRACKS } from '../games/rhythmTracks';
 import { RHYTHM_LEAD_BEATS, RING_CELLS, RING_PRIZE_INFO, RING_SLOW_MAX, RING_SLOW_MIN, RING_SLOW_MS, dragonTimes, dragonWindow, ringCellAt, ringLayout, ringResult } from '../games/logic';
 import { SUDOKU_LEVELS, isSolved, makeSudoku } from '../games/sudoku';
 import { clearT, setT } from './timers';
@@ -54,6 +55,8 @@ interface Secrets {
   calibIdx: number;
   landingIdx: number;
   rhythmN: number;
+  /** треки ритм-игры, ещё не сыгранные (каждая песня — один раз за игру; кончились — ритм-баттла больше нет) */
+  rhythmBag?: number[];
   ring: Record<string, { seed: number; t0: number }>;
   groupN?: number;
   usedTasks?: string[];
@@ -1355,13 +1358,13 @@ export class GameEngine {
         d.mode = null;
         const topics = this.combatTopics().map((t) => t.id);
         const ms = st.pickTime * 1000;
-        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: st.rhythmInDuel });
+        this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: this.rhythmLeft() });
         const choice = await this.waitInput(epoch, (m) => {
           if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== asker.id) return undefined;
           // спецвопрос: 'special' — из любой спецтемы, 'special:<тема>' — купленный на эту тему
           if (m.value === 'special' && asker.specials > (asker.specialTopics?.length ?? 0)) return 'special';
           if (typeof m.value === 'string' && m.value.startsWith('special:') && asker.specialTopics?.includes(m.value.slice(8))) return m.value;
-          if (m.value === 'rhythm' && st.rhythmInDuel) return 'rhythm';
+          if (m.value === 'rhythm' && this.rhythmLeft()) return 'rhythm';
           return topics.includes(m.value) ? (m.value as string) : undefined;
         }, ms + 400);
         // не выбрал за время — тему решает барабан (без спецвопроса)
@@ -1627,12 +1630,22 @@ export class GameEngine {
     this.emit();
   }
 
+  /** ритм-баттл ещё можно выбрать: включён в настройках и осталась несыгранная песня */
+  private rhythmLeft() {
+    return this.s.settings.rhythmInDuel && (this.sec.rhythmBag?.length ?? RHYTHM_TRACKS.length) > 0;
+  }
+
   private async rhythmBattle(epoch: number, pids: string[]): Promise<Record<string, number | null>> {
-    const bpm = 96 + randInt(5) * 8;
-    const beats = 36;
+    // трек: случайный из ещё не сыгранных (до вызова кнопку прячет rhythmLeft)
+    this.sec.rhythmBag ??= RHYTHM_TRACKS.map((_, i) => i);
+    if (!this.sec.rhythmBag.length) this.sec.rhythmBag = RHYTHM_TRACKS.map((_, i) => i); // на всякий случай: кнопку уже спрятал rhythmLeft
+    const track = this.sec.rhythmBag.splice(randInt(this.sec.rhythmBag.length), 1)[0];
+    const tr = RHYTHM_TRACKS[track];
+    const bpm = tr.bpm;
+    const beats = Math.ceil(tr.dur / (60000 / bpm));
     const startAt = this.now + 4500;
     const id = ++this.sec.rhythmN;
-    this.s.rhythm = { id, seed: randInt(1e9), bpm, startAt, beats, players: pids, scores: Object.fromEntries(pids.map((p) => [p, null])) };
+    this.s.rhythm = { id, seed: randInt(1e9), bpm, startAt, beats, track, players: pids, scores: Object.fromEntries(pids.map((p) => [p, null])) };
     this.setStage({ t: 'rhythm' });
     this.io.fx?.('rhythm', this.s.rhythm);
     const dur = (beats * 60000) / bpm;
