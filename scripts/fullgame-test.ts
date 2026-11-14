@@ -392,6 +392,8 @@ function reloadTv(why: string) {
       }
       if (!wheelStarted && now() - endAt > 20000) { wheelStarted = true; eng.onCtl('wheelStart'); console.log(`[${clock()}] колесо: жетоны`, JSON.stringify(Object.fromEntries(Object.entries(s.wheel?.tokens ?? {}).map(([id, n]) => [s.players[id].name, n]))), 'призы', JSON.stringify(s.wheel?.left)); }
       const w = s.wheel;
+      // приз выпал — ведущий вручает его и жмёт на пульте «Приз получен» (иначе очередь колеса не идёт дальше)
+      if (wheelStarted && w?.last && !w.spinner) { await wait(3000); if (eng.s.wheel?.last) eng.onCtl('wheelNext'); }
       if (wheelStarted && w && !w.spinner && (Object.values(w.tokens).every((n) => n <= 0) || Object.values(w.left).every((n) => n <= 0))) {
         await wait(8000);
         eng.onCtl('wheelEnd');
@@ -407,6 +409,14 @@ function reloadTv(why: string) {
   clearInterval(pingT);
   const s = eng.s;
   console.log('\n=== итог ===');
+  {
+    // вопросы не повторяются: сколько осталось в запасе к концу игры
+    const e = eng as any;
+    const left = e.candidates(() => true);
+    const byT: Record<string, number> = {};
+    for (const q of left) byT[q.topic] = (byT[q.topic] ?? 0) + 1;
+    console.log(`вопросов задано ${e.sec.qn}; в запасе без префектур ${left.length}; живых боевых тем ${e.liveTopics().length}/${e.combatTopics().length}; по темам ${JSON.stringify(byT)}`);
+  }
   console.log('не взяты награды:', PREF_CODES.filter((c) => !s.prefs[c].taken).map((c) => `${c}(${s.prefs[c].reward}, своих вопросов ${(eng as any).prefQueue(c).length}${(eng as any).prefQueue(c)[0]?.prize ? ', первый — призовой' : ''}, стоят: ${Object.values(s.players).filter((p) => p.pref === c).length})`).join(' '));
   console.log(`в охоте: дуэлей ${huntDuels}, вопросов префектур ${huntQs}`);
   for (const p of Object.values(s.players)) console.log(`${p.name.padEnd(8)} ¥${String(p.yen).padStart(6)} ${String(p.stars).padStart(3)}★ hp ${p.hp}/${p.maxHp} сила ${Object.values(p.stats).join(',')} ${p.car ?? ''} ${p.akita ? 'акита ' : ''}${p.cat ? 'кошка ' : ''}призы: ${p.prizes.join(',')}`);

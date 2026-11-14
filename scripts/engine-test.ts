@@ -32,6 +32,17 @@ const ok = (name: string, cond: boolean, extra = '') => { console.log(`${cond ? 
 const until = async (cond: () => boolean, maxMs: number) => { const end = now() + maxMs; while (!cond() && now() < end) await wait(200); return cond(); };
 
 (async () => {
+  // воскрешение: сложность по месту в рейтинге (низ — лёгкий, середина — средний, верх — сложный)
+  {
+    const ps = Object.values(eng.s.players);
+    const rd = (id: string) => (eng as any).reviveDifficulty(id);
+    ok('воскрешение: все равны — средний', ps.every((p) => rd(p.id) === 'medium'));
+    const yen0 = ps.map((p) => p.yen);
+    ps.forEach((p, i) => { p.yen = i * 1000; });
+    const got = ps.map((p) => rd(p.id)).join(',');
+    ok('воскрешение: последний лёгкий, лидер сложный', got === 'easy,medium,medium,hard', `(${got})`);
+    ps.forEach((p, i) => { p.yen = yen0[i]; });
+  }
   // ритм-баттл: три песни по разу за игру, потом кнопки нет
   {
     const left = () => (eng as any).rhythmLeft() as boolean;
@@ -109,6 +120,27 @@ const until = async (cond: () => boolean, maxMs: number) => { const end = now() 
   const got = await until(() => (eng.s.stage.t === 'turnStart' || eng.s.stage.t === 'move') && (eng.s.stage as any).pid !== cur, 60000);
   ok('после удаления ходит следующий по очереди', got && (eng.s.stage as any).pid === next, `(ждали ${eng.s.players[next]?.name}, ходит ${eng.s.players[(eng.s.stage as any).pid]?.name})`);
   ok('удалённого нет в очереди', !eng.s.turnOrder.includes(cur) && eng.s.turnIdx >= 0);
+
+  // вопросы не повторяются: тема кончилась — null, а не второй круг
+  {
+    const topic = combat[0].id;
+    const seen: string[] = [];
+    for (let i = 0; i < 500; i++) {
+      const q = (eng as any).pickQuestion((x: any) => x.topic === topic && !x.special && !x.pref);
+      if (!q) break;
+      seen.push(q.id);
+    }
+    const left = (eng as any).pickQuestion((x: any) => x.topic === topic && !x.special && !x.pref);
+    ok('тема кончилась — вопросы не повторяются', seen.length > 0 && new Set(seen).size === seen.length && !left, `(выдано ${seen.length})`);
+    const live: string[] = (eng as any).liveTopics();
+    ok('кончившейся темы нет на кнопках и барабане', !live.includes(topic) && live.length === combat.length - 1, `(${live.length} из ${combat.length})`);
+    // «первым» важнее сложности: такой вопрос выдаётся, даже если просили другую сложность
+    const fresh = structuredClone(QS.find((q) => q.topic === 'okinawa')!);
+    fresh.id = 'early-test'; fresh.early = 999; fresh.difficulty = 'hard';
+    eng.questions.push(fresh);
+    const got = (eng as any).pickQuestion((x: any) => x.topic === 'okinawa', false, 'easy');
+    ok('«в числе первых» важнее сложности воскрешения', got?.id === 'early-test');
+  }
 
   // удалить всех — движок не должен зависнуть
   for (const id of [...eng.s.joinOrder]) eng.onCtl('kick', { pid: id });

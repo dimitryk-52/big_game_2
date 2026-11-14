@@ -67,7 +67,9 @@ const until = async (cond: () => boolean, maxMs: number) => { const end = now() 
   }, 4 * 3600000);
   ok('сумо: дошло до итогов', done, `кругов ${maxCircle}, вопросов ${questions}`);
   ok('сумо: в первом круге никто не вылетел', !outInGrace);
-  ok('сумо: один победитель, места у всех', su.alive.length === 1 && Object.keys(su.places ?? {}).length === 7 && su.places![su.alive[0]] === 1);
+  // вопросы не повторяются: на маленьком наборе они могут кончиться — тогда сумо обрывается, и в круге остаётся несколько
+  const exhausted = su.alive.length > 1 && (eng as any).liveTopics().length === 0;
+  ok('сумо: один победитель (или кончились вопросы), места у всех', (su.alive.length === 1 || exhausted) && Object.keys(su.places ?? {}).length === 7 && Object.values(su.places!).filter((x) => x === 1).length === 1, exhausted ? '(вопросы кончились)' : '');
   ok('сумо: первый выбывший — последнее место', su.places![su.out[0]] === 7);
   console.log('   лапа кошки в сумо показывалась:', pawSeen);
   console.log(fails ? `\nПровалено: ${fails}` : '\nВсё хорошо');

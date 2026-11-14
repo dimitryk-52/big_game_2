@@ -1256,7 +1256,7 @@ export class GameEngine {
         p.specials++;
         text = 'Спецвопрос (сила ' + st.specialPower + ')';
         // спецтемы узкие — получатель сам выбирает, из какой будет вопрос (тема — секрет, как в магазине)
-        const topics = st.topics.filter((t) => t.special).map((t) => t.id);
+        const topics = this.liveSpecialTopics();
         if (topics.length) {
           const ms = 30000;
           this.setStage({ t: 'reward', pid: p.id, reward, text, pref: code, pickTopic: { topics, deadline: this.now + ms } });
@@ -1311,7 +1311,9 @@ export class GameEngine {
     }
     this.setStage({ t: 'banner', text: `${p.name} восстанавливается`, sub: 'Отдых на Окинаве: ответь, чтобы получить бонус', big: true });
     await this.sleep(epoch, 2500);
-    const q = this.pickQuestion((x) => x.topic === 'okinawa') ?? this.pickQuestion((x) => !x.special);
+    // камбэк: сложность по месту в рейтинге — низ лёгкий, середина средний, верх сложный
+    const diff = this.reviveDifficulty(p.id);
+    const q = this.pickQuestion((x) => x.topic === 'okinawa', false, diff) ?? this.pickQuestion((x) => !x.special, false, diff);
     p.hp = p.maxHp;
     this.bump('revive', p.id);
     if (!q) return;
@@ -1325,6 +1327,20 @@ export class GameEngine {
       results[p.id] = `+¥${y} и бонус`; // какой — секрет, видно в инвентаре
     } else results[p.id] = 'Ожил';
     await this.reveal(epoch, results);
+  }
+
+  /** вопрос воскрешения: место игрока по чистой стоимости среди всех — нижняя треть лёгкий, верхняя сложный, иначе средний.
+   *  Равные по стоимости делят место: берётся среднее (все равны — средний) */
+  private reviveDifficulty(pid: string): Difficulty {
+    const st = this.s.settings;
+    const ids = Object.keys(this.s.players);
+    if (ids.length < 2) return 'medium';
+    const me = netWorth(this.s.players[pid], st);
+    const nw = ids.map((id) => netWorth(this.s.players[id], st));
+    const below = nw.filter((x) => x < me).length;
+    const same = nw.filter((x) => x === me).length - 1; // без самого игрока
+    const pos = (below + same / 2) / (ids.length - 1); // 0 — последний, 1 — лидер
+    return pos < 1 / 3 ? 'easy' : pos > 2 / 3 ? 'hard' : 'medium';
   }
 
   // ───────── дуэль ─────────
@@ -1356,7 +1372,8 @@ export class GameEngine {
         d.topic = null;
         d.special = false;
         d.mode = null;
-        const topics = this.combatTopics().map((t) => t.id);
+        // кнопки только тех тем, где ещё есть вопросы
+        const topics = this.liveTopics();
         const ms = st.pickTime * 1000;
         this.setStage({ t: 'duelPick', pid: asker.id, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: this.rhythmLeft() });
         const choice = await this.waitInput(epoch, (m) => {
@@ -1369,6 +1386,7 @@ export class GameEngine {
         }, ms + 400);
         // не выбрал за время — тему решает барабан (без спецвопроса)
         const pickV = choice ?? (await this.topicReel(epoch, asker, 'duel')) ?? pick(topics);
+        if (!pickV) continue; // вопросы кончились во всех темах — ход без вопроса
 
         if (pickV === 'rhythm') {
           d.mode = 'rhythm';
@@ -1682,7 +1700,8 @@ export class GameEngine {
    * тему дуэли за время. Никто его не запускает: показывается на ТВ и сразу крутится сам.
    */
   private async topicReel(epoch: number, p: Player, why: 'pref' | 'duel'): Promise<TopicId | null> {
-    const topics = this.combatTopics().map((t) => t.id);
+    // темы, где вопросы кончились, на барабан не попадают
+    const topics = this.liveTopics();
     if (!topics.length) return null;
     // на ленте не меньше 6 ячеек, иначе одна и та же тема видна в окошке дважды
     const segs = topics.length < 4 ? [...topics, ...topics] : topics;
@@ -2448,7 +2467,7 @@ export class GameEngine {
     const cfg = sumoSettings(st);
     const ids = (this.s.turnOrder.length ? this.s.turnOrder : this.s.joinOrder).filter((id) => this.s.players[id]);
     if (!cfg.enabled || ids.length < 2) return;
-    const topics = this.combatTopics().map((t) => t.id);
+    let topics = this.liveTopics();
     const sec = (this.sec.sumo ??= { dmg: {}, cap: 0, fixed: false });
     let su = this.s.sumo;
     if (!su) {
@@ -2471,6 +2490,7 @@ export class GameEngine {
     while (live().length > 1) {
       const mult = 1 + cfg.ramp * Math.max(0, S.circle - cfg.rampFrom + 1);
       const grace = S.circle <= cfg.grace;
+      let askedInCircle = 0;
       for (const pid of [...S.ring]) {
         S.alive = live();
         if (S.alive.length <= 1) break;
@@ -2480,6 +2500,7 @@ export class GameEngine {
         S.asker = pid;
         S.phase = 'pick';
         S.fell = [];
+        topics = this.liveTopics(); // кончившиеся темы пропадают с кнопок
         this.setStage({ t: 'duelPick', pid, deadline: this.now + ms, topics, canSpecial: asker.specials > 0, canRhythm: false, sumo: true });
         const choice = await this.waitInput(epoch, (m) => {
           if (m.t !== 'pick' || m.kind !== 'duel' || m.pid !== pid) return undefined;
@@ -2488,6 +2509,7 @@ export class GameEngine {
           return topics.includes(m.value) ? (m.value as string) : undefined;
         }, ms + 400);
         const pickV = choice ?? (await this.topicReel(epoch, asker, 'duel')) ?? pick(topics);
+        if (!pickV) continue; // тем с вопросами не осталось — без вопроса (если так у всех, сумо закончится)
         let special = false;
         let q: Question | null;
         if (pickV === 'special' || pickV.startsWith('special:')) {
@@ -2503,6 +2525,7 @@ export class GameEngine {
           q = this.pickQuestion((x) => x.topic === pickV && !x.special) ?? this.pickQuestion((x) => topics.includes(x.topic));
         }
         if (!q) continue;
+        askedInCircle++;
         const tName = st.topics.find((t) => t.id === q!.topic)?.name ?? q.topic;
         const everyone = [...S.alive, ...S.out.filter((id) => this.s.players[id])];
         const res = await this.ask(epoch, q, 'sumo', `Сумо · круг ${S.circle} · ${special ? 'Спецвопрос · ' : ''}${tName} · спрашивает ${asker.name}`, everyone, q.time ?? st.duelTime);
@@ -2558,10 +2581,13 @@ export class GameEngine {
         for (const id of live()) S.pos[id] = place(id);
       }
       S.circle++;
+      // вопросы кончились совсем (повторов нет) — сумо заканчивается: места по тому, кто дальше от края
+      if (!askedInCircle) break;
     }
     // ── итоги: победитель — первый, выбывшие — с конца ──
     S.alive = live();
-    const order = [...S.alive, ...[...S.out].reverse()].filter((id) => this.s.players[id]);
+    // обычно в круге остаётся один; если сумо оборвалось (кончились вопросы) — выше тот, кто дальше от края
+    const order = [...[...S.alive].sort((a, b) => place(a) - place(b)), ...[...S.out].reverse()].filter((id) => this.s.players[id]);
     const places: Record<string, number> = {};
     const awards: Record<string, string> = {};
     order.forEach((id, i) => {
@@ -2738,7 +2764,6 @@ export class GameEngine {
 
   // ───────── вопросы ─────────
 
-  /** freshOnly — только ещё не заданные (иначе, когда свежие кончились, вопросы идут по второму кругу) */
   /** вопрос ещё рано задавать: связанный с ним не прозвучал или его префектура не открыта */
   private tooEarly(q: Question): boolean {
     if (q.after && this.questions.some((x) => x.id === q.after) && !(this.sec.asked ?? []).includes(q.after)) return true;
@@ -2760,12 +2785,29 @@ export class GameEngine {
     return !!q.early && !q.pref && asked.length < q.early && !asked.includes(q.id);
   }
 
-  /** prefer — желаемая сложность: если такие вопросы среди подходящих есть, выбор только из них */
-  private pickQuestion(f: (q: Question) => boolean, freshOnly = false, prefer?: Difficulty): Question | null {
+  /** вопросы, которые ещё можно задать: без повторов (кроме «до верного»); вопросы префектур — только в своей префектуре (prefQueue), здесь их нет */
+  private candidates(f: (q: Question) => boolean): Question[] {
     // вопросы спецтем считаются спецвопросами, даже если галочка не стоит
     const st = this.s.settings;
     const done = this.sec.qDone ?? [];
-    const all = this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !done.includes(q.id) && !this.tooEarly(q) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
+    return this.questions.filter((q) => q.answers?.length === 4 && !q.prize && q.kind !== 'flag' && !q.pref && !done.includes(q.id) && (q.mode === 'cycle' || !this.sec.used.includes(q.id)) && !this.tooEarly(q) && f(isSpecialQ(st, q) === !!q.special ? q : { ...q, special: isSpecialQ(st, q) }));
+  }
+
+  /** боевые темы, в которых ещё остались вопросы (для кнопок выбора темы и барабана) */
+  private liveTopics(): TopicId[] {
+    return this.combatTopics().map((t) => t.id).filter((id) => this.candidates((x) => x.topic === id && !x.special).length > 0);
+  }
+
+  /** спецтемы, в которых ещё остались вопросы */
+  private liveSpecialTopics(): TopicId[] {
+    return this.s.settings.topics.filter((t) => t.special).map((t) => t.id).filter((id) => this.candidates((x) => x.topic === id).length > 0);
+  }
+
+  /** prefer — желаемая сложность: если такие вопросы среди подходящих есть, выбор только из них.
+   *  Заданный вопрос второй раз не звучит; повторяются только «до верного ответа» (mode 'cycle'), пока их не решили (тогда они в qDone).
+   *  Кончились — null, и вызывающий берёт вопрос шире (другая тема) */
+  private pickQuestion(f: (q: Question) => boolean, _freshOnly = false, prefer?: Difficulty): Question | null {
+    const all = this.candidates(f);
     if (!all.length) return null;
     // «в числе первых N»: пока окно не прошло, такой вопрос идёт раньше всех (меньшее N — первее)
     const due = all.filter((q) => this.earlyDue(q));
@@ -2775,15 +2817,12 @@ export class GameEngine {
       if (!this.sec.used.includes(q.id)) this.sec.used.push(q.id);
       return q;
     }
-    let fresh = all.filter((q) => !this.sec.used.includes(q.id));
-    if (freshOnly && !fresh.length) return null;
-    if (prefer) {
-      const want = (fresh.length ? fresh : all).filter((q) => q.difficulty === prefer);
-      if (want.length) { const q = pick(want); if (!this.sec.used.includes(q.id)) this.sec.used.push(q.id); return q; }
-    }
-    const q = pick(fresh.length ? fresh : all);
-    if (!fresh.length) this.sec.used = this.sec.used.filter((id) => !all.some((x) => x.id === id));
-    this.sec.used.push(q.id);
+    // сначала ещё не звучавшие; повтор «до верного» — только если свежих нет
+    const fresh = all.filter((q) => !this.sec.used.includes(q.id));
+    const pool = fresh.length ? fresh : all;
+    const want = prefer ? pool.filter((q) => q.difficulty === prefer) : [];
+    const q = pick(want.length ? want : pool);
+    if (!this.sec.used.includes(q.id)) this.sec.used.push(q.id);
     return q;
   }
 
