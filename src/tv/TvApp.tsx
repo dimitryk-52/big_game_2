@@ -35,6 +35,7 @@ import { CAR_LOST, carName, dealersOf } from '../shared/cars';
 import { carUrl } from '../ui/carArt';
 import { RaceTv } from './RaceTv';
 import { fmtRace, trackFor } from '../shared/race';
+import { hotkeyCmd } from '../shared/hotkeys';
 
 export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }) {
   const [, force] = useState(0);
@@ -154,7 +155,9 @@ export function TvApp({ host, onNewGame }: { host: Host; onNewGame: () => void }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); host.ctl(host.state.phase === 'lobby' ? 'start' : 'next'); }
+      const hk = hotkeyCmd(e);
+      if (hk) { e.preventDefault(); host.ctl(hk); return; }
+      if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); const st = host.state.stage; host.ctl(host.state.phase === 'lobby' && !(st.t === 'lobby' && st.show && st.show !== 'walk') ? 'start' : 'next'); }
       if (e.code === 'KeyP') host.ctl('pause');
       if (e.code === 'KeyH') setPanel((x) => !x);
       if (e.code === 'KeyF') toggleFullscreen();

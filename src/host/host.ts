@@ -88,6 +88,7 @@ export class Host {
 
   onTvCmd?: (cmd: string, args?: any) => void;
   ctl(cmd: string, args?: any) {
+    if (TV_CMDS.includes(cmd)) return void this.onTvCmd?.(cmd, args);
     this.engine.onCtl(cmd, args);
   }
 }

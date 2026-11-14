@@ -20,6 +20,7 @@ import { PrefMap } from './PrefMap';
 import { IntrosTab, SoundsTab } from './Sounds';
 import { fmtYen, uid } from '../shared/util';
 import { RAT_RULES, computeAwards, type AwardRow } from '../shared/awards';
+import { HOTKEYS, hotkeyCmd } from '../shared/hotkeys';
 import { DEFAULT_TOKENS, EPOCHS, PRIZE_TIERS, TIER_INFO, epochOf, epochRatesFor, fmtMul, tokensFor } from '../shared/economy';
 
 type Tab = 'questions' | 'topics' | 'group' | 'prefs' | 'map' | 'sounds' | 'intros' | 'settings' | 'remote';
@@ -255,6 +256,18 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
     setTimeout(() => t.send('input', { t: 'hello', cid: 'admin' }), 400);
   };
   const ctl = (cmd: string, args?: any) => net?.send('input', { t: 'ctl', cmd, args });
+  // горячие клавиши (Stream Deck): работают, пока окно пульта в фокусе
+  useEffect(() => {
+    if (!net) return;
+    const onKey = (e: KeyboardEvent) => {
+      const hk = hotkeyCmd(e);
+      if (!hk) return;
+      e.preventDefault();
+      net.send('input', { t: 'ctl', cmd: hk });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [net]);
   if (!net) {
     return (
       <div class="pad col" style={{ maxWidth: 420 }}>
@@ -289,6 +302,7 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
         <button class="btn" onClick={() => ctl('debug')}>🐞 Отладка на ТВ</button>
         <button class="btn" onClick={() => ctl('panel')}>🛠 Панель ведущего на ТВ</button>
       </div>
+      <div class="note">Горячие клавиши (для Stream Deck; работают в окне пульта и в окне ТВ — где фокус): {HOTKEYS.map((h, i) => <span>{i ? ' · ' : ''}<b>{h.label}</b> — Ctrl+Alt+Shift+{h.letter} или {h.f}</span>)}</div>
       <div class="col remote-auto">
         {([
           ['autoIntro', 'Само: интро префектуры → вопрос (через 5 с)'],
