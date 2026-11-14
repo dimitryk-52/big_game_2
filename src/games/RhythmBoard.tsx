@@ -92,7 +92,7 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       s.fx = s.fx.filter((f) => t - f.t < 600);
       for (const f of s.fx) {
         ctx.globalAlpha = 1 - (t - f.t) / 600;
-        ctx.fillStyle = f.text === 'мимо' ? '#ff6b6b' : f.text === 'ИДЕАЛЬНО' ? '#ffd23f' : '#5ce16b';
+        ctx.fillStyle = f.text.startsWith('мимо') ? '#ff6b6b' : f.text === 'ИДЕАЛЬНО' ? '#ffd23f' : '#5ce16b';
         ctx.fillText(f.text, f.lane * lw + lw / 2, hitY - 40 - (t - f.t) / 20);
         ctx.globalAlpha = 1;
       }
