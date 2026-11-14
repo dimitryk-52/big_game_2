@@ -115,7 +115,8 @@ export function RhythmBoard({ r, now, spectator, players, onDone }: {
       const d = Math.abs(noteTime(n.at) - t);
       if (d < bd) { bd = d; best = idx; }
     });
-    if (best < 0 || bd > RHYTHM_WINDOW.good) return;
+    // нажатие мимо нот сбрасывает комбо — иначе выгодно молотить по всем кнопкам
+    if (best < 0 || bd > RHYTHM_WINDOW.good) { s.combo = 0; return; }
     s.judged.add(best);
     s.hits++;
     s.combo++;
