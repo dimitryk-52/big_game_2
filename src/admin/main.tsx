@@ -10,7 +10,7 @@ import { getStore } from '../shared/store';
 import { SEED_QUESTIONS } from '../shared/seedQuestions';
 import { PREFS, PREF } from '../map/mapData';
 import { GroupPick } from './TaskPick';
-import { DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ, withRecommendedLayout } from '../shared/settings';
+import { BONUS_INFO, DEFAULT_SETTINGS, REWARD_INFO, isSpecialQ, withRecommendedLayout } from '../shared/settings';
 import { createTransport, netMode, type Transport } from '../shared/net';
 import { Avatar, PixIcon, SkillIcon } from '../ui/common';
 import { Topics } from './Topics';
@@ -345,8 +345,19 @@ function Remote({ settings, onSave }: { settings: Settings; onSave: (s: Settings
                   <input class="inp-s num" placeholder="★" value={give[p.id + 's'] ?? ''} onInput={(e) => setGive({ ...give, [p.id + 's']: (e.target as HTMLInputElement).value })} />
                   <input class="inp-s num" placeholder="HP" value={give[p.id + 'h'] ?? ''} onInput={(e) => setGive({ ...give, [p.id + 'h']: (e.target as HTMLInputElement).value })} />
                   <input class="inp-s" style={{ width: 110 }} placeholder="приз" value={give[p.id + 'p'] ?? ''} onInput={(e) => setGive({ ...give, [p.id + 'p']: (e.target as HTMLInputElement).value })} />
+                  <select class="inp-s" style={{ width: 130 }} title="Выдать предмет" value={give[p.id + 'i'] ?? ''} onChange={(e) => setGive({ ...give, [p.id + 'i']: (e.target as HTMLSelectElement).value, [p.id + 't']: '' })}>
+                    <option value="">предмет…</option>
+                    <option value="special">Спецвопрос</option>
+                    {Object.entries(BONUS_INFO).map(([k, b]) => <option value={k}>{b.icon} {b.name}</option>)}
+                  </select>
+                  {give[p.id + 'i'] === 'special' && s.settings.topics.some((t) => t.special) && (
+                    <select class="inp-s" style={{ width: 130 }} title="Тема спецвопроса" value={give[p.id + 't'] ?? ''} onChange={(e) => setGive({ ...give, [p.id + 't']: (e.target as HTMLSelectElement).value })}>
+                      <option value="">тема: любая</option>
+                      {s.settings.topics.filter((t) => t.special).map((t) => <option value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}
                   <button class="btn small" onClick={() => {
-                    ctl('give', { pid: p.id, yen: Number(give[p.id + 'y'] || 0), stars: Number(give[p.id + 's'] || 0), hp: Number(give[p.id + 'h'] || 0), prize: give[p.id + 'p'] || undefined });
+                    ctl('give', { pid: p.id, yen: Number(give[p.id + 'y'] || 0), stars: Number(give[p.id + 's'] || 0), hp: Number(give[p.id + 'h'] || 0), prize: give[p.id + 'p'] || undefined, item: give[p.id + 'i'] || undefined, topic: give[p.id + 't'] || undefined });
                     setGive({});
                   }}>OK</button>
                   <button class="btn small" title="Отнять введённые ¥ и ★ (и HP); ниже нуля не уйдёт" onClick={() => {

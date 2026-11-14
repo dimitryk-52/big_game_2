@@ -249,6 +249,18 @@ export class GameEngine {
         p.stars = Math.max(0, p.stars + (args.stars ?? 0));
         p.hp = Math.max(0, Math.min(p.maxHp, p.hp + (args.hp ?? 0)));
         if (args.prize) p.prizes.push(String(args.prize));
+        // предмет от ведущего: спецвопрос (можно с темой) или любой бонус из инвентаря
+        const item = args.item ? String(args.item) : '';
+        if (item === 'special') {
+          p.specials++;
+          const topic = args.topic ? String(args.topic) : '';
+          const name = this.s.settings.topics.find((t) => t.id === topic && t.special)?.name;
+          if (name) (p.specialTopics ??= []).push(topic);
+          this.log(`Ведущий выдал ${p.name}: спецвопрос${name ? ` «${name}»` : ''}`);
+        } else if (item in BONUS_INFO) {
+          p.bonuses[item as BonusId] = (p.bonuses[item as BonusId] ?? 0) + 1;
+          this.log(`Ведущий выдал ${p.name}: ${BONUS_INFO[item as BonusId].name}`);
+        }
         this.emit();
         break;
       }
